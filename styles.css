@@ -603,3 +603,434 @@ body {
     animation-duration: 0.01ms !important;
   }
 }
+
+/* =============================================
+   TAB BAR
+   ============================================= */
+.tab-bar {
+  display: flex;
+  gap: 4px;
+  padding: 0 0 8px;
+  background: var(--bg-secondary);
+}
+
+.tab-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 12px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-muted);
+  font-family: var(--font);
+  font-size: 0.82rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition);
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.tab-btn:active {
+  transform: scale(0.96);
+}
+
+.tab-btn.active {
+  background: var(--bg-card);
+  color: var(--text-primary);
+  box-shadow: inset 0 -2px 0 var(--accent-primary);
+}
+
+.tab-btn .tab-icon {
+  font-size: 1rem;
+}
+
+.tab-btn .tab-label {
+  font-size: 0.82rem;
+}
+
+/* =============================================
+   STATS VIEW
+   ============================================= */
+.stats-view {
+  padding: 16px;
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Stats cards grid */
+.stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.stat-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  text-align: center;
+}
+
+.stat-card .stat-icon {
+  font-size: 1.5rem;
+  margin-bottom: 6px;
+}
+
+.stat-card .stat-number {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.2;
+}
+
+.stat-card .stat-label {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.stat-card .stat-sub {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+.stat-card.highlight {
+  border-color: var(--accent-primary);
+  background: linear-gradient(135deg, rgba(233,69,96,0.08), rgba(15,52,96,0.08));
+}
+
+.stat-card.highlight .stat-number {
+  color: var(--accent-primary);
+}
+
+/* Stats section headers */
+.stats-section-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 20px 0 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.stats-section-title .line {
+  flex: 1;
+  height: 1px;
+  background: var(--border-color);
+}
+
+/* ===== ATTENDANCE CALENDAR ===== */
+.attendance-calendar {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  margin-bottom: 20px;
+}
+
+.calendar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.calendar-header h3 {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.calendar-nav {
+  display: flex;
+  gap: 8px;
+}
+
+.calendar-nav-btn {
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 4px 8px;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all var(--transition);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.calendar-nav-btn:active {
+  transform: scale(0.92);
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 3px;
+}
+
+.calendar-day-label {
+  text-align: center;
+  font-size: 0.6rem;
+  color: var(--text-muted);
+  padding: 4px 0;
+  font-weight: 500;
+}
+
+.calendar-day {
+  aspect-ratio: 1;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  background: transparent;
+  position: relative;
+}
+
+.calendar-day.today {
+  border: 1px solid var(--accent-primary);
+  color: var(--accent-primary);
+}
+
+.calendar-day.attended {
+  background: var(--accent-green);
+  color: #fff;
+  font-weight: 600;
+}
+
+.calendar-day.attended-some {
+  background: rgba(46, 204, 113, 0.3);
+  color: var(--text-primary);
+}
+
+.calendar-day.other-month {
+  opacity: 0.2;
+}
+
+.calendar-legend {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 10px;
+  font-size: 0.65rem;
+  color: var(--text-muted);
+}
+
+.calendar-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.legend-box {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+}
+
+/* ===== EXERCISE SELECTOR (STATS) ===== */
+.exercise-selector {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-family: var(--font);
+  font-size: 0.82rem;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23a0a0b8' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 32px;
+  margin-bottom: 12px;
+}
+
+.exercise-selector:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+}
+
+/* ===== WEIGHT CHART ===== */
+.chart-container {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  margin-bottom: 20px;
+  position: relative;
+}
+
+.chart-title {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 12px;
+}
+
+.chart-canvas-wrapper {
+  width: 100%;
+  position: relative;
+}
+
+.chart-canvas-wrapper canvas {
+  width: 100%;
+  height: auto;
+  display: block;
+  border-radius: var(--radius-sm);
+}
+
+.chart-empty {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+
+.chart-empty .icon {
+  font-size: 2.5rem;
+  margin-bottom: 8px;
+  opacity: 0.3;
+}
+
+/* Chart stats row */
+.chart-stats-row {
+  display: flex;
+  gap: 16px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+
+.chart-stat-item {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.chart-stat-item .value {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.chart-stat-item .up { color: var(--accent-green); }
+.chart-stat-item .down { color: var(--accent-primary); }
+
+/* ===== WEEKLY CONSISTENCY ===== */
+.weekly-list {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 12px 16px;
+  margin-bottom: 20px;
+}
+
+.weekly-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border-color);
+  font-size: 0.75rem;
+}
+
+.weekly-row:last-child {
+  border-bottom: none;
+}
+
+.weekly-row .week-label {
+  color: var(--text-secondary);
+  min-width: 70px;
+}
+
+.weekly-row .week-days {
+  display: flex;
+  gap: 4px;
+}
+
+.weekly-row .week-dot {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  background: var(--bg-input);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.55rem;
+  color: var(--text-muted);
+}
+
+.weekly-row .week-dot.done {
+  background: var(--accent-green);
+  color: #fff;
+}
+
+.weekly-row .week-dot.partial {
+  background: rgba(46, 204, 113, 0.3);
+}
+
+.weekly-row .week-count {
+  min-width: 30px;
+  text-align: right;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* ===== LAST SESSIONS ===== */
+.session-list {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 12px 16px;
+  margin-bottom: 20px;
+}
+
+.session-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border-color);
+  font-size: 0.75rem;
+}
+
+.session-item:last-child {
+  border-bottom: none;
+}
+
+.session-item .session-date {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.session-item .session-info {
+  color: var(--text-muted);
+  font-size: 0.7rem;
+}
+
+.session-item .session-count {
+  font-weight: 600;
+  color: var(--accent-green);
+}
+
+@media (max-width: 380px) {
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+}

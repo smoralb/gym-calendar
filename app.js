@@ -699,6 +699,624 @@
   }
 
   // =============================================
+  // TAB SWITCHING
+  // =============================================
+  let currentTab = 'rutina';
+
+  function switchTab(tab) {
+    currentTab = tab;
+
+    // Update tab buttons
+    document.querySelectorAll('.tab-btn').forEach(function (btn) {
+      btn.classList.toggle('active', btn.dataset.tab === tab);
+    });
+
+    // Show/hide views
+    var rutinaView = document.getElementById('rutinaView');
+    var statsView = document.getElementById('statsView');
+    if (tab === 'rutina') {
+      rutinaView.style.display = '';
+      statsView.style.display = 'none';
+    } else {
+      rutinaView.style.display = 'none';
+      statsView.style.display = '';
+      renderStats();
+    }
+  }
+
+  // =============================================
+  // STATS: Core data helpers
+  // =============================================
+  function getWorkoutDates() {
+    return Object.keys(state.completions || {}).sort();
+  }
+
+  function getTotalWorkoutDays() {
+    return getWorkoutDates().length;
+  }
+
+  function getExercisesCompletedTotal() {
+    var total = 0;
+    var completions = state.completions || {};
+    for (var date in completions) {
+      total += Object.keys(completions[date]).length;
+    }
+    return total;
+  }
+
+  function getTotalExerciseLogs() {
+    var total = 0;
+    for (var exId in state.progress) {
+      total += state.progress[exId].length;
+    }
+    return total;
+  }
+
+  function getCurrentStreak() {
+    var dates = getWorkoutDates();
+    if (dates.length === 0) return 0;
+    var streak = 0;
+    var today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // Check if there was a workout today or yesterday to count
+    var dateSet = {};
+    dates.forEach(function (d) { dateSet[d] = true; });
+
+    // Walk backwards from today
+    var checkDate = new Date(today);
+    var maxLookback = 365;
+    while (maxLookback > 0) {
+      var key = checkDate.getFullYear() + '-' +
+        String(checkDate.getMonth() + 1).padStart(2, '0') + '-' +
+        String(checkDate.getDate()).padStart(2, '0');
+      if (dateSet[key]) {
+        streak++;
+        checkDate.setDate(checkDate.getDate() - 1);
+        maxLookback--;
+      } else {
+        break;
+      }
+    }
+    return streak;
+  }
+
+  function getWeeklyConsistency() {
+    var dates = getWorkoutDates();
+    var weeks = {};
+
+    // Group by ISO week
+    dates.forEach(function (dateStr) {
+      var d = new Date(dateStr + 'T12:00:00');
+      // Get Monday of that week
+      var day = d.getDay();
+      var diff = d.getDate() - day + (day === 0 ? -6 : 1);
+      var monday = new Date(d);
+      monday.setDate(diff);
+      var weekKey = monday.getFullYear() + '-' +
+        String(monday.getMonth() + 1).padStart(2, '0') + '-' +
+        String(monday.getDate()).padStart(2, '0');
+
+      if (!weeks[weekKey]) {
+        weeks[weekKey] = { monday: monday, dates: [] };
+      }
+      weeks[weekKey].dates.push(dateStr);
+    });
+
+    // Get expected days per week (Mon, Wed, Fri = 3 possible)
+    var weeklyData = [];
+    for (var wk in weeks) {
+      var dayNames = weeks[wk].dates.map(function (d) {
+        var dt = new Date(d + 'T12:00:00');
+        return dt.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+      });
+
+      // Count how many of our training days (1=Mon, 3=Wed, 5=Fri)
+      var mon = dayNames.indexOf(1) >= 0 ? 1 : 0;
+      var wed = dayNames.indexOf(3) >= 0 ? 1 : 0;
+      var fri = dayNames.indexOf(5) >= 0 ? 1 : 0;
+      var attended = mon + wed + fri;
+
+      weeklyData.push({
+        weekStart: weeks[wk].monday,
+        attended: attended,
+        total: 3,
+        mon: mon,
+        wed: wed,
+        fri: fri
+      });
+    }
+
+    // Sort by week descending
+    weeklyData.sort(function (a, b) { return b.weekStart - a.weekStart; });
+
+    // Limit to last 8 weeks
+    return weeklyData.slice(0, 8);
+  }
+
+  function getMuscleGroupStats() {
+    var muscleCount = {};
+    var completions = state.completions || {};
+
+    for (var date in completions) {
+      var dayCompletions = completions[date];
+      for (var exId in dayCompletions) {
+        var ex = findExercise(exId);
+        if (ex) {
+          var muscle = ex.muscle;
+          if (!muscleCount[muscle]) muscleCount[muscle] = 0;
+          muscleCount[muscle]++;
+        }
+      }
+    }
+
+    // Sort by count descending
+    var sorted = [];
+    for (var m in muscleCount) {
+      sorted.push({ muscle: m, count: muscleCount[m] });
+    }
+    sorted.sort(function (a, b) { return b.count - a.count; });
+
+    return sorted;
+  }
+
+  function getLastSessions(limit) {
+    limit = limit || 10;
+    var dates = getWorkoutDates().reverse();
+    var sessions = [];
+    var seen = 0;
+
+    for (var i = 0; i < dates.length && seen < limit; i++) {
+      var date = dates[i];
+      var dayCompletions = state.completions[date] || {};
+      var count = Object.keys(dayCompletions).length;
+      if (count > 0) {
+        // Determine which days
+        var d = new Date(date + 'T12:00:00');
+        var dayNames = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+        var dayName = dayNames[d.getDay()];
+        sessions.push({ date: date, dayName: dayName, count: count });
+        seen++;
+      }
+    }
+    return sessions;
+  }
+
+  function getAllExercisesWithProgress() {
+    var list = [];
+    for (var dayIdx = 0; dayIdx < ROUTINE.length; dayIdx++) {
+      var day = ROUTINE[dayIdx];
+      for (var exIdx = 0; exIdx < day.exercises.length; exIdx++) {
+        var ex = day.exercises[exIdx];
+        var p = getExerciseProgress(ex.id);
+        if (p.length > 0) {
+          list.push({ exercise: ex, dayTitle: day.title, dayIdx: dayIdx });
+        }
+      }
+    }
+    return list;
+  }
+
+  // =============================================
+  // STATS: Render
+  // =============================================
+  function renderStats() {
+    var container = document.getElementById('statsContent');
+    if (!container) return;
+
+    var totalDays = getTotalWorkoutDays();
+    var totalExercises = getExercisesCompletedTotal();
+    var totalLogs = getTotalExerciseLogs();
+    var streak = getCurrentStreak();
+    var weeklyData = getWeeklyConsistency();
+    var muscleStats = getMuscleGroupStats();
+    var sessions = getLastSessions(8);
+
+    var topMuscle = muscleStats.length > 0 ? muscleStats[0].muscle : '—';
+
+    var weeklyPct = 0;
+    if (weeklyData.length > 0) {
+      var totalAttended = 0;
+      var totalPossible = 0;
+      weeklyData.forEach(function (w) {
+        totalAttended += w.attended;
+        totalPossible += w.total;
+      });
+      weeklyPct = totalPossible > 0 ? Math.round((totalAttended / totalPossible) * 100) : 0;
+    }
+
+    var html = '';
+
+    // ---- Overview Cards ----
+    html += '<div class="stats-grid">';
+    html += '<div class="stat-card highlight">';
+    html += '<div class="stat-icon">📅</div>';
+    html += '<div class="stat-number">' + totalDays + '</div>';
+    html += '<div class="stat-label">Días de gym</div>';
+    html += '</div>';
+    html += '<div class="stat-card">';
+    html += '<div class="stat-icon">🔥</div>';
+    html += '<div class="stat-number">' + streak + '</div>';
+    html += '<div class="stat-label">Racha actual</div>';
+    html += streak > 0 ? '<div class="stat-sub">días seguidos</div>' : '';
+    html += '</div>';
+    html += '<div class="stat-card">';
+    html += '<div class="stat-icon">✅</div>';
+    html += '<div class="stat-number">' + totalExercises + '</div>';
+    html += '<div class="stat-label">Ejercicios hechos</div>';
+    html += '</div>';
+    html += '<div class="stat-card">';
+    html += '<div class="stat-icon">📊</div>';
+    html += '<div class="stat-number">' + weeklyPct + '%</div>';
+    html += '<div class="stat-label">Consistencia semanal</div>';
+    html += '<div class="stat-sub">' + weeklyData.length + ' semanas</div>';
+    html += '</div>';
+    html += '</div>';
+
+    // ---- Attendance Calendar ----
+    html += renderAttendanceCalendar();
+
+    // ---- Weekly Consistency ----
+    html += '<div class="stats-section-title">📆 Consistencia semanal <span class="line"></span></div>';
+    html += '<div class="weekly-list">';
+    if (weeklyData.length === 0) {
+      html += '<div style="text-align:center;padding:16px 0;color:var(--text-muted);font-size:0.78rem;">Aún no hay datos. ¡Empieza tu rutina!</div>';
+    } else {
+      weeklyData.forEach(function (w) {
+        var weekLabel = formatDateShort(w.weekStart);
+        var pct = Math.round((w.attended / w.total) * 100);
+        html += '<div class="weekly-row">';
+        html += '<span class="week-label">' + weekLabel + '</span>';
+        html += '<div class="week-days">';
+        html += '<span class="week-dot ' + (w.mon ? 'done' : '') + '">L</span>';
+        html += '<span class="week-dot ' + (w.wed ? 'done' : '') + '">M</span>';
+        html += '<span class="week-dot ' + (w.fri ? 'done' : '') + '">V</span>';
+        html += '</div>';
+        html += '<span class="week-count">' + w.attended + '/3 (' + pct + '%)</span>';
+        html += '</div>';
+      });
+    }
+    html += '</div>';
+
+    // ---- Weight Progression Chart ----
+    html += '<div class="stats-section-title">🏋️ Evolución de peso <span class="line"></span></div>';
+
+    var exercisesWithData = getAllExercisesWithProgress();
+    if (exercisesWithData.length === 0) {
+      html += '<div class="chart-container">';
+      html += '<div class="chart-empty"><div class="icon">📈</div><p>Registra tus pesos en la rutina para ver la evolución aquí.</p></div>';
+      html += '</div>';
+    } else {
+      html += '<select class="exercise-selector" id="chartExerciseSelect">';
+      exercisesWithData.forEach(function (item, idx) {
+        html += '<option value="' + item.exercise.id + '">' + item.dayTitle + ': ' + item.exercise.name + '</option>';
+      });
+      html += '</select>';
+      html += '<div class="chart-container">';
+      html += '<div class="chart-title" id="chartTitle">Progresión de peso</div>';
+      html += '<div class="chart-canvas-wrapper">';
+      html += '<canvas id="weightChart" width="400" height="220"></canvas>';
+      html += '</div>';
+      html += '<div class="chart-stats-row" id="chartStats"></div>';
+      html += '</div>';
+    }
+
+    // ---- Most trained muscles ----
+    if (muscleStats.length > 0) {
+      html += '<div class="stats-section-title">💪 Grupos musculares más trabajados <span class="line"></span></div>';
+      html += '<div class="session-list">';
+      var showMuscles = muscleStats.slice(0, 6);
+      showMuscles.forEach(function (m) {
+        html += '<div class="session-item">';
+        html += '<span class="session-date">' + m.muscle + '</span>';
+        html += '<span class="session-count">' + m.count + ' ejercicios</span>';
+        html += '</div>';
+      });
+      html += '</div>';
+    }
+
+    // ---- Last sessions ----
+    html += '<div class="stats-section-title">🕐 Últimas sesiones <span class="line"></span></div>';
+    html += '<div class="session-list">';
+    if (sessions.length === 0) {
+      html += '<div style="text-align:center;padding:16px 0;color:var(--text-muted);font-size:0.78rem;">Aún no hay sesiones registradas.</div>';
+    } else {
+      sessions.forEach(function (s) {
+        var d = new Date(s.date + 'T12:00:00');
+        var formatted = formatDateShort(d) + ' (' + s.dayName + ')';
+        html += '<div class="session-item">';
+        html += '<span class="session-date">' + formatted + '</span>';
+        html += '<span class="session-count">' + s.count + ' ej.</span>';
+        html += '</div>';
+      });
+    }
+    html += '</div>';
+
+    container.innerHTML = html;
+
+    // ---- Setup chart ----
+    if (exercisesWithData.length > 0) {
+      var select = document.getElementById('chartExerciseSelect');
+      setupChart(select.value);
+      select.addEventListener('change', function () {
+        setupChart(select.value);
+      });
+    }
+  }
+
+  // =============================================
+  // STATS: Attendance Calendar (month view)
+  // =============================================
+  function renderAttendanceCalendar() {
+    var now = new Date();
+    var year = now.getFullYear();
+    var month = now.getMonth();
+
+    var firstDay = new Date(year, month, 1);
+    var lastDay = new Date(year, month + 1, 0);
+    var daysInMonth = lastDay.getDate();
+    var startOffset = firstDay.getDay(); // 0=Sun
+
+    // Build date key set for quick lookup
+    var attendedSet = {};
+    var completions = state.completions || {};
+    for (var dateKey in completions) {
+      var exCount = Object.keys(completions[dateKey]).length;
+      attendedSet[dateKey] = exCount;
+    }
+
+    var todayKey = getTodayKey();
+    var dayNames = ['D', 'L', 'M', 'M', 'J', 'V', 'S'];
+
+    var monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+      'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+
+    var html = '<div class="attendance-calendar">';
+    html += '<div class="calendar-header">';
+    html += '<h3>📅 ' + monthNames[month] + ' ' + year + '</h3>';
+    html += '</div>';
+    html += '<div class="calendar-grid">';
+
+    // Day labels
+    dayNames.forEach(function (n) {
+      html += '<div class="calendar-day-label">' + n + '</div>';
+    });
+
+    // Empty cells before first day
+    for (var i = 0; i < startOffset; i++) {
+      html += '<div class="calendar-day other-month"></div>';
+    }
+
+    // Days
+    for (var day = 1; day <= daysInMonth; day++) {
+      var cellDate = year + '-' +
+        String(month + 1).padStart(2, '0') + '-' +
+        String(day).padStart(2, '0');
+      var isToday = cellDate === todayKey;
+      var attended = attendedSet[cellDate];
+
+      var cls = 'calendar-day';
+      if (isToday) cls += ' today';
+      if (attended && attended >= 3) cls += ' attended';
+      else if (attended && attended > 0) cls += ' attended-some';
+
+      var label = '';
+      if (attended) label = '✓';
+      else if (isToday) label = day;
+
+      html += '<div class="' + cls + '" title="' + cellDate + '">' + (label || day) + '</div>';
+    }
+
+    html += '</div>';
+
+    // Legend
+    html += '<div class="calendar-legend">';
+    html += '<span class="calendar-legend-item"><span class="legend-box" style="background:var(--accent-green);"></span> Completo</span>';
+    html += '<span class="calendar-legend-item"><span class="legend-box" style="background:rgba(46,204,113,0.3);"></span> Parcial</span>';
+    html += '<span class="calendar-legend-item"><span class="legend-box" style="background:transparent;border:1px solid var(--border-color);"></span> Hoy</span>';
+    html += '</div>';
+
+    html += '</div>';
+    return html;
+  }
+
+  // =============================================
+  // STATS: Weight Chart (Canvas)
+  // =============================================
+  function setupChart(exerciseId) {
+    var canvas = document.getElementById('weightChart');
+    if (!canvas) return;
+
+    var progress = getExerciseProgress(exerciseId);
+    var exercise = findExercise(exerciseId);
+    if (!exercise || progress.length === 0) {
+      var ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      return;
+    }
+
+    // Sort by date
+    var sorted = progress.slice().sort(function (a, b) {
+      return new Date(a.date) - new Date(b.date);
+    });
+
+    var titleEl = document.getElementById('chartTitle');
+    if (titleEl) titleEl.textContent = exercise.name;
+
+    // Draw chart
+    drawWeightChart(canvas, sorted, exercise);
+
+    // Update stats
+    var statsEl = document.getElementById('chartStats');
+    if (statsEl) {
+      var firstW = sorted[0].weight;
+      var lastW = sorted[sorted.length - 1].weight;
+      var maxW = sorted.reduce(function (m, e) { return Math.max(m, e.weight); }, 0);
+      var minW = sorted.reduce(function (m, e) { return Math.min(m, e.weight); }, maxW);
+      var diff = lastW - firstW;
+      var diffClass = diff > 0 ? 'up' : (diff < 0 ? 'down' : '');
+      var diffSign = diff > 0 ? '+' : '';
+
+      statsEl.innerHTML =
+        '<span class="chart-stat-item">📈 Progreso total: <span class="value ' + diffClass + '">' + diffSign + diff.toFixed(1) + ' kg</span></span>' +
+        '<span class="chart-stat-item">⬆️ Máximo: <span class="value">' + maxW + ' kg</span></span>' +
+        '<span class="chart-stat-item">⬇️ Mínimo: <span class="value">' + minW + ' kg</span></span>' +
+        '<span class="chart-stat-item">📊 Registros: <span class="value">' + sorted.length + '</span></span>';
+    }
+  }
+
+  function drawWeightChart(canvas, data, exercise) {
+    var ctx = canvas.getContext('2d');
+    var W = canvas.width;
+    var H = canvas.height;
+    var pad = { top: 18, right: 16, bottom: 32, left: 40 };
+    var chartW = W - pad.left - pad.right;
+    var chartH = H - pad.top - pad.bottom;
+
+    // Clear
+    ctx.clearRect(0, 0, W, H);
+
+    // Find min/max for Y axis
+    var values = data.map(function (e) { return e.weight; });
+    var minVal = Math.min.apply(null, values);
+    var maxVal = Math.max.apply(null, values);
+    var range = maxVal - minVal;
+
+    // Add padding to range (10% each side, min 2kg)
+    var yPad = Math.max(range * 0.1, 2);
+    var yMin = Math.max(0, Math.floor((minVal - yPad) / 2.5) * 2.5);
+    var yMax = Math.ceil((maxVal + yPad) / 2.5) * 2.5;
+    var yRange = yMax - yMin;
+
+    // X axis: date labels
+    var labels = data.map(function (e) {
+      var d = new Date(e.date + 'T12:00:00');
+      return String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0');
+    });
+
+    // ---- Grid lines ----
+    ctx.strokeStyle = '#1e2a45';
+    ctx.lineWidth = 0.5;
+
+    var ySteps = 4;
+    for (var yi = 0; yi <= ySteps; yi++) {
+      var yVal = yMin + (yi / ySteps) * yRange;
+      var yPos = pad.top + chartH - ((yVal - yMin) / yRange) * chartH;
+
+      ctx.beginPath();
+      ctx.moveTo(pad.left, yPos);
+      ctx.lineTo(W - pad.right, yPos);
+      ctx.stroke();
+
+      // Y label
+      ctx.fillStyle = '#6a6a80';
+      ctx.font = '10px -apple-system, sans-serif';
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'middle';
+      var label = yVal % 1 === 0 ? yVal.toString() : yVal.toFixed(1);
+      ctx.fillText(label, pad.left - 6, yPos);
+    }
+
+    // ---- Line ----
+    if (data.length < 2) {
+      // Single point, just draw a dot
+      var x1 = pad.left + chartW / 2;
+      var y1 = pad.top + chartH - ((data[0].weight - yMin) / yRange) * chartH;
+      ctx.beginPath();
+      ctx.arc(x1, y1, 5, 0, Math.PI * 2);
+      ctx.fillStyle = '#e94560';
+      ctx.fill();
+      return;
+    }
+
+    // Calculate X positions
+    var xPositions = [];
+    for (var i = 0; i < data.length; i++) {
+      var x = pad.left + (i / (data.length - 1)) * chartW;
+      xPositions.push(x);
+    }
+
+    // Draw line
+    ctx.beginPath();
+    ctx.strokeStyle = '#e94560';
+    ctx.lineWidth = 2.5;
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+
+    for (var i = 0; i < data.length; i++) {
+      var yVal = data[i].weight;
+      var yPos = pad.top + chartH - ((yVal - yMin) / yRange) * chartH;
+      if (i === 0) ctx.moveTo(xPositions[i], yPos);
+      else ctx.lineTo(xPositions[i], yPos);
+    }
+    ctx.stroke();
+
+    // Gradient fill under line
+    var lastX = xPositions[xPositions.length - 1];
+    var firstX = xPositions[0];
+    ctx.lineTo(lastX, pad.top + chartH);
+    ctx.lineTo(firstX, pad.top + chartH);
+    ctx.closePath();
+
+    var gradient = ctx.createLinearGradient(0, pad.top, 0, pad.top + chartH);
+    gradient.addColorStop(0, 'rgba(233, 69, 96, 0.15)');
+    gradient.addColorStop(1, 'rgba(233, 69, 96, 0)');
+    ctx.fillStyle = gradient;
+    ctx.fill();
+
+    // Draw dots
+    for (var i = 0; i < data.length; i++) {
+      var yVal = data[i].weight;
+      var yPos = pad.top + chartH - ((yVal - yMin) / yRange) * chartH;
+
+      // Outer circle (glow)
+      ctx.beginPath();
+      ctx.arc(xPositions[i], yPos, 6, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(233, 69, 96, 0.15)';
+      ctx.fill();
+
+      // Inner circle
+      ctx.beginPath();
+      ctx.arc(xPositions[i], yPos, 4, 0, Math.PI * 2);
+      ctx.fillStyle = '#e94560';
+      ctx.fill();
+
+      // White center
+      ctx.beginPath();
+      ctx.arc(xPositions[i], yPos, 2, 0, Math.PI * 2);
+      ctx.fillStyle = '#fff';
+      ctx.fill();
+
+      // X label (skip if too many)
+      if (data.length <= 10 || i === 0 || i === data.length - 1 || i === Math.floor(data.length / 2)) {
+        ctx.fillStyle = '#6a6a80';
+        ctx.font = '9px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.fillText(labels[i], xPositions[i], pad.top + chartH + 6);
+      }
+    }
+
+    // Show weight on last point
+    var lastWeight = data[data.length - 1].weight;
+    var lastY = pad.top + chartH - ((lastWeight - yMin) / yRange) * chartH;
+    ctx.fillStyle = '#e94560';
+    ctx.font = 'bold 11px -apple-system, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'bottom';
+    ctx.fillText(lastWeight + ' kg', xPositions[xPositions.length - 1] + 8, lastY - 4);
+  }
+
+  // =============================================
+  // UTILITIES
+  // =============================================
+  function formatDateShort(d) {
+    var day = String(d.getDate()).padStart(2, '0');
+    var month = String(d.getMonth() + 1).padStart(2, '0');
+    return day + '/' + month;
+  }
+
+  // =============================================
   // INIT
   // =============================================
   function init() {
@@ -718,6 +1336,13 @@
       if (e.target && e.target.classList.contains('weight-input')) {
         scheduleSuggestionCheck();
       }
+    });
+
+    // Tab switching
+    document.querySelectorAll('.tab-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        switchTab(btn.dataset.tab);
+      });
     });
 
     // Register service worker

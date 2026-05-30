@@ -41,24 +41,44 @@
           <span class="subtitle">Rutina de ejercicios</span>
         </span>
       </div>
-      <div class="day-selector" id="daySelector"></div>
+      <!-- TAB BAR -->
+      <div class="tab-bar">
+        <button class="tab-btn active" data-tab="rutina">
+          <span class="tab-icon">🏋️</span>
+          <span class="tab-label">Rutina</span>
+        </button>
+        <button class="tab-btn" data-tab="stats">
+          <span class="tab-icon">📊</span>
+          <span class="tab-label">Estadísticas</span>
+        </button>
+      </div>
     </header>
 
-    <!-- PROGRESS -->
-    <div class="progress-container">
-      <div class="progress-header">
-        <span id="progressLabel">0/0 ejercicios</span>
-        <span id="progressText">0% completado</span>
+    <!-- RUTINA VIEW -->
+    <div id="rutinaView">
+      <!-- PROGRESS -->
+      <div class="progress-container">
+        <div class="progress-header">
+          <span id="progressLabel">0/0 ejercicios</span>
+          <span id="progressText">0% completado</span>
+        </div>
+        <div class="progress-bar-track">
+          <div class="progress-bar-fill" id="progressFill"></div>
+        </div>
       </div>
-      <div class="progress-bar-track">
-        <div class="progress-bar-fill" id="progressFill"></div>
-      </div>
+
+      <!-- DAY VIEW -->
+      <main class="day-view" id="dayView">
+        <!-- Rendered by JS -->
+      </main>
     </div>
 
-    <!-- DAY VIEW -->
-    <main class="day-view" id="dayView">
-      <!-- Rendered by JS -->
-    </main>
+    <!-- STATS VIEW -->
+    <div class="stats-view" id="statsView" style="display:none;">
+      <div id="statsContent">
+        <!-- Rendered by JS -->
+      </div>
+    </div>
   </div>
 
   <!-- TOAST -->
