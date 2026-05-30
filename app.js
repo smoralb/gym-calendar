@@ -288,11 +288,14 @@
     const existing = state.progress[exerciseId];
     const last = existing[existing.length - 1];
     if (last && last.date === getTodayKey() && last.weight === entry.weight) {
+      showToast('✓ Ya registrado: ' + weight + ' kg hoy');
       return; // Already logged today with same weight
     }
     state.progress[exerciseId].push(entry);
     saveState(state);
     renderCurrentDay();
+    // Re-check suggestions with new weight
+    scheduleSuggestionCheck();
     showToast('✓ Peso guardado: ' + weight + ' kg');
   }
 
@@ -555,6 +558,7 @@
             <div class="weight-row">
               <div class="weight-input-group">
                 <input type="number" class="weight-input" id="weight-${ex.id}" 
+                       value="${lastWeight !== null ? lastWeight : ''}" 
                        placeholder="${lastWeight !== null ? lastWeight : '0'}" 
                        inputmode="decimal" step="0.5" min="0">
                 <span class="weight-unit">kg</span>
@@ -685,6 +689,15 @@
     });
   }
 
+  let suggestionTimer = null;
+
+  function scheduleSuggestionCheck() {
+    clearTimeout(suggestionTimer);
+    suggestionTimer = setTimeout(function () {
+      checkSuggestions();
+    }, 150);
+  }
+
   // =============================================
   // INIT
   // =============================================
@@ -697,13 +710,13 @@
     updateProgress();
     updateDayBadges();
 
-    // Check suggestions after a short delay (allows weight inputs to settle)
-    setTimeout(checkSuggestions, 100);
+    // Check suggestions after render (weight inputs now have values)
+    scheduleSuggestionCheck();
 
     // Listen for weight input changes to update suggestions
     document.addEventListener('input', function (e) {
       if (e.target && e.target.classList.contains('weight-input')) {
-        checkSuggestions();
+        scheduleSuggestionCheck();
       }
     });
 
