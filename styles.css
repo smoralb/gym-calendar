@@ -1306,6 +1306,97 @@ body {
   padding: 0 16px;
 }
 
+/* ===== WEIGHT HINT IN EXERCISE CARDS ===== */
+.exercise-weight-hint {
+  display: block;
+  font-size: 0.65rem;
+  color: var(--accent-yellow);
+  margin-top: 3px;
+  font-weight: 400;
+  opacity: 0.8;
+}
+
+/* ===== PHASE BANNER (stats page) ===== */
+.phase-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: linear-gradient(135deg, rgba(233,69,96,0.1), rgba(15,52,96,0.1));
+  border: 1px solid var(--accent-primary);
+  border-radius: var(--radius-md);
+  margin-bottom: 16px;
+}
+
+.phase-banner-icon {
+  font-size: 1rem;
+}
+
+.phase-banner-text {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  flex: 1;
+}
+
+.phase-banner-week {
+  font-size: 0.7rem;
+  color: var(--accent-primary);
+  background: rgba(233,69,96,0.12);
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-weight: 600;
+}
+
+/* ===== ROUTINE STATUS PHASE INDICATOR ===== */
+.routine-status-phase {
+  font-size: 0.65rem;
+  color: var(--accent-blue);
+  margin-top: 6px;
+  font-weight: 500;
+  opacity: 0.8;
+  margin-left: 34px;
+}
+
+/* ===== FUTURE DATE PREDICTION STYLES ===== */
+.calendar-day.clickable.future-pred {
+  border: 1px dashed rgba(233, 69, 96, 0.3);
+  background: rgba(233, 69, 96, 0.04);
+}
+
+.calendar-day.clickable.future-pred .cal-day-emoji.small {
+  font-size: 0.5rem;
+}
+
+.calendar-day.clickable.future-pred.routine-push {
+  border-color: rgba(233, 69, 96, 0.4);
+  background: rgba(233, 69, 96, 0.06);
+}
+
+.calendar-day.clickable.future-pred.routine-pull {
+  border-color: rgba(15, 52, 96, 0.4);
+  background: rgba(15, 52, 96, 0.08);
+}
+
+.calendar-day.clickable.future-pred.routine-legs {
+  border-color: rgba(46, 204, 113, 0.4);
+  background: rgba(46, 204, 113, 0.06);
+}
+
+.calendar-day.clickable.future .cal-day-num {
+  opacity: 0.6;
+}
+
+/* Series/reps in day detail future */
+.dd-ex-reps {
+  color: var(--accent-yellow);
+  font-weight: 500;
+  background: rgba(243, 156, 18, 0.1);
+  padding: 1px 6px;
+  border-radius: 6px;
+  font-size: 0.68rem;
+}
+
 @media (max-width: 380px) {
   .stats-grid {
     grid-template-columns: 1fr;
