@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Gym Calendar — Rutina de Ejercicios</title>
-  <meta name="description" content="Calendario de rutina de ejercicios 3 días/semana: Empuje, Tirón, Pierna y Core. Progresión y seguimiento de pesos.">
+  <meta name="description" content="Calendario de rutina de ejercicios. Para cuando voy un día sí y otro no.">
 
   <!-- PWA -->
   <link rel="manifest" href="manifest.json">
@@ -17,7 +17,7 @@
 
   <!-- Open Graph -->
   <meta property="og:title" content="Gym Calendar">
-  <meta property="og:description" content="Rutina de ejercicios 3 días/semana con seguimiento de progreso">
+  <meta property="og:description" content="Rutina de ejercicios con seguimiento de progreso">
   <meta property="og:type" content="website">
   <meta property="og:image" content="icons/icon-512.svg">
 
@@ -38,26 +38,47 @@
         </svg>
         <span>
           Gym Calendar
-          <span class="subtitle">Rutina de ejercicios</span>
+          <span class="subtitle">un día sí, otro no</span>
         </span>
       </div>
       <!-- TAB BAR -->
       <div class="tab-bar">
+        <button class="tab-btn" data-tab="home">
+          <span class="tab-icon">🏠</span>
+          <span class="tab-label">Inicio</span>
+        </button>
         <button class="tab-btn active" data-tab="rutina">
           <span class="tab-icon">🏋️</span>
           <span class="tab-label">Rutina</span>
         </button>
         <button class="tab-btn" data-tab="stats">
           <span class="tab-icon">📊</span>
-          <span class="tab-label">Estadísticas</span>
+          <span class="tab-label">Stats</span>
         </button>
       </div>
     </header>
 
+    <!-- HOME VIEW -->
+    <div class="home-view" id="homeView" style="display:none;">
+      <div id="homeContent">
+        <!-- Rendered by JS -->
+      </div>
+    </div>
+
     <!-- RUTINA VIEW -->
     <div id="rutinaView">
+      <!-- ROUTINE HEADER (today/rest indicator) -->
+      <div class="routine-status" id="routineStatus">
+        <!-- Rendered by JS -->
+      </div>
+
+      <!-- DAY SELECTOR -->
+      <div class="day-selector-container" id="daySelectorContainer">
+        <div class="day-selector" id="daySelector"></div>
+      </div>
+
       <!-- PROGRESS -->
-      <div class="progress-container">
+      <div class="progress-container" id="progressContainer">
         <div class="progress-header">
           <span id="progressLabel">0/0 ejercicios</span>
           <span id="progressText">0% completado</span>

@@ -1,6 +1,6 @@
 /* =============================================
    Gym Calendar - App de Rutina de Ejercicios
-   Versión: 1.0.0
+   Versión: 2.0.0
    ============================================= */
 
 (function () {
@@ -9,12 +9,12 @@
   // =============================================
   // DATA: Ejercicios organizados por día
   // =============================================
-  const ROUTINE = [
+  var ROUTINE = [
     {
       id: 'dia1',
-      day: 'Lunes',
-      title: 'Empuje',
-      subtitle: 'Pecho, Hombro anterior y Tríceps',
+      day: 'Empuje',
+      title: 'Pecho, Hombro anterior y Tríceps',
+      emoji: '🔥',
       gradient: 'linear-gradient(135deg, #e94560, #c23152)',
       exercises: [
         {
@@ -76,9 +76,9 @@
     },
     {
       id: 'dia2',
-      day: 'Miércoles',
-      title: 'Tirón',
-      subtitle: 'Espalda, Hombro posterior y Bíceps',
+      day: 'Tirón',
+      title: 'Espalda, Hombro posterior y Bíceps',
+      emoji: '💪',
       gradient: 'linear-gradient(135deg, #0f3460, #1a5276)',
       exercises: [
         {
@@ -129,9 +129,9 @@
     },
     {
       id: 'dia3',
-      day: 'Viernes',
-      title: 'Pierna y Core',
-      subtitle: 'Cuádriceps, Glúteo, Isquios, Hombro lateral y Abdomen',
+      day: 'Pierna',
+      title: 'Cuádriceps, Glúteo, Isquios, Hombro lateral y Abdomen',
+      emoji: '🦵',
       gradient: 'linear-gradient(135deg, #2ecc71, #1abc9c)',
       exercises: [
         {
@@ -208,25 +208,23 @@
   // =============================================
   // STATE: localStorage manager
   // =============================================
-  const STORAGE_KEY = 'gym_calendar_data';
+  var STORAGE_KEY = 'gym_calendar_data';
 
   function getDefaultState() {
     return {
-      progress: {},   // { "d1e1": [ { weight, reps, date }, ... ] }
-      completions: {}, // { "YYYY-MM-DD": { "d1e1": true, ... } }
-      goalReps: {}     // { "d1e1": { series: [reps, reps, reps] } } - actual reps per series
+      progress: {},
+      completions: {}
     };
   }
 
   function loadState() {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
+      var raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
-        const data = JSON.parse(raw);
+        var data = JSON.parse(raw);
         return {
           progress: data.progress || {},
-          completions: data.completions || {},
-          goalReps: data.goalReps || {}
+          completions: data.completions || {}
         };
       }
     } catch (e) {
@@ -235,7 +233,7 @@
     return getDefaultState();
   }
 
-  function saveState(state) {
+  function saveState() {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     } catch (e) {
@@ -243,22 +241,32 @@
     }
   }
 
-  let state = loadState();
+  var state = loadState();
 
   function getTodayKey() {
-    const d = new Date();
+    var d = new Date();
+    return d.getFullYear() + '-' +
+      String(d.getMonth() + 1).padStart(2, '0') + '-' +
+      String(d.getDate()).padStart(2, '0');
+  }
+
+  function getDateKey(d) {
     return d.getFullYear() + '-' +
       String(d.getMonth() + 1).padStart(2, '0') + '-' +
       String(d.getDate()).padStart(2, '0');
   }
 
   function getTodayCompletions() {
-    const key = getTodayKey();
+    var key = getTodayKey();
     return state.completions[key] || {};
   }
 
+  function getCompletionsForDate(dateKey) {
+    return state.completions[dateKey] || {};
+  }
+
   function toggleCompletion(exerciseId) {
-    const key = getTodayKey();
+    var key = getTodayKey();
     if (!state.completions[key]) {
       state.completions[key] = {};
     }
@@ -266,35 +274,31 @@
       delete state.completions[key][exerciseId];
     } else {
       state.completions[key][exerciseId] = true;
-      // Play sound + vibrate
       playCompleteSound();
       vibrate();
     }
-    saveState(state);
+    saveState();
     renderCurrentDay();
-    updateProgress();
-    updateDayBadges();
+    updateAll();
   }
 
   function saveWeight(exerciseId, weight) {
     if (!state.progress[exerciseId]) {
       state.progress[exerciseId] = [];
     }
-    const entry = {
+    var entry = {
       weight: parseFloat(weight),
       date: getTodayKey()
     };
-    // Don't add duplicate entries for same date
-    const existing = state.progress[exerciseId];
-    const last = existing[existing.length - 1];
+    var existing = state.progress[exerciseId];
+    var last = existing[existing.length - 1];
     if (last && last.date === getTodayKey() && last.weight === entry.weight) {
       showToast('✓ Ya registrado: ' + weight + ' kg hoy');
-      return; // Already logged today with same weight
+      return;
     }
     state.progress[exerciseId].push(entry);
-    saveState(state);
+    saveState();
     renderCurrentDay();
-    // Re-check suggestions with new weight
     scheduleSuggestionCheck();
     showToast('✓ Peso guardado: ' + weight + ' kg');
   }
@@ -304,79 +308,133 @@
   }
 
   function getLastWeight(exerciseId) {
-    const p = getExerciseProgress(exerciseId);
+    var p = getExerciseProgress(exerciseId);
     return p.length > 0 ? p[p.length - 1].weight : null;
   }
 
   function getSessionCount(exerciseId) {
-    // Count unique dates
-    const dates = new Set();
-    getExerciseProgress(exerciseId).forEach(e => dates.add(e.date));
+    var dates = new Set();
+    getExerciseProgress(exerciseId).forEach(function (e) { dates.add(e.date); });
     return dates.size;
   }
 
   function getWeightSuggestion(exerciseId, currentWeight) {
-    const history = getExerciseProgress(exerciseId);
-    const exercise = findExercise(exerciseId);
+    var history = getExerciseProgress(exerciseId);
+    var exercise = findExercise(exerciseId);
     if (!exercise || history.length < 2) return null;
 
-    // Get entries with the current weight
-    const sameWeightEntries = history.filter(e => e.weight === currentWeight);
+    var sameWeightEntries = history.filter(function (e) { return e.weight === currentWeight; });
     if (sameWeightEntries.length < 2) return null;
 
-    // Check if last two same-weight sessions were consecutive in the history
-    const sorted = [...history].sort((a, b) => new Date(a.date) - new Date(b.date));
-    const lastTwoSame = sorted.filter(e => e.weight === currentWeight).slice(-2);
+    var sorted = history.slice().sort(function (a, b) { return new Date(a.date) - new Date(b.date); });
+    var lastTwoSame = sorted.filter(function (e) { return e.weight === currentWeight; }).slice(-2);
     if (lastTwoSame.length < 2) return null;
 
-    // Suggest increase
-    const increment = currentWeight < 20 ? 2.5 : (currentWeight < 50 ? 2.5 : 5);
-    const suggestedWeight = Math.round((currentWeight + increment) * 2) / 2;
+    var increment = currentWeight < 20 ? 2.5 : (currentWeight < 50 ? 2.5 : 5);
+    var suggestedWeight = Math.round((currentWeight + increment) * 2) / 2;
 
     return {
-      currentWeight,
-      suggestedWeight,
+      currentWeight: currentWeight,
+      suggestedWeight: suggestedWeight,
       sessionsAtWeight: sameWeightEntries.length,
-      increment
+      increment: increment
     };
   }
 
   function findExercise(exerciseId) {
-    for (const day of ROUTINE) {
-      for (const ex of day.exercises) {
-        if (ex.id === exerciseId) return ex;
+    for (var d = 0; d < ROUTINE.length; d++) {
+      for (var e = 0; e < ROUTINE[d].exercises.length; e++) {
+        if (ROUTINE[d].exercises[e].id === exerciseId) return ROUTINE[d].exercises[e];
       }
     }
     return null;
   }
 
+  function findExerciseDay(exerciseId) {
+    for (var d = 0; d < ROUTINE.length; d++) {
+      for (var e = 0; e < ROUTINE[d].exercises.length; e++) {
+        if (ROUTINE[d].exercises[e].id === exerciseId) return d;
+      }
+    }
+    return -1;
+  }
+
+  // =============================================
+  // ROUTINE ROTATION LOGIC (un día sí, otro no)
+  // =============================================
+  function getWorkoutDates() {
+    return Object.keys(state.completions || {}).sort();
+  }
+
+  function getLastWorkoutDate() {
+    var dates = getWorkoutDates();
+    return dates.length > 0 ? dates[dates.length - 1] : null;
+  }
+
+  function getRoutineForDate(dateKey) {
+    var dayCompletions = state.completions[dateKey];
+    if (!dayCompletions) return null;
+    var counts = [0, 0, 0];
+    for (var exId in dayCompletions) {
+      var idx = findExerciseDay(exId);
+      if (idx >= 0) counts[idx]++;
+    }
+    var maxIdx = 0;
+    for (var i = 1; i < 3; i++) {
+      if (counts[i] > counts[maxIdx]) maxIdx = i;
+    }
+    return counts[maxIdx] > 0 ? maxIdx : null;
+  }
+
+  function getTodayRoutine() {
+    var today = getTodayKey();
+    var todayCompletions = getTodayCompletions();
+    var hasDoneAny = false;
+    for (var k in todayCompletions) { hasDoneAny = true; break; }
+
+    if (hasDoneAny) {
+      // Already worked out today, show current routine
+      var routineIdx = getRoutineForDate(today);
+      return routineIdx !== null ? routineIdx : -1;
+    }
+
+    var lastDate = getLastWorkoutDate();
+    if (!lastDate) return 0; // No history → start with Push
+
+    var last = new Date(lastDate + 'T12:00:00');
+    var now = new Date(today + 'T12:00:00');
+    var diffDays = Math.round((now - last) / (1000 * 60 * 60 * 24));
+
+    if (diffDays <= 1) {
+      // Worked out yesterday → rest
+      return -1;
+    }
+
+    // Worked out 2+ days ago → next in rotation
+    var lastRoutine = getRoutineForDate(lastDate);
+    if (lastRoutine === null) return 0;
+    return (lastRoutine + 1) % 3;
+  }
+
   // =============================================
   // SOUND & VIBRATION
   // =============================================
-  let audioCtx = null;
+  var audioCtx = null;
 
   function getAudioCtx() {
     if (!audioCtx) {
-      try {
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      } catch (e) {
-        return null;
-      }
+      try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return null; }
     }
-    if (audioCtx.state === 'suspended') {
-      audioCtx.resume();
-    }
+    if (audioCtx.state === 'suspended') audioCtx.resume();
     return audioCtx;
   }
 
   function playCompleteSound() {
     try {
-      const ctx = getAudioCtx();
+      var ctx = getAudioCtx();
       if (!ctx) return;
-
-      // Pleasant two-tone "ding"
-      const osc1 = ctx.createOscillator();
-      const gain1 = ctx.createGain();
+      var osc1 = ctx.createOscillator();
+      var gain1 = ctx.createGain();
       osc1.connect(gain1);
       gain1.connect(ctx.destination);
       osc1.type = 'sine';
@@ -386,87 +444,123 @@
       osc1.start(ctx.currentTime);
       osc1.stop(ctx.currentTime + 0.3);
 
-      const osc2 = ctx.createOscillator();
-      const gain2 = ctx.createGain();
+      var osc2 = ctx.createOscillator();
+      var gain2 = ctx.createGain();
       osc2.connect(gain2);
       gain2.connect(ctx.destination);
       osc2.type = 'sine';
-      osc2.frequency.value = 1108.73; // C#6
+      osc2.frequency.value = 1108.73;
       gain2.gain.setValueAtTime(0.01, ctx.currentTime);
       gain2.gain.setValueAtTime(0.25, ctx.currentTime + 0.08);
       gain2.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
       osc2.start(ctx.currentTime + 0.08);
       osc2.stop(ctx.currentTime + 0.5);
-    } catch (e) {
-      // Audio not available, silently fail
-    }
+    } catch (e) {}
   }
 
   function vibrate() {
-    try {
-      if (navigator.vibrate) {
-        navigator.vibrate(30);
-      }
-    } catch (e) {
-      // Vibration not supported
-    }
+    try { if (navigator.vibrate) navigator.vibrate(30); } catch (e) {}
   }
 
   // =============================================
-  // UI: Toast notifications
+  // UI: Toast
   // =============================================
-  let toastTimeout = null;
+  var toastTimeout = null;
 
   function showToast(msg) {
-    const el = document.getElementById('toast');
+    var el = document.getElementById('toast');
     if (!el) return;
     clearTimeout(toastTimeout);
     el.textContent = msg;
     el.classList.add('show');
-    toastTimeout = setTimeout(() => {
-      el.classList.remove('show');
-    }, 2000);
+    toastTimeout = setTimeout(function () { el.classList.remove('show'); }, 2000);
   }
 
   // =============================================
-  // UI: Render
+  // UI: Tab switching
   // =============================================
-  let currentDayIndex = 0;
+  var currentTab = 'rutina';
 
-  function getDayIndexForToday() {
-    const dayMap = { 1: 0, 2: 0, 3: 1, 4: 1, 5: 2, 6: 2, 0: 2 };
-    // Mon=1 Tue=2 Wed=3 Thu=4 Fri=5 Sat=6 Sun=0
-    // We want: Mon -> 0, Wed -> 1, Fri -> 2. Other days -> closest
-    const today = new Date().getDay();
-    // Mon=1 (0), Wed=3 (1), Fri=5 (2)
-    if (today === 1) return 0;
-    if (today === 3) return 1;
-    if (today === 5) return 2;
-    // Otherwise find closest: Mon=1(0), Wed=3(1), Fri=5(2)
-    if (today === 0 || today === 6) return 2; // Weekend -> Friday
-    if (today === 2 || today === 4) {
-      // Tue -> closest Mon
-      if (today === 2) return 0;
-      // Thu -> closest Wed
-      return 1;
+  function switchTab(tab) {
+    currentTab = tab;
+    document.querySelectorAll('.tab-btn').forEach(function (btn) {
+      btn.classList.toggle('active', btn.dataset.tab === tab);
+    });
+
+    document.getElementById('homeView').style.display = tab === 'home' ? '' : 'none';
+    document.getElementById('rutinaView').style.display = tab === 'rutina' ? '' : 'none';
+    document.getElementById('statsView').style.display = tab === 'stats' ? '' : 'none';
+
+    if (tab === 'home') renderHome();
+    if (tab === 'stats') renderStats();
+  }
+
+  // =============================================
+  // UI: Routine header (today / rest indicator)
+  // =============================================
+  function renderRoutineStatus() {
+    var container = document.getElementById('routineStatus');
+    if (!container) return;
+
+    var routineIdx = getTodayRoutine();
+    var today = getTodayKey();
+    var todayCompletions = getTodayCompletions();
+    var hasDoneAny = false;
+    for (var k in todayCompletions) { hasDoneAny = true; break; }
+
+    var html = '';
+    if (routineIdx === -1 && !hasDoneAny) {
+      // Rest day
+      var lastDate = getLastWorkoutDate();
+      html = '<div class="routine-status-card rest">';
+      html += '  <div class="routine-status-emoji">🛌</div>';
+      html += '  <div class="routine-status-text">Hoy es <strong>descanso</strong></div>';
+      html += '  <div class="routine-status-sub">';
+      if (lastDate) {
+        var d = new Date(lastDate + 'T12:00:00');
+        var lastRoutine = getRoutineForDate(lastDate);
+        var routineName = lastRoutine !== null ? ROUTINE[lastRoutine].day : '—';
+        html += 'El ' + formatDateShort(d) + ' hiciste <strong>' + routineName + '</strong>. ¡Recupérate bien! 💪';
+      } else {
+        html += 'Mañana toca entrenar. ¡Prepárate! ⚡';
+      }
+      html += '  </div>';
+      html += '</div>';
+    } else {
+      var idx = hasDoneAny ? getRoutineForDate(today) : routineIdx;
+      if (idx === null) idx = 0;
+      var day = ROUTINE[idx];
+      html = '<div class="routine-status-card workout" style="background:linear-gradient(135deg, rgba(233,69,96,0.12), rgba(15,52,96,0.12));border-color:' + (idx === 0 ? '#e94560' : idx === 1 ? '#0f3460' : '#2ecc71') + ';">';
+      html += '  <div class="routine-status-top">';
+      html += '    <div class="routine-status-emoji">' + day.emoji + '</div>';
+      html += '    <div class="routine-status-text">Hoy toca: <strong>' + day.day + '</strong></div>';
+      if (hasDoneAny) html += '    <div class="routine-status-badge">En progreso</div>';
+      html += '  </div>';
+      html += '  <div class="routine-status-sub">' + day.title + '</div>';
+      html += '</div>';
     }
-    return 0;
+
+    container.innerHTML = html;
   }
+
+  // =============================================
+  // UI: Day selector (show all 3 routines)
+  // =============================================
+  var currentDayIndex = 0;
 
   function renderDaySelector() {
-    const container = document.getElementById('daySelector');
+    var container = document.getElementById('daySelector');
     if (!container) return;
 
     container.innerHTML = '';
-    ROUTINE.forEach((day, idx) => {
-      const btn = document.createElement('button');
+    ROUTINE.forEach(function (day, idx) {
+      var btn = document.createElement('button');
       btn.className = 'day-btn' + (idx === currentDayIndex ? ' active' : '');
       btn.dataset.index = idx;
-      btn.innerHTML = `
-        <span class="day-name">${day.day}</span>
-        <span class="day-desc">${day.title}</span>
-        <span class="day-badge" id="badge-${idx}"></span>
-      `;
+      btn.innerHTML =
+        '<span class="day-name">' + day.emoji + ' ' + day.day + '</span>' +
+        '<span class="day-desc">' + day.title + '</span>' +
+        '<span class="day-badge" id="badge-' + idx + '"></span>';
       btn.addEventListener('click', function () {
         currentDayIndex = idx;
         renderDaySelector();
@@ -475,20 +569,22 @@
       container.appendChild(btn);
     });
 
-    // Scroll active into view
-    const active = container.querySelector('.day-btn.active');
+    var active = container.querySelector('.day-btn.active');
     if (active) {
       active.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
     }
   }
 
   function updateDayBadges() {
-    ROUTINE.forEach((day, idx) => {
-      const badge = document.getElementById('badge-' + idx);
+    ROUTINE.forEach(function (day, idx) {
+      var badge = document.getElementById('badge-' + idx);
       if (!badge) return;
-      const completions = getTodayCompletions();
-      const done = day.exercises.filter(e => completions[e.id]).length;
-      const total = day.exercises.length;
+      var completions = getTodayCompletions();
+      var done = 0;
+      for (var i = 0; i < day.exercises.length; i++) {
+        if (completions[day.exercises[i].id]) done++;
+      }
+      var total = day.exercises.length;
       if (done > 0) {
         badge.textContent = done + '/' + total;
         badge.classList.add('show');
@@ -498,100 +594,72 @@
     });
   }
 
+  // =============================================
+  // UI: Render current day
+  // =============================================
   function renderCurrentDay() {
-    const container = document.getElementById('dayView');
+    var container = document.getElementById('dayView');
     if (!container) return;
 
-    const day = ROUTINE[currentDayIndex];
+    var day = ROUTINE[currentDayIndex];
     if (!day) return;
 
-    const completions = getTodayCompletions();
-    const total = day.exercises.length;
-    const done = day.exercises.filter(e => completions[e.id]).length;
+    var completions = getTodayCompletions();
+    var total = day.exercises.length;
 
-    let html = `
-      <div class="day-view-header">
-        <h2>${day.day} — ${day.title}</h2>
-        <p>${day.subtitle}</p>
-      </div>
-    `;
+    var html = '';
 
-    day.exercises.forEach((ex, idx) => {
-      const isCompleted = !!completions[ex.id];
-      const lastWeight = getLastWeight(ex.id);
-      const sessionCount = getSessionCount(ex.id);
-      const progress = getExerciseProgress(ex.id);
-      const lastEntry = progress.length > 0 ? progress[progress.length - 1] : null;
+    day.exercises.forEach(function (ex, idx) {
+      var isCompleted = !!completions[ex.id];
+      var lastWeight = getLastWeight(ex.id);
+      var sessionCount = getSessionCount(ex.id);
+      var progress = getExerciseProgress(ex.id);
 
-      html += `
-        <div class="exercise-card ${isCompleted ? 'completed' : ''}" id="card-${ex.id}">
-          <div class="exercise-top">
-            <div class="exercise-info">
-              <div class="exercise-name">${idx + 1}. ${ex.name}</div>
-              <span class="exercise-muscle">${ex.muscle}</span>
-            </div>
-            <div class="exercise-check">
-              <button class="check-btn ${isCompleted ? 'checked' : ''}" data-ex="${ex.id}" aria-label="Marcar ${ex.name} como completado">
-                ${isCompleted ? '✓' : ''}
-              </button>
-            </div>
-          </div>
-          <div class="exercise-details">
-            <div class="exercise-detail-item">
-              <span class="icon">🔄</span>
-              <span><span class="label">Series: </span><span class="value">${ex.series}</span></span>
-            </div>
-            <div class="exercise-detail-item">
-              <span class="icon">🔁</span>
-              <span><span class="label">Reps: </span><span class="value">${ex.reps}</span></span>
-            </div>
-            <div class="exercise-detail-item">
-              <span class="icon">⏱️</span>
-              <span><span class="label">Descanso: </span><span class="value">${ex.rest}</span></span>
-            </div>
-          </div>
-          <div class="exercise-focus">
-            <div class="focus-label">💡 Enfoque clave</div>
-            ${ex.focus}
-          </div>
-          <div class="exercise-weight-section">
-            <div class="weight-row">
-              <div class="weight-input-group">
-                <input type="number" class="weight-input" id="weight-${ex.id}" 
-                       value="${lastWeight !== null ? lastWeight : ''}" 
-                       placeholder="${lastWeight !== null ? lastWeight : '0'}" 
-                       inputmode="decimal" step="0.5" min="0">
-                <span class="weight-unit">kg</span>
-              </div>
-              <button class="weight-save-btn" data-ex="${ex.id}">Guardar peso</button>
-            </div>
-            <div class="weight-history" id="history-${ex.id}">
-              ${renderWeightHistory(ex.id)}
-            </div>
-            <div id="suggestion-${ex.id}"></div>
-          </div>
-        </div>
-      `;
+      html += '<div class="exercise-card ' + (isCompleted ? 'completed' : '') + '" id="card-' + ex.id + '">';
+      html += '  <div class="exercise-top">';
+      html += '    <div class="exercise-info">';
+      html += '      <div class="exercise-name">' + (idx + 1) + '. ' + ex.name + '</div>';
+      html += '      <span class="exercise-muscle">' + ex.muscle + '</span>';
+      html += '    </div>';
+      html += '    <div class="exercise-check">';
+      html += '      <button class="check-btn ' + (isCompleted ? 'checked' : '') + '" data-ex="' + ex.id + '" aria-label="Marcar ' + ex.name + ' como completado">' + (isCompleted ? '✓' : '') + '</button>';
+      html += '    </div>';
+      html += '  </div>';
+      html += '  <div class="exercise-details">';
+      html += '    <div class="exercise-detail-item"><span class="icon">🔄</span><span><span class="label">Series: </span><span class="value">' + ex.series + '</span></span></div>';
+      html += '    <div class="exercise-detail-item"><span class="icon">🔁</span><span><span class="label">Reps: </span><span class="value">' + ex.reps + '</span></span></div>';
+      html += '    <div class="exercise-detail-item"><span class="icon">⏱️</span><span><span class="label">Descanso: </span><span class="value">' + ex.rest + '</span></span></div>';
+      html += '  </div>';
+      html += '  <div class="exercise-focus">';
+      html += '    <div class="focus-label">💡 Enfoque clave</div>';
+      html += '    ' + ex.focus;
+      html += '  </div>';
+      html += '  <div class="exercise-weight-section">';
+      html += '    <div class="weight-row">';
+      html += '      <div class="weight-input-group">';
+      html += '        <input type="number" class="weight-input" id="weight-' + ex.id + '" value="' + (lastWeight !== null ? lastWeight : '') + '" placeholder="' + (lastWeight !== null ? lastWeight : '0') + '" inputmode="decimal" step="0.5" min="0">';
+      html += '        <span class="weight-unit">kg</span>';
+      html += '      </div>';
+      html += '      <button class="weight-save-btn" data-ex="' + ex.id + '">Guardar peso</button>';
+      html += '    </div>';
+      html += '    <div class="weight-history" id="history-' + ex.id + '">' + renderWeightHistory(ex.id) + '</div>';
+      html += '    <div id="suggestion-' + ex.id + '"></div>';
+      html += '  </div>';
+      html += '</div>';
     });
 
     container.innerHTML = html;
 
-    // Attach event listeners
-    day.exercises.forEach(ex => {
-      // Check button
-      const checkBtn = container.querySelector(`.check-btn[data-ex="${ex.id}"]`);
+    day.exercises.forEach(function (ex) {
+      var checkBtn = container.querySelector('.check-btn[data-ex="' + ex.id + '"]');
       if (checkBtn) {
-        checkBtn.addEventListener('click', function () {
-          toggleCompletion(ex.id);
-        });
+        checkBtn.addEventListener('click', function () { toggleCompletion(ex.id); });
       }
-
-      // Save weight button
-      const saveBtn = container.querySelector(`.weight-save-btn[data-ex="${ex.id}"]`);
-      const weightInput = container.querySelector(`#weight-${ex.id}`);
+      var saveBtn = container.querySelector('.weight-save-btn[data-ex="' + ex.id + '"]');
+      var weightInput = container.querySelector('#weight-' + ex.id);
       if (saveBtn && weightInput) {
         saveBtn.addEventListener('click', function () {
-          const val = weightInput.value.trim();
+          var val = weightInput.value.trim();
           if (val && parseFloat(val) >= 0) {
             saveWeight(ex.id, parseFloat(val));
           } else {
@@ -599,9 +667,7 @@
           }
         });
         weightInput.addEventListener('keydown', function (e) {
-          if (e.key === 'Enter') {
-            saveBtn.click();
-          }
+          if (e.key === 'Enter') saveBtn.click();
         });
       }
     });
@@ -611,135 +677,313 @@
   }
 
   function renderWeightHistory(exerciseId) {
-    const progress = getExerciseProgress(exerciseId);
-    const sessionCount = getSessionCount(exerciseId);
-    const lastWeightVal = getLastWeight(exerciseId);
+    var progress = getExerciseProgress(exerciseId);
+    var sessionCount = getSessionCount(exerciseId);
+    var lastWeightVal = getLastWeight(exerciseId);
 
-    let html = '';
+    var html = '';
     if (sessionCount > 0) {
-      html += `<span class="stat">📊 <span class="stat-value">${sessionCount} ${sessionCount === 1 ? 'sesión' : 'sesiones'}</span></span>`;
+      html += '<span class="stat">📊 <span class="stat-value">' + sessionCount + ' ' + (sessionCount === 1 ? 'sesión' : 'sesiones') + '</span></span>';
     }
     if (lastWeightVal !== null) {
-      html += `<span class="stat">🏋️ Último peso: <span class="stat-value">${lastWeightVal} kg</span></span>`;
+      html += '<span class="stat">🏋️ Último peso: <span class="stat-value">' + lastWeightVal + ' kg</span></span>';
     }
-
-    // Show last 3 weight entries as a trend
     if (progress.length > 0) {
-      const recent = progress.slice(-5);
-      const trend = recent.map(e => e.weight + 'kg').join(' → ');
-      html += `<span class="stat">📈 <span class="stat-value">${trend}</span></span>`;
+      var recent = progress.slice(-5);
+      var trend = recent.map(function (e) { return e.weight + 'kg'; }).join(' → ');
+      html += '<span class="stat">📈 <span class="stat-value">' + trend + '</span></span>';
     }
-
     return html;
   }
 
   function updateProgress() {
-    const day = ROUTINE[currentDayIndex];
+    var day = ROUTINE[currentDayIndex];
     if (!day) return;
+    var completions = getTodayCompletions();
+    var total = day.exercises.length;
+    var done = 0;
+    for (var i = 0; i < day.exercises.length; i++) {
+      if (completions[day.exercises[i].id]) done++;
+    }
+    var pct = total > 0 ? Math.round((done / total) * 100) : 0;
 
-    const completions = getTodayCompletions();
-    const total = day.exercises.length;
-    const done = day.exercises.filter(e => completions[e.id]).length;
-    const pct = total > 0 ? Math.round((done / total) * 100) : 0;
-
-    const fill = document.getElementById('progressFill');
-    const label = document.getElementById('progressLabel');
-    const text = document.getElementById('progressText');
-
+    var fill = document.getElementById('progressFill');
+    var label = document.getElementById('progressLabel');
+    var text = document.getElementById('progressText');
     if (fill) fill.style.width = pct + '%';
     if (label) label.textContent = done + '/' + total + ' ejercicios';
     if (text) text.textContent = pct + '% completado';
   }
 
   // =============================================
-  // UI: Weight suggestion (called after render)
+  // UI: Weight suggestion
   // =============================================
   function checkSuggestions() {
-    const day = ROUTINE[currentDayIndex];
+    var day = ROUTINE[currentDayIndex];
     if (!day) return;
-
-    day.exercises.forEach(ex => {
-      const container = document.getElementById('suggestion-' + ex.id);
+    day.exercises.forEach(function (ex) {
+      var container = document.getElementById('suggestion-' + ex.id);
       if (!container) return;
-
-      const weightInput = document.getElementById('weight-' + ex.id);
+      var weightInput = document.getElementById('weight-' + ex.id);
       if (!weightInput) return;
-
-      const currentWeight = weightInput.value.trim() !== ''
-        ? parseFloat(weightInput.value.trim())
-        : getLastWeight(ex.id);
-
-      if (currentWeight === null || currentWeight <= 0) {
-        container.innerHTML = '';
-        return;
-      }
-
-      const suggestion = getWeightSuggestion(ex.id, currentWeight);
+      var currentWeight = weightInput.value.trim() !== '' ? parseFloat(weightInput.value.trim()) : getLastWeight(ex.id);
+      if (currentWeight === null || currentWeight <= 0) { container.innerHTML = ''; return; }
+      var suggestion = getWeightSuggestion(ex.id, currentWeight);
       if (suggestion) {
-        container.innerHTML = `
-          <div class="suggestion-banner">
-            <span class="icon">🎯</span>
-            <span>¡Buen trabajo! Llevas ${suggestion.sessionsAtWeight} sesiones con ${suggestion.currentWeight}kg. 
-                   Prueba subir a <strong>${suggestion.suggestedWeight} kg</strong> la próxima vez.</span>
-          </div>
-        `;
+        container.innerHTML = '<div class="suggestion-banner"><span class="icon">🎯</span><span>¡Buen trabajo! Llevas ' + suggestion.sessionsAtWeight + ' sesiones con ' + suggestion.currentWeight + 'kg. Prueba subir a <strong>' + suggestion.suggestedWeight + ' kg</strong> la próxima vez.</span></div>';
       } else {
         container.innerHTML = '';
       }
     });
   }
 
-  let suggestionTimer = null;
-
+  var suggestionTimer = null;
   function scheduleSuggestionCheck() {
     clearTimeout(suggestionTimer);
-    suggestionTimer = setTimeout(function () {
-      checkSuggestions();
-    }, 150);
+    suggestionTimer = setTimeout(function () { checkSuggestions(); }, 150);
   }
 
   // =============================================
-  // TAB SWITCHING
+  // UI: updateAll (refresh all dynamic UI)
   // =============================================
-  let currentTab = 'rutina';
+  function updateAll() {
+    renderRoutineStatus();
+    updateProgress();
+    updateDayBadges();
+    scheduleSuggestionCheck();
+  }
 
-  function switchTab(tab) {
-    currentTab = tab;
+  // =============================================
+  // HOME TAB: Interactive Calendar
+  // =============================================
+  var homeMonthOffset = 0; // 0 = current month, -1 = previous, etc.
 
-    // Update tab buttons
-    document.querySelectorAll('.tab-btn').forEach(function (btn) {
-      btn.classList.toggle('active', btn.dataset.tab === tab);
+  function renderHome() {
+    var container = document.getElementById('homeContent');
+    if (!container) return;
+
+    var now = new Date();
+    var year = now.getFullYear();
+    var month = now.getMonth() + homeMonthOffset;
+
+    // Adjust for overflow
+    while (month < 0) { month += 12; year--; }
+    while (month > 11) { month -= 12; year++; }
+
+    var firstDay = new Date(year, month, 1);
+    var lastDay = new Date(year, month + 1, 0);
+    var daysInMonth = lastDay.getDate();
+    var startOffset = firstDay.getDay();
+
+    var monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+      'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+    var dayNames = ['D', 'L', 'M', 'M', 'J', 'V', 'S'];
+    var todayKey = getTodayKey();
+
+    // Build attendance set
+    var attendedSet = {};
+    for (var dateKey in state.completions) {
+      var exCount = Object.keys(state.completions[dateKey]).length;
+      if (exCount > 0) {
+        var routineIdx = getRoutineForDate(dateKey);
+        attendedSet[dateKey] = routineIdx !== null ? routineIdx : -1;
+      }
+    }
+
+    // Determine if a date is selected
+    var selectedDate = document.getElementById('homeContent').dataset.selectedDate || todayKey;
+
+    var html = '';
+
+    // Calendar header with navigation
+    html += '<div class="home-calendar">';
+    html += '  <div class="calendar-header">';
+    html += '    <button class="calendar-nav-btn" id="calPrev" aria-label="Mes anterior">‹</button>';
+    html += '    <h3>' + monthNames[month] + ' ' + year + '</h3>';
+    html += '    <button class="calendar-nav-btn" id="calNext" aria-label="Mes siguiente">›</button>';
+    html += '  </div>';
+    html += '  <div class="calendar-grid">';
+
+    // Day labels
+    dayNames.forEach(function (n) {
+      html += '<div class="calendar-day-label">' + n + '</div>';
     });
 
-    // Show/hide views
-    var rutinaView = document.getElementById('rutinaView');
-    var statsView = document.getElementById('statsView');
-    if (tab === 'rutina') {
-      rutinaView.style.display = '';
-      statsView.style.display = 'none';
-    } else {
-      rutinaView.style.display = 'none';
-      statsView.style.display = '';
-      renderStats();
+    // Empty cells
+    for (var i = 0; i < startOffset; i++) {
+      html += '<div class="calendar-day other-month"></div>';
     }
+
+    // Days
+    for (var day = 1; day <= daysInMonth; day++) {
+      var cellDate = year + '-' + String(month + 1).padStart(2, '0') + '-' + String(day).padStart(2, '0');
+      var isToday = cellDate === todayKey;
+      var isSelected = cellDate === selectedDate;
+      var attended = attendedSet[cellDate];
+
+      var cls = 'calendar-day clickable';
+      if (isToday) cls += ' today';
+      if (isSelected) cls += ' selected';
+      if (attended !== undefined) {
+        cls += ' attended';
+        if (attended === 0) cls += ' routine-push';
+        else if (attended === 1) cls += ' routine-pull';
+        else if (attended === 2) cls += ' routine-legs';
+      }
+
+      html += '<div class="' + cls + '" data-date="' + cellDate + '">';
+      // Show routine emoji on attended days
+      if (attended !== undefined && attended >= 0) {
+        html += '<span class="cal-day-emoji">' + ROUTINE[attended].emoji + '</span>';
+      }
+      html += '<span class="cal-day-num">' + day + '</span>';
+      html += '</div>';
+    }
+
+    html += '  </div>';
+    html += '  <div class="calendar-legend">';
+    html += '    <span class="calendar-legend-item"><span class="legend-box" style="background:#e94560;"></span> Empuje</span>';
+    html += '    <span class="calendar-legend-item"><span class="legend-box" style="background:#0f3460;"></span> Tirón</span>';
+    html += '    <span class="calendar-legend-item"><span class="legend-box" style="background:#2ecc71;"></span> Pierna</span>';
+    html += '  </div>';
+    html += '</div>';
+
+    // Day detail panel
+    html += '<div class="day-detail" id="dayDetail">';
+    html += renderDayDetail(selectedDate);
+    html += '</div>';
+
+    container.innerHTML = html;
+
+    // Bind calendar navigation
+    var prevBtn = document.getElementById('calPrev');
+    var nextBtn = document.getElementById('calNext');
+    if (prevBtn) prevBtn.addEventListener('click', function () { homeMonthOffset--; renderHome(); });
+    if (nextBtn) nextBtn.addEventListener('click', function () { homeMonthOffset++; renderHome(); });
+
+    // Bind day clicks
+    container.querySelectorAll('.calendar-day.clickable').forEach(function (el) {
+      el.addEventListener('click', function () {
+        container.dataset.selectedDate = el.dataset.date;
+        var detailEl = document.getElementById('dayDetail');
+        if (detailEl) detailEl.innerHTML = renderDayDetail(el.dataset.date);
+        // Update selected visual
+        container.querySelectorAll('.calendar-day.clickable').forEach(function (d) { d.classList.remove('selected'); });
+        el.classList.add('selected');
+      });
+    });
+  }
+
+  function renderDayDetail(dateKey) {
+    var d = new Date(dateKey + 'T12:00:00');
+    var dayNames = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+    var dayName = dayNames[d.getDay()];
+    var formatted = formatDateShort(d);
+    var todayKey = getTodayKey();
+
+    // Check if this date is in the future
+    if (dateKey > todayKey) {
+      return '<div class="day-detail-empty"><div class="day-detail-date">' + formatted + ' (' + dayName + ')</div><div class="day-detail-msg">🔮 Este día aún no ha llegado</div></div>';
+    }
+
+    var completions = getCompletionsForDate(dateKey);
+    var hasData = false;
+    for (var k in completions) { hasData = true; break; }
+
+    if (!hasData) {
+      // Check if there's weight data for this date
+      var hasWeight = false;
+      for (var exId in state.progress) {
+        var entries = state.progress[exId];
+        for (var i = 0; i < entries.length; i++) {
+          if (entries[i].date === dateKey) { hasWeight = true; break; }
+        }
+        if (hasWeight) break;
+      }
+
+      if (hasWeight) {
+        // Has weight data but no completions (unusual, but handle it)
+        return renderDayDetailWithData(dateKey, completions, formatted, dayName);
+      }
+
+      return '<div class="day-detail-empty">' +
+        '<div class="day-detail-date">' + formatted + ' (' + dayName + ')</div>' +
+        '<div class="day-detail-msg">🛌 Descanso</div>' +
+        '<div class="day-detail-sub">No hubo entrenamiento este día</div>' +
+        '</div>';
+    }
+
+    return renderDayDetailWithData(dateKey, completions, formatted, dayName);
+  }
+
+  function renderDayDetailWithData(dateKey, completions, formatted, dayName) {
+    var count = 0;
+    for (var k in completions) { count++; }
+
+    var routineIdx = getRoutineForDate(dateKey);
+    var routineName = routineIdx !== null ? ROUTINE[routineIdx].day : '—';
+    var routineEmoji = routineIdx !== null ? ROUTINE[routineIdx].emoji : '🏋️';
+
+    var html = '<div class="day-detail-data">';
+    html += '  <div class="day-detail-date">' + formatted + ' (' + dayName + ')</div>';
+    html += '  <div class="day-detail-routine">' + routineEmoji + ' ' + routineName + '</div>';
+    html += '  <div class="day-detail-exercises">';
+
+    // List exercises done
+    var dayExercises = [];
+    if (routineIdx !== null) {
+      dayExercises = ROUTINE[routineIdx].exercises;
+    } else {
+      // Find exercises from completions
+      for (var exId in completions) {
+        var ex = findExercise(exId);
+        if (ex) dayExercises.push(ex);
+      }
+    }
+
+    for (var i = 0; i < dayExercises.length; i++) {
+      var ex = dayExercises[i];
+      var done = !!completions[ex.id];
+      if (!done) continue;
+
+      // Find weight for this date
+      var weightStr = '—';
+      var weightEntries = state.progress[ex.id];
+      if (weightEntries) {
+        for (var w = 0; w < weightEntries.length; w++) {
+          if (weightEntries[w].date === dateKey) {
+            weightStr = weightEntries[w].weight + ' kg';
+            break;
+          }
+        }
+      }
+
+      html += '    <div class="day-detail-ex-item">';
+      html += '      <div class="dd-ex-name">' + ex.name + '</div>';
+      html += '      <div class="dd-ex-meta">';
+      html += '        <span class="dd-ex-muscle">' + ex.muscle + '</span>';
+      html += '        <span class="dd-ex-weight">🏋️ ' + weightStr + '</span>';
+      html += '      </div>';
+      html += '    </div>';
+    }
+
+    html += '  </div>';
+    html += '  <div class="day-detail-summary">' + count + ' ejercicios completados</div>';
+    html += '</div>';
+    return html;
   }
 
   // =============================================
-  // STATS: Core data helpers
+  // STATS
   // =============================================
-  function getWorkoutDates() {
-    return Object.keys(state.completions || {}).sort();
-  }
-
   function getTotalWorkoutDays() {
     return getWorkoutDates().length;
   }
 
   function getExercisesCompletedTotal() {
     var total = 0;
-    var completions = state.completions || {};
-    for (var date in completions) {
-      total += Object.keys(completions[date]).length;
+    for (var date in state.completions) {
+      total += Object.keys(state.completions[date]).length;
     }
     return total;
   }
@@ -758,25 +1002,14 @@
     var streak = 0;
     var today = new Date();
     today.setHours(0, 0, 0, 0);
-
-    // Check if there was a workout today or yesterday to count
     var dateSet = {};
     dates.forEach(function (d) { dateSet[d] = true; });
-
-    // Walk backwards from today
     var checkDate = new Date(today);
     var maxLookback = 365;
     while (maxLookback > 0) {
-      var key = checkDate.getFullYear() + '-' +
-        String(checkDate.getMonth() + 1).padStart(2, '0') + '-' +
-        String(checkDate.getDate()).padStart(2, '0');
-      if (dateSet[key]) {
-        streak++;
-        checkDate.setDate(checkDate.getDate() - 1);
-        maxLookback--;
-      } else {
-        break;
-      }
+      var key = getDateKey(checkDate);
+      if (dateSet[key]) { streak++; checkDate.setDate(checkDate.getDate() - 1); maxLookback--; }
+      else break;
     }
     return streak;
   }
@@ -785,78 +1018,52 @@
     var dates = getWorkoutDates();
     var weeks = {};
 
-    // Group by ISO week
     dates.forEach(function (dateStr) {
       var d = new Date(dateStr + 'T12:00:00');
-      // Get Monday of that week
       var day = d.getDay();
       var diff = d.getDate() - day + (day === 0 ? -6 : 1);
       var monday = new Date(d);
       monday.setDate(diff);
-      var weekKey = monday.getFullYear() + '-' +
-        String(monday.getMonth() + 1).padStart(2, '0') + '-' +
-        String(monday.getDate()).padStart(2, '0');
-
-      if (!weeks[weekKey]) {
-        weeks[weekKey] = { monday: monday, dates: [] };
-      }
+      var weekKey = getDateKey(monday);
+      if (!weeks[weekKey]) weeks[weekKey] = { monday: monday, dates: [] };
       weeks[weekKey].dates.push(dateStr);
     });
 
-    // Get expected days per week (Mon, Wed, Fri = 3 possible)
     var weeklyData = [];
     for (var wk in weeks) {
       var dayNames = weeks[wk].dates.map(function (d) {
-        var dt = new Date(d + 'T12:00:00');
-        return dt.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+        return new Date(d + 'T12:00:00').getDay();
       });
-
-      // Count how many of our training days (1=Mon, 3=Wed, 5=Fri)
-      var mon = dayNames.indexOf(1) >= 0 ? 1 : 0;
-      var wed = dayNames.indexOf(3) >= 0 ? 1 : 0;
-      var fri = dayNames.indexOf(5) >= 0 ? 1 : 0;
-      var attended = mon + wed + fri;
-
-      weeklyData.push({
-        weekStart: weeks[wk].monday,
-        attended: attended,
-        total: 3,
-        mon: mon,
-        wed: wed,
-        fri: fri
+      var attended = 0;
+      if (dayNames.indexOf(1) >= 0) attended++;
+      if (dayNames.indexOf(3) >= 0) attended++;
+      if (dayNames.indexOf(5) >= 0) attended++;
+      // Also count any other day as partial
+      dayNames.forEach(function (day) {
+        if (day !== 1 && day !== 3 && day !== 5) attended = Math.max(attended, 1);
       });
+      weeklyData.push({ weekStart: weeks[wk].monday, attended: Math.min(attended, 3), total: 3 });
     }
 
-    // Sort by week descending
     weeklyData.sort(function (a, b) { return b.weekStart - a.weekStart; });
-
-    // Limit to last 8 weeks
     return weeklyData.slice(0, 8);
   }
 
   function getMuscleGroupStats() {
     var muscleCount = {};
-    var completions = state.completions || {};
-
-    for (var date in completions) {
-      var dayCompletions = completions[date];
+    for (var date in state.completions) {
+      var dayCompletions = state.completions[date];
       for (var exId in dayCompletions) {
         var ex = findExercise(exId);
         if (ex) {
-          var muscle = ex.muscle;
-          if (!muscleCount[muscle]) muscleCount[muscle] = 0;
-          muscleCount[muscle]++;
+          if (!muscleCount[ex.muscle]) muscleCount[ex.muscle] = 0;
+          muscleCount[ex.muscle]++;
         }
       }
     }
-
-    // Sort by count descending
     var sorted = [];
-    for (var m in muscleCount) {
-      sorted.push({ muscle: m, count: muscleCount[m] });
-    }
+    for (var m in muscleCount) sorted.push({ muscle: m, count: muscleCount[m] });
     sorted.sort(function (a, b) { return b.count - a.count; });
-
     return sorted;
   }
 
@@ -865,13 +1072,12 @@
     var dates = getWorkoutDates().reverse();
     var sessions = [];
     var seen = 0;
-
     for (var i = 0; i < dates.length && seen < limit; i++) {
       var date = dates[i];
       var dayCompletions = state.completions[date] || {};
-      var count = Object.keys(dayCompletions).length;
+      var count = 0;
+      for (var k in dayCompletions) count++;
       if (count > 0) {
-        // Determine which days
         var d = new Date(date + 'T12:00:00');
         var dayNames = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
         var dayName = dayNames[d.getDay()];
@@ -888,18 +1094,14 @@
       var day = ROUTINE[dayIdx];
       for (var exIdx = 0; exIdx < day.exercises.length; exIdx++) {
         var ex = day.exercises[exIdx];
-        var p = getExerciseProgress(ex.id);
-        if (p.length > 0) {
-          list.push({ exercise: ex, dayTitle: day.title, dayIdx: dayIdx });
+        if (getExerciseProgress(ex.id).length > 0) {
+          list.push({ exercise: ex, dayTitle: day.day, dayIdx: dayIdx });
         }
       }
     }
     return list;
   }
 
-  // =============================================
-  // STATS: Render
-  // =============================================
   function renderStats() {
     var container = document.getElementById('statsContent');
     if (!container) return;
@@ -912,51 +1114,25 @@
     var muscleStats = getMuscleGroupStats();
     var sessions = getLastSessions(8);
 
-    var topMuscle = muscleStats.length > 0 ? muscleStats[0].muscle : '—';
-
     var weeklyPct = 0;
     if (weeklyData.length > 0) {
       var totalAttended = 0;
       var totalPossible = 0;
-      weeklyData.forEach(function (w) {
-        totalAttended += w.attended;
-        totalPossible += w.total;
-      });
+      weeklyData.forEach(function (w) { totalAttended += w.attended; totalPossible += w.total; });
       weeklyPct = totalPossible > 0 ? Math.round((totalAttended / totalPossible) * 100) : 0;
     }
 
     var html = '';
 
-    // ---- Overview Cards ----
+    // Overview cards
     html += '<div class="stats-grid">';
-    html += '<div class="stat-card highlight">';
-    html += '<div class="stat-icon">📅</div>';
-    html += '<div class="stat-number">' + totalDays + '</div>';
-    html += '<div class="stat-label">Días de gym</div>';
-    html += '</div>';
-    html += '<div class="stat-card">';
-    html += '<div class="stat-icon">🔥</div>';
-    html += '<div class="stat-number">' + streak + '</div>';
-    html += '<div class="stat-label">Racha actual</div>';
-    html += streak > 0 ? '<div class="stat-sub">días seguidos</div>' : '';
-    html += '</div>';
-    html += '<div class="stat-card">';
-    html += '<div class="stat-icon">✅</div>';
-    html += '<div class="stat-number">' + totalExercises + '</div>';
-    html += '<div class="stat-label">Ejercicios hechos</div>';
-    html += '</div>';
-    html += '<div class="stat-card">';
-    html += '<div class="stat-icon">📊</div>';
-    html += '<div class="stat-number">' + weeklyPct + '%</div>';
-    html += '<div class="stat-label">Consistencia semanal</div>';
-    html += '<div class="stat-sub">' + weeklyData.length + ' semanas</div>';
-    html += '</div>';
+    html += '<div class="stat-card highlight"><div class="stat-icon">📅</div><div class="stat-number">' + totalDays + '</div><div class="stat-label">Días de gym</div></div>';
+    html += '<div class="stat-card"><div class="stat-icon">🔥</div><div class="stat-number">' + streak + '</div><div class="stat-label">Racha actual</div>' + (streak > 0 ? '<div class="stat-sub">días seguidos</div>' : '') + '</div>';
+    html += '<div class="stat-card"><div class="stat-icon">✅</div><div class="stat-number">' + totalExercises + '</div><div class="stat-label">Ejercicios hechos</div></div>';
+    html += '<div class="stat-card"><div class="stat-icon">📊</div><div class="stat-number">' + weeklyPct + '%</div><div class="stat-label">Consistencia semanal</div><div class="stat-sub">' + weeklyData.length + ' semanas</div></div>';
     html += '</div>';
 
-    // ---- Attendance Calendar ----
-    html += renderAttendanceCalendar();
-
-    // ---- Weekly Consistency ----
+    // Weekly consistency
     html += '<div class="stats-section-title">📆 Consistencia semanal <span class="line"></span></div>';
     html += '<div class="weekly-list">';
     if (weeklyData.length === 0) {
@@ -965,57 +1141,44 @@
       weeklyData.forEach(function (w) {
         var weekLabel = formatDateShort(w.weekStart);
         var pct = Math.round((w.attended / w.total) * 100);
-        html += '<div class="weekly-row">';
-        html += '<span class="week-label">' + weekLabel + '</span>';
-        html += '<div class="week-days">';
-        html += '<span class="week-dot ' + (w.mon ? 'done' : '') + '">L</span>';
-        html += '<span class="week-dot ' + (w.wed ? 'done' : '') + '">M</span>';
-        html += '<span class="week-dot ' + (w.fri ? 'done' : '') + '">V</span>';
-        html += '</div>';
-        html += '<span class="week-count">' + w.attended + '/3 (' + pct + '%)</span>';
-        html += '</div>';
+        html += '<div class="weekly-row"><span class="week-label">' + weekLabel + '</span><div class="week-days">';
+        html += '<span class="week-dot ' + (w.attended >= 1 ? 'done' : '') + '">W</span>';
+        html += '<span class="week-dot ' + (w.attended >= 2 ? 'done' : '') + '">W</span>';
+        html += '<span class="week-dot ' + (w.attended >= 3 ? 'done' : '') + '">W</span>';
+        html += '</div><span class="week-count">' + w.attended + '/3 (' + pct + '%)</span></div>';
       });
     }
     html += '</div>';
 
-    // ---- Weight Progression Chart ----
+    // Weight progression chart
     html += '<div class="stats-section-title">🏋️ Evolución de peso <span class="line"></span></div>';
-
     var exercisesWithData = getAllExercisesWithProgress();
     if (exercisesWithData.length === 0) {
-      html += '<div class="chart-container">';
-      html += '<div class="chart-empty"><div class="icon">📈</div><p>Registra tus pesos en la rutina para ver la evolución aquí.</p></div>';
-      html += '</div>';
+      html += '<div class="chart-container"><div class="chart-empty"><div class="icon">📈</div><p>Registra tus pesos en la rutina para ver la evolución aquí.</p></div></div>';
     } else {
       html += '<select class="exercise-selector" id="chartExerciseSelect">';
-      exercisesWithData.forEach(function (item, idx) {
+      exercisesWithData.forEach(function (item) {
         html += '<option value="' + item.exercise.id + '">' + item.dayTitle + ': ' + item.exercise.name + '</option>';
       });
       html += '</select>';
       html += '<div class="chart-container">';
       html += '<div class="chart-title" id="chartTitle">Progresión de peso</div>';
-      html += '<div class="chart-canvas-wrapper">';
-      html += '<canvas id="weightChart" width="400" height="220"></canvas>';
-      html += '</div>';
+      html += '<div class="chart-canvas-wrapper"><canvas id="weightChart" width="400" height="220"></canvas></div>';
       html += '<div class="chart-stats-row" id="chartStats"></div>';
       html += '</div>';
     }
 
-    // ---- Most trained muscles ----
+    // Most trained muscles
     if (muscleStats.length > 0) {
       html += '<div class="stats-section-title">💪 Grupos musculares más trabajados <span class="line"></span></div>';
       html += '<div class="session-list">';
-      var showMuscles = muscleStats.slice(0, 6);
-      showMuscles.forEach(function (m) {
-        html += '<div class="session-item">';
-        html += '<span class="session-date">' + m.muscle + '</span>';
-        html += '<span class="session-count">' + m.count + ' ejercicios</span>';
-        html += '</div>';
+      muscleStats.slice(0, 6).forEach(function (m) {
+        html += '<div class="session-item"><span class="session-date">' + m.muscle + '</span><span class="session-count">' + m.count + ' ejercicios</span></div>';
       });
       html += '</div>';
     }
 
-    // ---- Last sessions ----
+    // Last sessions
     html += '<div class="stats-section-title">🕐 Últimas sesiones <span class="line"></span></div>';
     html += '<div class="session-list">';
     if (sessions.length === 0) {
@@ -1024,109 +1187,23 @@
       sessions.forEach(function (s) {
         var d = new Date(s.date + 'T12:00:00');
         var formatted = formatDateShort(d) + ' (' + s.dayName + ')';
-        html += '<div class="session-item">';
-        html += '<span class="session-date">' + formatted + '</span>';
-        html += '<span class="session-count">' + s.count + ' ej.</span>';
-        html += '</div>';
+        html += '<div class="session-item"><span class="session-date">' + formatted + '</span><span class="session-count">' + s.count + ' ej.</span></div>';
       });
     }
     html += '</div>';
 
     container.innerHTML = html;
 
-    // ---- Setup chart ----
     if (exercisesWithData.length > 0) {
       var select = document.getElementById('chartExerciseSelect');
       setupChart(select.value);
-      select.addEventListener('change', function () {
-        setupChart(select.value);
-      });
+      select.addEventListener('change', function () { setupChart(select.value); });
     }
   }
 
-  // =============================================
-  // STATS: Attendance Calendar (month view)
-  // =============================================
-  function renderAttendanceCalendar() {
-    var now = new Date();
-    var year = now.getFullYear();
-    var month = now.getMonth();
-
-    var firstDay = new Date(year, month, 1);
-    var lastDay = new Date(year, month + 1, 0);
-    var daysInMonth = lastDay.getDate();
-    var startOffset = firstDay.getDay(); // 0=Sun
-
-    // Build date key set for quick lookup
-    var attendedSet = {};
-    var completions = state.completions || {};
-    for (var dateKey in completions) {
-      var exCount = Object.keys(completions[dateKey]).length;
-      attendedSet[dateKey] = exCount;
-    }
-
-    var todayKey = getTodayKey();
-    var dayNames = ['D', 'L', 'M', 'M', 'J', 'V', 'S'];
-
-    var monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
-      'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
-
-    var html = '<div class="attendance-calendar">';
-    html += '<div class="calendar-header">';
-    html += '<h3>📅 ' + monthNames[month] + ' ' + year + '</h3>';
-    html += '</div>';
-    html += '<div class="calendar-grid">';
-
-    // Day labels
-    dayNames.forEach(function (n) {
-      html += '<div class="calendar-day-label">' + n + '</div>';
-    });
-
-    // Empty cells before first day
-    for (var i = 0; i < startOffset; i++) {
-      html += '<div class="calendar-day other-month"></div>';
-    }
-
-    // Days
-    for (var day = 1; day <= daysInMonth; day++) {
-      var cellDate = year + '-' +
-        String(month + 1).padStart(2, '0') + '-' +
-        String(day).padStart(2, '0');
-      var isToday = cellDate === todayKey;
-      var attended = attendedSet[cellDate];
-
-      var cls = 'calendar-day';
-      if (isToday) cls += ' today';
-      if (attended && attended >= 3) cls += ' attended';
-      else if (attended && attended > 0) cls += ' attended-some';
-
-      var label = '';
-      if (attended) label = '✓';
-      else if (isToday) label = day;
-
-      html += '<div class="' + cls + '" title="' + cellDate + '">' + (label || day) + '</div>';
-    }
-
-    html += '</div>';
-
-    // Legend
-    html += '<div class="calendar-legend">';
-    html += '<span class="calendar-legend-item"><span class="legend-box" style="background:var(--accent-green);"></span> Completo</span>';
-    html += '<span class="calendar-legend-item"><span class="legend-box" style="background:rgba(46,204,113,0.3);"></span> Parcial</span>';
-    html += '<span class="calendar-legend-item"><span class="legend-box" style="background:transparent;border:1px solid var(--border-color);"></span> Hoy</span>';
-    html += '</div>';
-
-    html += '</div>';
-    return html;
-  }
-
-  // =============================================
-  // STATS: Weight Chart (Canvas)
-  // =============================================
   function setupChart(exerciseId) {
     var canvas = document.getElementById('weightChart');
     if (!canvas) return;
-
     var progress = getExerciseProgress(exerciseId);
     var exercise = findExercise(exerciseId);
     if (!exercise || progress.length === 0) {
@@ -1134,38 +1211,29 @@
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       return;
     }
-
-    // Sort by date
-    var sorted = progress.slice().sort(function (a, b) {
-      return new Date(a.date) - new Date(b.date);
-    });
-
+    var sorted = progress.slice().sort(function (a, b) { return new Date(a.date) - new Date(b.date); });
     var titleEl = document.getElementById('chartTitle');
     if (titleEl) titleEl.textContent = exercise.name;
+    drawWeightChart(canvas, sorted);
 
-    // Draw chart
-    drawWeightChart(canvas, sorted, exercise);
-
-    // Update stats
     var statsEl = document.getElementById('chartStats');
     if (statsEl) {
       var firstW = sorted[0].weight;
       var lastW = sorted[sorted.length - 1].weight;
-      var maxW = sorted.reduce(function (m, e) { return Math.max(m, e.weight); }, 0);
-      var minW = sorted.reduce(function (m, e) { return Math.min(m, e.weight); }, maxW);
+      var maxW = 0;
+      var minW = Infinity;
+      sorted.forEach(function (e) { if (e.weight > maxW) maxW = e.weight; if (e.weight < minW) minW = e.weight; });
       var diff = lastW - firstW;
       var diffClass = diff > 0 ? 'up' : (diff < 0 ? 'down' : '');
       var diffSign = diff > 0 ? '+' : '';
-
       statsEl.innerHTML =
-        '<span class="chart-stat-item">📈 Progreso total: <span class="value ' + diffClass + '">' + diffSign + diff.toFixed(1) + ' kg</span></span>' +
+        '<span class="chart-stat-item">📈 Progreso: <span class="value ' + diffClass + '">' + diffSign + diff.toFixed(1) + ' kg</span></span>' +
         '<span class="chart-stat-item">⬆️ Máximo: <span class="value">' + maxW + ' kg</span></span>' +
-        '<span class="chart-stat-item">⬇️ Mínimo: <span class="value">' + minW + ' kg</span></span>' +
-        '<span class="chart-stat-item">📊 Registros: <span class="value">' + sorted.length + '</span></span>';
+        '<span class="chart-stat-item">⬇️ Mínimo: <span class="value">' + minW + ' kg</span></span>';
     }
   }
 
-  function drawWeightChart(canvas, data, exercise) {
+  function drawWeightChart(canvas, data) {
     var ctx = canvas.getContext('2d');
     var W = canvas.width;
     var H = canvas.height;
@@ -1173,53 +1241,41 @@
     var chartW = W - pad.left - pad.right;
     var chartH = H - pad.top - pad.bottom;
 
-    // Clear
     ctx.clearRect(0, 0, W, H);
 
-    // Find min/max for Y axis
     var values = data.map(function (e) { return e.weight; });
     var minVal = Math.min.apply(null, values);
     var maxVal = Math.max.apply(null, values);
     var range = maxVal - minVal;
-
-    // Add padding to range (10% each side, min 2kg)
     var yPad = Math.max(range * 0.1, 2);
     var yMin = Math.max(0, Math.floor((minVal - yPad) / 2.5) * 2.5);
     var yMax = Math.ceil((maxVal + yPad) / 2.5) * 2.5;
     var yRange = yMax - yMin;
 
-    // X axis: date labels
     var labels = data.map(function (e) {
       var d = new Date(e.date + 'T12:00:00');
       return String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0');
     });
 
-    // ---- Grid lines ----
+    // Grid lines
     ctx.strokeStyle = '#1e2a45';
     ctx.lineWidth = 0.5;
-
     var ySteps = 4;
     for (var yi = 0; yi <= ySteps; yi++) {
       var yVal = yMin + (yi / ySteps) * yRange;
       var yPos = pad.top + chartH - ((yVal - yMin) / yRange) * chartH;
-
       ctx.beginPath();
       ctx.moveTo(pad.left, yPos);
       ctx.lineTo(W - pad.right, yPos);
       ctx.stroke();
-
-      // Y label
       ctx.fillStyle = '#6a6a80';
       ctx.font = '10px -apple-system, sans-serif';
       ctx.textAlign = 'right';
       ctx.textBaseline = 'middle';
-      var label = yVal % 1 === 0 ? yVal.toString() : yVal.toFixed(1);
-      ctx.fillText(label, pad.left - 6, yPos);
+      ctx.fillText(yVal % 1 === 0 ? yVal.toString() : yVal.toFixed(1), pad.left - 6, yPos);
     }
 
-    // ---- Line ----
     if (data.length < 2) {
-      // Single point, just draw a dot
       var x1 = pad.left + chartW / 2;
       var y1 = pad.top + chartH - ((data[0].weight - yMin) / yRange) * chartH;
       ctx.beginPath();
@@ -1229,65 +1285,52 @@
       return;
     }
 
-    // Calculate X positions
     var xPositions = [];
     for (var i = 0; i < data.length; i++) {
-      var x = pad.left + (i / (data.length - 1)) * chartW;
-      xPositions.push(x);
+      xPositions.push(pad.left + (i / (data.length - 1)) * chartW);
     }
 
-    // Draw line
+    // Line
     ctx.beginPath();
     ctx.strokeStyle = '#e94560';
     ctx.lineWidth = 2.5;
     ctx.lineJoin = 'round';
     ctx.lineCap = 'round';
-
-    for (var i = 0; i < data.length; i++) {
-      var yVal = data[i].weight;
-      var yPos = pad.top + chartH - ((yVal - yMin) / yRange) * chartH;
+    for (i = 0; i < data.length; i++) {
+      var yPos = pad.top + chartH - ((data[i].weight - yMin) / yRange) * chartH;
       if (i === 0) ctx.moveTo(xPositions[i], yPos);
       else ctx.lineTo(xPositions[i], yPos);
     }
     ctx.stroke();
 
-    // Gradient fill under line
+    // Fill
     var lastX = xPositions[xPositions.length - 1];
     var firstX = xPositions[0];
     ctx.lineTo(lastX, pad.top + chartH);
     ctx.lineTo(firstX, pad.top + chartH);
     ctx.closePath();
-
     var gradient = ctx.createLinearGradient(0, pad.top, 0, pad.top + chartH);
     gradient.addColorStop(0, 'rgba(233, 69, 96, 0.15)');
     gradient.addColorStop(1, 'rgba(233, 69, 96, 0)');
     ctx.fillStyle = gradient;
     ctx.fill();
 
-    // Draw dots
-    for (var i = 0; i < data.length; i++) {
-      var yVal = data[i].weight;
-      var yPos = pad.top + chartH - ((yVal - yMin) / yRange) * chartH;
-
-      // Outer circle (glow)
+    // Dots
+    for (i = 0; i < data.length; i++) {
+      var yPos = pad.top + chartH - ((data[i].weight - yMin) / yRange) * chartH;
       ctx.beginPath();
       ctx.arc(xPositions[i], yPos, 6, 0, Math.PI * 2);
       ctx.fillStyle = 'rgba(233, 69, 96, 0.15)';
       ctx.fill();
-
-      // Inner circle
       ctx.beginPath();
       ctx.arc(xPositions[i], yPos, 4, 0, Math.PI * 2);
       ctx.fillStyle = '#e94560';
       ctx.fill();
-
-      // White center
       ctx.beginPath();
       ctx.arc(xPositions[i], yPos, 2, 0, Math.PI * 2);
       ctx.fillStyle = '#fff';
       ctx.fill();
 
-      // X label (skip if too many)
       if (data.length <= 10 || i === 0 || i === data.length - 1 || i === Math.floor(data.length / 2)) {
         ctx.fillStyle = '#6a6a80';
         ctx.font = '9px -apple-system, sans-serif';
@@ -1297,7 +1340,7 @@
       }
     }
 
-    // Show weight on last point
+    // Last weight label
     var lastWeight = data[data.length - 1].weight;
     var lastY = pad.top + chartH - ((lastWeight - yMin) / yRange) * chartH;
     ctx.fillStyle = '#e94560';
@@ -1311,53 +1354,55 @@
   // UTILITIES
   // =============================================
   function formatDateShort(d) {
-    var day = String(d.getDate()).padStart(2, '0');
-    var month = String(d.getMonth() + 1).padStart(2, '0');
-    return day + '/' + month;
+    return String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0');
   }
 
   // =============================================
   // INIT
   // =============================================
   function init() {
-    // Determine which day to show
-    currentDayIndex = getDayIndexForToday();
+    // Determine day for today's routine
+    var routineIdx = getTodayRoutine();
+    if (routineIdx >= 0) {
+      currentDayIndex = routineIdx;
+    } else {
+      // Rest day: show last routine or default
+      var lastDate = getLastWorkoutDate();
+      if (lastDate) {
+        var lastRoutine = getRoutineForDate(lastDate);
+        currentDayIndex = lastRoutine !== null ? lastRoutine : 0;
+      } else {
+        currentDayIndex = 0;
+      }
+    }
 
+    renderRoutineStatus();
     renderDaySelector();
     renderCurrentDay();
-    updateProgress();
-    updateDayBadges();
+    updateAll();
 
-    // Check suggestions after render (weight inputs now have values)
-    scheduleSuggestionCheck();
+    // Tab switching
+    document.querySelectorAll('.tab-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () { switchTab(btn.dataset.tab); });
+    });
 
-    // Listen for weight input changes to update suggestions
+    // Weight input suggestion listener
     document.addEventListener('input', function (e) {
       if (e.target && e.target.classList.contains('weight-input')) {
         scheduleSuggestionCheck();
       }
     });
 
-    // Tab switching
-    document.querySelectorAll('.tab-btn').forEach(function (btn) {
-      btn.addEventListener('click', function () {
-        switchTab(btn.dataset.tab);
-      });
-    });
-
-    // Register service worker
+    // Service worker
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', function () {
-        navigator.serviceWorker.register('sw.js').catch(function (err) {
-          console.warn('SW registration failed:', err);
-        });
+        navigator.serviceWorker.register('sw.js').catch(function () {});
       });
     }
 
-    console.log('🏋️ Gym Calendar initialized!');
+    console.log('🏋️ Gym Calendar v2 initialized!');
   }
 
-  // Wait for DOM
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
   } else {

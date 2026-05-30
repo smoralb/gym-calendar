@@ -1029,6 +1029,238 @@ body {
   color: var(--accent-green);
 }
 
+/* =============================================
+   ROUTINE STATUS (today / rest indicator)
+   ============================================= */
+.routine-status {
+  padding: 12px 16px 4px;
+}
+
+.routine-status-card {
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  animation: slideUp 0.3s ease;
+}
+
+.routine-status-card.rest {
+  border-color: var(--accent-yellow);
+  background: rgba(243, 156, 18, 0.06);
+}
+
+.routine-status-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.routine-status-emoji {
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+.routine-status-text {
+  font-size: 0.95rem;
+  color: var(--text-primary);
+}
+
+.routine-status-text strong {
+  color: var(--accent-primary);
+}
+
+.routine-status-card.rest .routine-status-text strong {
+  color: var(--accent-yellow);
+}
+
+.routine-status-sub {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-top: 4px;
+  margin-left: 34px;
+}
+
+.routine-status-badge {
+  font-size: 0.6rem;
+  background: var(--accent-green);
+  color: #fff;
+  padding: 2px 8px;
+  border-radius: 10px;
+  margin-left: auto;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* =============================================
+   HOME TAB
+   ============================================= */
+.home-view {
+  padding: 16px;
+  animation: fadeIn 0.3s ease;
+}
+
+/* Clickable calendar (home tab) */
+.home-calendar {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.calendar-day.clickable {
+  cursor: pointer;
+  transition: all var(--transition);
+  -webkit-tap-highlight-color: transparent;
+  position: relative;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.calendar-day.clickable:active {
+  transform: scale(0.92);
+}
+
+.calendar-day.clickable.selected {
+  box-shadow: 0 0 0 2px var(--accent-primary);
+  border-radius: 6px;
+}
+
+.calendar-day.clickable .cal-day-emoji {
+  font-size: 0.6rem;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.calendar-day.clickable .cal-day-num {
+  font-size: 0.65rem;
+  pointer-events: none;
+}
+
+/* Routine colors for calendar days */
+.calendar-day.clickable.routine-push {
+  background: rgba(233, 69, 96, 0.2);
+  color: #fff;
+}
+
+.calendar-day.clickable.routine-pull {
+  background: rgba(15, 52, 96, 0.4);
+  color: #fff;
+}
+
+.calendar-day.clickable.routine-legs {
+  background: rgba(46, 204, 113, 0.2);
+  color: #fff;
+}
+
+.calendar-day.clickable.routine-push .cal-day-num,
+.calendar-day.clickable.routine-pull .cal-day-num,
+.calendar-day.clickable.routine-legs .cal-day-num {
+  font-weight: 600;
+}
+
+.calendar-day.clickable.today {
+  border: 1px solid var(--accent-primary);
+}
+
+/* ===== DAY DETAIL PANEL ===== */
+.day-detail {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  margin-bottom: 16px;
+  animation: slideUp 0.25s ease;
+}
+
+.day-detail-empty {
+  text-align: center;
+  padding: 16px 0;
+}
+
+.day-detail-date {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+}
+
+.day-detail-msg {
+  font-size: 1.1rem;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+
+.day-detail-sub {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.day-detail-data .day-detail-date {
+  margin-bottom: 4px;
+}
+
+.day-detail-routine {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--accent-primary);
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.day-detail-exercises {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.day-detail-ex-item {
+  padding: 8px 10px;
+  background: var(--bg-input);
+  border-radius: var(--radius-sm);
+  border-left: 3px solid var(--accent-secondary);
+}
+
+.day-detail-ex-item .dd-ex-name {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  margin-bottom: 3px;
+}
+
+.day-detail-ex-item .dd-ex-meta {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 0.7rem;
+}
+
+.day-detail-ex-item .dd-ex-muscle {
+  color: var(--accent-primary);
+  background: rgba(233, 69, 96, 0.08);
+  padding: 1px 6px;
+  border-radius: 6px;
+}
+
+.day-detail-ex-item .dd-ex-weight {
+  color: var(--accent-green);
+}
+
+.day-detail-summary {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  margin-top: 12px;
+  text-align: center;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-color);
+}
+
+/* Hide day selector container when not needed */
+.day-selector-container {
+  padding: 0 16px;
+}
+
 @media (max-width: 380px) {
   .stats-grid {
     grid-template-columns: 1fr;
