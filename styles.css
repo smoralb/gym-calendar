@@ -1091,6 +1091,51 @@ body {
   white-space: nowrap;
 }
 
+/* ===== SKIPPED EXERCISES NOTICE ===== */
+.skipped-notice {
+  margin-top: 8px;
+  padding: 10px 12px;
+  background: rgba(243, 156, 18, 0.08);
+  border: 1px solid rgba(243, 156, 18, 0.25);
+  border-radius: var(--radius-sm);
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  animation: slideUp 0.3s ease;
+}
+
+.skipped-notice-icon {
+  font-size: 1rem;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.skipped-notice-body {
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.skipped-notice-title {
+  margin-bottom: 3px;
+}
+
+.skipped-notice-title strong {
+  color: var(--accent-yellow);
+}
+
+.skipped-notice-list {
+  font-weight: 500;
+  color: var(--text-primary);
+  font-style: italic;
+  margin-bottom: 4px;
+}
+
+.skipped-notice-note {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+}
+
 /* =============================================
    HOME TAB
    ============================================= */

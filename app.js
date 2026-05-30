@@ -498,6 +498,39 @@
   // =============================================
   // UI: Routine header (today / rest indicator)
   // =============================================
+  function getSkippedExercisesFromLastSession() {
+    var dates = getWorkoutDates();
+    if (dates.length === 0) return null;
+
+    var lastDate = dates[dates.length - 1];
+    var dayCompletions = state.completions[lastDate];
+    if (!dayCompletions) return null;
+
+    var routineIdx = getRoutineForDate(lastDate);
+    if (routineIdx === null) return null;
+
+    var routine = ROUTINE[routineIdx];
+    var missed = [];
+
+    for (var i = 0; i < routine.exercises.length; i++) {
+      if (!dayCompletions[routine.exercises[i].id]) {
+        missed.push(routine.exercises[i].name);
+      }
+    }
+
+    if (missed.length === 0) return null;
+    if (missed.length === routine.exercises.length) return null; // Entire day skipped, normal
+
+    return {
+      date: lastDate,
+      routineName: routine.day,
+      emoji: routine.emoji,
+      missed: missed,
+      totalMissed: missed.length,
+      totalExercises: routine.exercises.length
+    };
+  }
+
   function renderRoutineStatus() {
     var container = document.getElementById('routineStatus');
     if (!container) return;
@@ -538,6 +571,21 @@
       html += '  </div>';
       html += '  <div class="routine-status-sub">' + day.title + '</div>';
       html += '</div>';
+
+      // Show skipped exercises notice from last session
+      var skipped = getSkippedExercisesFromLastSession();
+      if (skipped) {
+        var skipDate = new Date(skipped.date + 'T12:00:00');
+        var skipLabel = formatDateShort(skipDate);
+        html += '<div class="skipped-notice">';
+        html += '  <div class="skipped-notice-icon">📋</div>';
+        html += '  <div class="skipped-notice-body">';
+        html += '    <div class="skipped-notice-title">Te quedaron sin marcar el <strong>' + skipLabel + '</strong> (' + skipped.emoji + ' ' + skipped.routineName + '):</div>';
+        html += '    <div class="skipped-notice-list">' + skipped.missed.join(', ') + '</div>';
+        html += '    <div class="skipped-notice-note">No pasa nada, hoy a darle a tu rutina 💪</div>';
+        html += '  </div>';
+        html += '</div>';
+      }
     }
 
     container.innerHTML = html;
