@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Gym Calendar — Rutina de Ejercicios</title>
+  <meta name="description" content="Calendario de rutina de ejercicios 3 días/semana: Empuje, Tirón, Pierna y Core. Progresión y seguimiento de pesos.">
+
+  <!-- PWA -->
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icons/icon-192.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-192.svg">
+  <meta name="theme-color" content="#1a1a2e">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="mobile-web-app-capable" content="yes">
+
+  <!-- Open Graph -->
+  <meta property="og:title" content="Gym Calendar">
+  <meta property="og:description" content="Rutina de ejercicios 3 días/semana con seguimiento de progreso">
+  <meta property="og:type" content="website">
+  <meta property="og:image" content="icons/icon-512.svg">
+
+  <!-- Styles -->
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- HEADER -->
+    <header class="app-header">
+      <div class="app-title">
+        <svg class="logo" viewBox="0 0 32 32" width="32" height="32">
+          <rect x="2" y="14" width="28" height="4" rx="2" fill="#e94560"/>
+          <rect x="0" y="10" width="6" height="12" rx="2" fill="#0f3460"/>
+          <rect x="26" y="10" width="6" height="12" rx="2" fill="#0f3460"/>
+          <rect x="0" y="9" width="8" height="14" rx="3" fill="none" stroke="#e94560" stroke-width="0.8"/>
+          <rect x="24" y="9" width="8" height="14" rx="3" fill="none" stroke="#e94560" stroke-width="0.8"/>
+        </svg>
+        <span>
+          Gym Calendar
+          <span class="subtitle">Rutina de ejercicios</span>
+        </span>
+      </div>
+      <div class="day-selector" id="daySelector"></div>
+    </header>
+
+    <!-- PROGRESS -->
+    <div class="progress-container">
+      <div class="progress-header">
+        <span id="progressLabel">0/0 ejercicios</span>
+        <span id="progressText">0% completado</span>
+      </div>
+      <div class="progress-bar-track">
+        <div class="progress-bar-fill" id="progressFill"></div>
+      </div>
+    </div>
+
+    <!-- DAY VIEW -->
+    <main class="day-view" id="dayView">
+      <!-- Rendered by JS -->
+    </main>
+  </div>
+
+  <!-- TOAST -->
+  <div class="toast" id="toast"></div>
+
+  <!-- Scripts -->
+  <script src="app.js"></script>
+</body>
+</html>

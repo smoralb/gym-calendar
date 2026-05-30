@@ -1,0 +1,29 @@
+{
+  "name": "Gym Calendar - Rutina de Ejercicios",
+  "short_name": "Gym Calendar",
+  "description": "Calendario de rutina de ejercicios 3 días/semana: Empuje, Tirón, Pierna",
+  "start_url": "/gym-calendar/",
+  "scope": "/gym-calendar/",
+  "display": "standalone",
+  "background_color": "#0f0f1a",
+  "theme_color": "#1a1a2e",
+  "orientation": "portrait",
+  "categories": ["fitness", "health", "lifestyle"],
+  "icons": [
+    {
+      "src": "icons/icon-192.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icons/icon-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [],
+  "lang": "es",
+  "dir": "ltr"
+}
