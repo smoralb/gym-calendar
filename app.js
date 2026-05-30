@@ -370,6 +370,7 @@
     document.getElementById('homeView').style.display = tab === 'home' ? '' : 'none';
     document.getElementById('rutinaView').style.display = tab === 'rutina' ? '' : 'none';
     document.getElementById('statsView').style.display = tab === 'stats' ? '' : 'none';
+    if (tab === 'rutina') { renderCurrentDay(); updateAll(); }
     if (tab === 'home') renderHome();
     if (tab === 'stats') renderStats();
   }
@@ -450,46 +451,21 @@
   // =============================================
   // DAY SELECTOR
   // =============================================
-  var currentDayIndex = 0;
-
-  function renderDaySelector() {
-    var container = document.getElementById('daySelector');
-    if (!container) return;
-    container.innerHTML = '';
-    var phase = getPhase(getTodayKey());
-    phase.days.forEach(function (day, idx) {
-      var btn = document.createElement('button');
-      btn.className = 'day-btn' + (idx === currentDayIndex ? ' active' : '');
-      btn.dataset.index = idx;
-      btn.innerHTML = '<span class="day-name">' + day.emoji + ' ' + day.day + '</span><span class="day-desc">' + day.title + '</span><span class="day-badge" id="badge-' + phase.id + '-' + idx + '"></span>';
-      btn.addEventListener('click', function () { currentDayIndex = idx; renderDaySelector(); renderCurrentDay(); });
-      container.appendChild(btn);
-    });
-    var active = container.querySelector('.day-btn.active');
-    if (active) active.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
-  }
-
-  function updateDayBadges() {
-    var phase = getPhase(getTodayKey());
-    phase.days.forEach(function (day, idx) {
-      var badge = document.getElementById('badge-' + phase.id + '-' + idx);
-      if (!badge) return;
-      var completions = getTodayCompletions();
-      var done = 0;
-      day.exercises.forEach(function (ex) { if (completions[ex.id]) done++; });
-      if (done > 0) { badge.textContent = done + '/' + day.exercises.length; badge.classList.add('show'); }
-      else badge.classList.remove('show');
-    });
-  }
-
   // =============================================
-  // RENDER CURRENT DAY
+  // RENDER TODAY'S ROUTINE
   // =============================================
   function renderCurrentDay() {
     var container = document.getElementById('dayView');
     if (!container) return;
     var phase = getPhase(getTodayKey());
-    var day = phase.days[currentDayIndex];
+
+    var routineIdx = getTodayRoutine();
+    if (routineIdx === -1) {
+      // Rest day — no exercises to show
+      container.innerHTML = '';
+      return;
+    }
+    var day = phase.days[routineIdx];
     if (!day) return;
     var completions = getTodayCompletions();
 
@@ -537,7 +513,6 @@
     });
 
     updateProgress();
-    updateDayBadges();
   }
 
   function renderWeightHistory(exerciseId) {
@@ -556,7 +531,9 @@
 
   function updateProgress() {
     var phase = getPhase(getTodayKey());
-    var day = phase.days[currentDayIndex];
+    var routineIdx = getTodayRoutine();
+    if (routineIdx === -1) { var f = document.getElementById('progressFill'); if (f) f.style.width = '0%'; var l = document.getElementById('progressLabel'); if (l) l.textContent = '—'; var t = document.getElementById('progressText'); if (t) t.textContent = 'Descanso'; return; }
+    var day = phase.days[routineIdx];
     if (!day) return;
     var completions = getTodayCompletions();
     var done = 0;
@@ -572,7 +549,9 @@
 
   function checkSuggestions() {
     var phase = getPhase(getTodayKey());
-    var day = phase.days[currentDayIndex];
+    var routineIdx = getTodayRoutine();
+    if (routineIdx === -1) return;
+    var day = phase.days[routineIdx];
     if (!day) return;
     day.exercises.forEach(function (ex) {
       var container = document.getElementById('suggestion-' + ex.id);
@@ -590,7 +569,7 @@
   var suggestionTimer = null;
   function scheduleSuggestionCheck() { clearTimeout(suggestionTimer); suggestionTimer = setTimeout(function () { checkSuggestions(); }, 150); }
 
-  function updateAll() { renderRoutineStatus(); updateProgress(); updateDayBadges(); scheduleSuggestionCheck(); }
+  function updateAll() { renderRoutineStatus(); updateProgress(); scheduleSuggestionCheck(); }
 
   // =============================================
   // HOME: Interactive Calendar (with future view)
@@ -1078,15 +1057,7 @@
   // INIT
   // =============================================
   function init() {
-    var routineIdx = getTodayRoutine();
-    if (routineIdx >= 0) currentDayIndex = routineIdx;
-    else {
-      var lastDate = getLastWorkoutDate();
-      currentDayIndex = lastDate ? (getRoutineForDate(lastDate) || 0) : 0;
-    }
-
     renderRoutineStatus();
-    renderDaySelector();
     renderCurrentDay();
     updateAll();
 
