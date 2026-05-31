@@ -6,6 +6,8 @@
 (function () {
   'use strict';
 
+  var APP_VERSION = '4.0.0';
+
   // =============================================
   // PHASES: 3 meses de progresión
   // Los ejercicios con el mismo ID comparten historial
@@ -1242,7 +1244,10 @@
       window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js').catch(function () {}); });
     }
 
-    console.log('🏋️ Gym Calendar v4 — Horario semanal configurable!');
+    var vEl = document.getElementById('appVersion');
+    if (vEl) vEl.textContent = 'v' + APP_VERSION;
+
+    console.log('🏋️ Gym Calendar v' + APP_VERSION);
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);

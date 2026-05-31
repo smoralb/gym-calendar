@@ -1,6 +1,7 @@
 {
   "name": "Gym Calendar - Rutina de Ejercicios",
   "short_name": "Gym Calendar",
+  "version": "4.0.0",
   "description": "Calendario de rutina de ejercicios 3 días/semana: Empuje, Tirón, Pierna",
   "start_url": "/gym-calendar/",
   "scope": "/gym-calendar/",
