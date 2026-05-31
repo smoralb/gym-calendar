@@ -1,12 +1,12 @@
 /* =============================================
    Gym Calendar - App de Rutina de Ejercicios
-   Versión: 4.0.0 — Horario semanal configurable
+   Versión: 4.0.1 — Horario semanal configurable
    ============================================= */
 
 (function () {
   'use strict';
 
-  var APP_VERSION = '4.0.0';
+  var APP_VERSION = '4.0.1';
 
   // =============================================
   // PHASES: 3 meses de progresión
