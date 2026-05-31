@@ -1,6 +1,6 @@
 /* =============================================
    Gym Calendar - App de Rutina de Ejercicios
-   Versión: 3.0.0 - Plan 3 meses con fases
+   Versión: 4.0.0 — Horario semanal configurable
    ============================================= */
 
 (function () {
@@ -23,31 +23,31 @@
           id: 'dia1', day: 'Empuje', emoji: '🔥',
           title: 'Pecho, Hombro anterior y Tríceps',
           exercises: [
-            { id: 'press_plano', name: 'Press plano con mancuernas', muscle: 'Pecho', series: 3, reps: '12', repsMin: 12, repsMax: 12, rest: '90 seg', focus: 'Clavar escápulas. No bloquear codos arriba.', weightHint: '5-7.5 kg / mancuerna' },
-            { id: 'press_inclinado', name: 'Press inclinado con mancuernas', muscle: 'Pecho (Superior)', series: 3, reps: '12', repsMin: 12, repsMax: 12, rest: '90 seg', focus: 'Tronco a 30°-45°. Controla la bajada.', weightHint: '5 kg / mancuerna' },
-            { id: 'aperturas_planas', name: 'Aperturas planas (Flyes)', muscle: 'Pecho', series: 3, reps: '12', repsMin: 12, repsMax: 12, rest: '60 seg', focus: 'Movimiento controlado en arco. Codos ligeramente flexionados.', weightHint: '2-3 kg / mancuerna' },
-            { id: 'press_militar_sentado', name: 'Press militar sentado', muscle: 'Hombro', series: 3, reps: '12', repsMin: 12, repsMax: 12, rest: '90 seg', focus: 'Empuje vertical. Espalda recta apoyada.', weightHint: '3-5 kg / mancuerna' },
-            { id: 'extension_triceps', name: 'Extensión tras nuca (2 manos)', muscle: 'Tríceps', series: 3, reps: '12', repsMin: 12, repsMax: 12, rest: '60 seg', focus: 'Codos cerrados mirando al frente.', weightHint: '5 kg (1 mancuerna)' }
+            { id: 'press_plano', name: 'Press plano con mancuernas', muscle: 'Pecho', series: 3, reps: '12', repsMin: 12, repsMax: 12, rest: '90 seg', focus: 'Clavar escápulas. No bloquear codos arriba. Empieza ligero, sube solo si la técnica es perfecta.', weightHint: '5-7.5 kg / mancuerna' },
+            { id: 'press_inclinado', name: 'Press inclinado con mancuernas', muscle: 'Pecho (Superior)', series: 3, reps: '12', repsMin: 12, repsMax: 12, rest: '90 seg', focus: 'Tronco a 30°-45°. Controla la bajada. Empieza ligero, domina el movimiento antes de subir peso.', weightHint: '5 kg / mancuerna' },
+            { id: 'aperturas_planas', name: 'Aperturas planas (Flyes)', muscle: 'Pecho', series: 3, reps: '12', repsMin: 12, repsMax: 12, rest: '60 seg', focus: 'Movimiento controlado en arco. Codos ligeramente flexionados. Peso muy ligero, siente el pecho.', weightHint: '2-3 kg / mancuerna' },
+            { id: 'press_militar_sentado', name: 'Press militar sentado', muscle: 'Hombro', series: 3, reps: '12', repsMin: 12, repsMax: 12, rest: '90 seg', focus: 'Empuje vertical. Espalda recta apoyada. Empieza ligero, prioriza el control antes que el peso.', weightHint: '3-5 kg / mancuerna' },
+            { id: 'extension_triceps', name: 'Extensión tras nuca (2 manos)', muscle: 'Tríceps', series: 3, reps: '12', repsMin: 12, repsMax: 12, rest: '60 seg', focus: 'Codos cerrados mirando al frente. Controla el descenso, no uses impulso.', weightHint: '5 kg (1 mancuerna)' }
           ]
         },
         {
           id: 'dia2', day: 'Tirón', emoji: '💪',
           title: 'Espalda, Hombro posterior y Bíceps',
           exercises: [
-            { id: 'remo_maquina', name: 'Máquina de remo (apoyo pecho)', muscle: 'Espalda (Grosor)', series: 3, reps: '12', repsMin: 12, repsMax: 12, rest: '90 seg', focus: 'Piensa en dar un codazo hacia atrás.', weightHint: 'Peso ligero en placas' },
-            { id: 'remo_una_mano', name: 'Remo a una mano (en banco)', muscle: 'Espalda (Dorsal)', series: 3, reps: '12', repsMin: 12, repsMax: 12, rest: '90 seg', focus: 'Trayecto en diagonal hacia la cadera.', weightHint: '5-7.5 kg / mancuerna' },
-            { id: 'pajaro', name: 'Pájaro con mancuernas (sentado)', muscle: 'Hombro (Atrás)', series: 3, reps: '12', repsMin: 12, repsMax: 12, rest: '60 seg', focus: 'Pecho pegado a los muslos. Peso muy ligero.', weightHint: '2-3 kg / mancuerna' },
-            { id: 'curl_biceps', name: 'Curl de bíceps con mancuernas', muscle: 'Bíceps', series: 3, reps: '12', repsMin: 12, repsMax: 12, rest: '60 seg', focus: 'Codos pegados a los costados. Sin balanceo.', weightHint: '3-5 kg / mancuerna' }
+            { id: 'remo_maquina', name: 'Máquina de remo (apoyo pecho)', muscle: 'Espalda (Grosor)', series: 3, reps: '12', repsMin: 12, repsMax: 12, rest: '90 seg', focus: 'Piensa en dar un codazo hacia atrás. Peso ligero, controla el retroceso.', weightHint: 'Peso ligero en placas' },
+            { id: 'remo_una_mano', name: 'Remo a una mano (en banco)', muscle: 'Espalda (Dorsal)', series: 3, reps: '12', repsMin: 12, repsMax: 12, rest: '90 seg', focus: 'Trayecto en diagonal hacia la cadera. Empieza ligero, siente el dorsal.', weightHint: '5-7.5 kg / mancuerna' },
+            { id: 'pajaro', name: 'Pájaro con mancuernas (sentado)', muscle: 'Hombro (Atrás)', series: 3, reps: '12', repsMin: 12, repsMax: 12, rest: '60 seg', focus: 'Pecho pegado a los muslos. Peso muy ligero, movimiento sin balanceo.', weightHint: '2-3 kg / mancuerna' },
+            { id: 'curl_biceps', name: 'Curl de bíceps con mancuernas', muscle: 'Bíceps', series: 3, reps: '12', repsMin: 12, repsMax: 12, rest: '60 seg', focus: 'Codos pegados a los costados. Sin balanceo. Empieza ligero, controla el movimiento completo.', weightHint: '3-5 kg / mancuerna' }
           ]
         },
         {
           id: 'dia3', day: 'Pierna', emoji: '🦵',
           title: 'Pierna y Core',
           exercises: [
-            { id: 'sentadilla_goblet', name: 'Sentadilla Goblet', muscle: 'Cuádriceps / Glúteo', series: 3, reps: '12', repsMin: 12, repsMax: 12, rest: '90 seg', focus: 'Baja como si te sentaras. Espalda recta. Mancuerna al pecho.', weightHint: '5-7.5 kg (1 mancuerna)' },
-            { id: 'zancadas_estaticas', name: 'Zancadas estáticas', muscle: 'Piernas en general', series: 3, reps: '10 (por pierna)', repsMin: 10, repsMax: 10, rest: '60 seg', focus: 'Paso al frente y baja vertical. Controla el equilibrio.', weightHint: 'Solo peso corporal' },
-            { id: 'elevaciones_laterales', name: 'Elevaciones laterales', muscle: 'Hombro (Lateral)', series: 3, reps: '12', repsMin: 12, repsMax: 12, rest: '60 seg', focus: 'Sube brazos hacia los lados. Peso ligero.', weightHint: '2-3 kg / mancuerna' },
-            { id: 'plancha', name: 'Plancha abdominal (Plank)', muscle: 'Abdomen (Core)', series: 3, reps: '30 seg', repsMin: 30, repsMax: 30, rest: '60 seg', isTimed: true, focus: 'Cuerpo recto como una tabla. Aprieta abdomen y glúteo.', weightHint: 'Peso corporal' }
+            { id: 'sentadilla_goblet', name: 'Sentadilla Goblet', muscle: 'Cuádriceps / Glúteo', series: 3, reps: '12', repsMin: 12, repsMax: 12, rest: '90 seg', focus: 'Baja como si te sentaras. Espalda recta. Mancuerna al pecho. Empieza ligero, domina la profundidad.', weightHint: '5-7.5 kg (1 mancuerna)' },
+            { id: 'zancadas_estaticas', name: 'Zancadas estáticas', muscle: 'Piernas en general', series: 3, reps: '10 (por pierna)', repsMin: 10, repsMax: 10, rest: '60 seg', focus: 'Paso al frente y baja vertical. Controla el equilibrio. Solo peso corporal.', weightHint: 'Solo peso corporal' },
+            { id: 'elevaciones_laterales', name: 'Elevaciones laterales', muscle: 'Hombro (Lateral)', series: 3, reps: '12', repsMin: 12, repsMax: 12, rest: '60 seg', focus: 'Sube brazos hacia los lados. Peso muy ligero, control estricto, sin balanceo.', weightHint: '2-3 kg / mancuerna' },
+            { id: 'plancha', name: 'Plancha abdominal (Plank)', muscle: 'Abdomen (Core)', series: 3, reps: '30 seg', repsMin: 30, repsMax: 30, rest: '60 seg', isTimed: true, focus: 'Cuerpo recto como una tabla. Aprieta abdomen y glúteo. Respiración constante.', weightHint: 'Peso corporal' }
           ]
         }
       ]
@@ -138,12 +138,20 @@
   ];
 
   // =============================================
+  // WARMUP
+  // =============================================
+  var WARMUP = {
+    general: '🔥 5 min de movilidad articular (cuello, hombros, muñecas, cadera, tobillos)',
+    approach: '➕ 1-2 series de aproximación con peso ligero en el primer ejercicio'
+  };
+
+  // =============================================
   // STATE
   // =============================================
   var STORAGE_KEY = 'gym_calendar_data';
 
   function getDefaultState() {
-    return { progress: {}, completions: {} };
+    return { progress: {}, completions: {}, settings: { trainingDays: [1,3,5] } };
   }
 
   function loadState() {
@@ -151,7 +159,13 @@
       var raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
         var data = JSON.parse(raw);
-        return { progress: data.progress || {}, completions: data.completions || {} };
+        var st = { progress: data.progress || {}, completions: data.completions || {} };
+        // Ensure settings exist (retrocompatibility with old data)
+        st.settings = data.settings || {};
+        if (!Array.isArray(st.settings.trainingDays) || st.settings.trainingDays.length === 0) {
+          st.settings.trainingDays = [1, 3, 5];
+        }
+        return st;
       }
     } catch (e) {}
     return getDefaultState();
@@ -192,14 +206,6 @@
     return getTodayKey();
   }
 
-  function getWeekNumber(dateKey) {
-    var start = new Date(getStartDate() + 'T12:00:00');
-    var current = new Date(dateKey + 'T12:00:00');
-    if (current < start) return 0;
-    var diffMs = current - start;
-    return Math.floor(diffMs / (1000 * 60 * 60 * 24 * 7)) + 1;
-  }
-
   function getPhaseIndex(dateKey) {
     var week = getWeekNumber(dateKey);
     if (week <= 4) return 0;
@@ -208,6 +214,62 @@
   }
 
   function getPhase(dateKey) { return PHASES[getPhaseIndex(dateKey)]; }
+
+  // =============================================
+  // ISO WEEK & SCHEDULE HELPERS
+  // =============================================
+  function isoDow(date) {
+    return (date.getDay() + 6) % 7; // Mon=0, Tue=1, ..., Sun=6
+  }
+
+  function getMonday(dateObj) {
+    var d = new Date(dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate(), 12, 0, 0);
+    var day = d.getDay();
+    var diff = day === 0 ? -6 : 1 - day;
+    d.setDate(d.getDate() + diff);
+    return d;
+  }
+
+  function getWeekNumber(dateKey) {
+    var startKey = getStartDate();
+    var start = new Date(startKey + 'T12:00:00');
+    var current = new Date(dateKey + 'T12:00:00');
+    var mondayStart = getMonday(start);
+    var mondayCurrent = getMonday(current);
+    if (mondayCurrent < mondayStart) return 0;
+    var diffMs = mondayCurrent - mondayStart;
+    return Math.floor(diffMs / (7 * 86400000)) + 1;
+  }
+
+  function getTrainingDays() {
+    if (!state.settings || !Array.isArray(state.settings.trainingDays) || state.settings.trainingDays.length === 0) {
+      return [1, 3, 5];
+    }
+    var days = state.settings.trainingDays.slice();
+    days.sort(function(a, b) {
+      var aIso = (a + 6) % 7;
+      var bIso = (b + 6) % 7;
+      return aIso - bIso;
+    });
+    return days;
+  }
+
+  function isTrainingDay(dateKey) {
+    var d = new Date(dateKey + 'T12:00:00');
+    var day = d.getDay();
+    return getTrainingDays().indexOf(day) !== -1;
+  }
+
+  function getRoutineSlotForDate(dateKey) {
+    if (!isTrainingDay(dateKey)) return -1;
+    var d = new Date(dateKey + 'T12:00:00');
+    var day = d.getDay();
+    var trainingDays = getTrainingDays();
+    var slot = trainingDays.indexOf(day);
+    if (slot === -1) return -1;
+    var phase = getPhase(dateKey);
+    return slot % phase.days.length;
+  }
 
   // =============================================
   // ROUTINE HELPERS
@@ -259,17 +321,20 @@
     var todayCompletions = getTodayCompletions();
     var hasDoneAny = false;
     for (var k in todayCompletions) { hasDoneAny = true; break; }
-    if (hasDoneAny) { var ri = getRoutineForDate(today); return ri !== null ? ri : -1; }
 
-    var lastDate = getLastWorkoutDate();
-    if (!lastDate) return 0;
-    var last = new Date(lastDate + 'T12:00:00');
-    var now = new Date(today + 'T12:00:00');
-    var diffDays = Math.round((now - last) / (1000 * 60 * 60 * 24));
-    if (diffDays <= 1) return -1;
-    var lastRoutine = getRoutineForDate(lastDate);
-    if (lastRoutine === null) return 0;
-    return (lastRoutine + 1) % 3;
+    // If completions exist today, use the actual routine from completions
+    if (hasDoneAny) {
+      var ri = getRoutineForDate(today);
+      return ri !== null ? ri : -1;
+    }
+
+    // If today is a training day, return the scheduled routine
+    if (isTrainingDay(today)) {
+      return getRoutineSlotForDate(today);
+    }
+
+    // Rest day with no completions
+    return -1;
   }
 
   // =============================================
@@ -413,6 +478,15 @@
     var html = '';
     if (routineIdx === -1 && !hasDoneAny) {
       var lastDate = getLastWorkoutDate();
+      // Find next training day
+      var nextDate = null;
+      var checkD = new Date(today + 'T12:00:00');
+      for (var ci = 1; ci <= 7; ci++) {
+        checkD.setDate(checkD.getDate() + 1);
+        var ck = getDateKey(checkD);
+        if (isTrainingDay(ck)) { nextDate = ck; break; }
+      }
+      var dayNames = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
       html = '<div class="routine-status-card rest">';
       html += '  <div class="routine-status-top"><div class="routine-status-emoji">🛌</div><div class="routine-status-text">Hoy es <strong>descanso</strong></div></div>';
       html += '  <div class="routine-status-sub">';
@@ -421,7 +495,13 @@
         var lr = getRoutineForDate(lastDate);
         var rn = lr !== null ? phase.days[lr].day : '—';
         html += 'El ' + formatDateShort(d) + ' hiciste <strong>' + rn + '</strong>. ¡Recupérate bien! 💪';
-      } else html += 'Mañana toca entrenar. ¡Prepárate! ⚡';
+      } else {
+        html += '¡Empieza tu plan! Selecciona un día de entreno para comenzar. 💪';
+      }
+      if (nextDate) {
+        var nd = new Date(nextDate + 'T12:00:00');
+        html += ' Próximo entreno: <strong>' + dayNames[nd.getDay()] + '</strong>.';
+      }
       html += '  </div>';
       // Show phase info even on rest days
       html += '  <div class="routine-status-phase">' + phase.name + '</div>';
@@ -471,6 +551,18 @@
 
     var html = '';
     html += '<div class="day-view-header"><h2>' + day.emoji + ' ' + day.day + '</h2><p>' + day.title + '</p></div>';
+
+    // Warmup card
+    var phaseIdx = getPhaseIndex(getTodayKey());
+    var warmupEmphasis = phaseIdx === 0 ? '🔧 <strong>Mes 1: Prioriza la técnica sobre el peso.</strong> Aprende el movimiento, controla cada repetición. Empieza ligero, sube solo si la técnica es perfecta.' : '🔥 Calentamiento: movilidad articular + series de aproximación.';
+    html += '<div class="warmup-card">';
+    html += '  <div class="warmup-card-icon">🔥</div>';
+    html += '  <div class="warmup-card-content">';
+    html += '    <div class="warmup-card-text">' + WARMUP.general + '</div>';
+    html += '    <div class="warmup-card-text">' + WARMUP.approach + '</div>';
+    html += '    <div class="warmup-card-emphasis">' + warmupEmphasis + '</div>';
+    html += '  </div>';
+    html += '</div>';
 
     day.exercises.forEach(function (ex, idx) {
       var isCompleted = !!completions[ex.id];
@@ -605,6 +697,26 @@
     var selectedDate = container.dataset.selectedDate || todayKey;
 
     var html = '';
+
+    // ---- Schedule settings (day selector) ----
+    var dayLabelsShort = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
+    var dayNamesFull = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
+    var dayGetDayMap = [1, 2, 3, 4, 5, 6, 0]; // Mon=1 ... Sun=0
+    var currentTrainingDays = getTrainingDays();
+
+    html += '<div class="schedule-settings">';
+    html += '  <div class="schedule-settings-title">📅 Tus días de entrenamiento</div>';
+    html += '  <div class="schedule-settings-chips">';
+    for (var ci = 0; ci < 7; ci++) {
+      var dVal = dayGetDayMap[ci];
+      var isActive = currentTrainingDays.indexOf(dVal) !== -1;
+      html += '    <button class="weekday-chip' + (isActive ? ' active' : '') + '" data-day="' + dVal + '">' + dayLabelsShort[ci] + '</button>';
+    }
+    html += '  </div>';
+    html += '  <div class="schedule-settings-hint">Recomendado: 3 días/semana (un día sí, otro no)</div>';
+    html += '</div>';
+
+    // ---- Calendar ----
     html += '<div class="home-calendar">';
     html += '  <div class="calendar-header"><button class="calendar-nav-btn" id="calPrev">‹</button><h3>' + monthNames[month] + ' ' + year + '</h3><button class="calendar-nav-btn" id="calNext">›</button></div>';
     html += '  <div class="calendar-grid">';
@@ -616,31 +728,50 @@
       var isToday = cellDate === todayKey;
       var isSelected = cellDate === selectedDate;
       var attended = attendedSet[cellDate];
+      var isPast = cellDate < todayKey;
       var isFuture = cellDate > todayKey;
+      var scheduled = isTrainingDay(cellDate);
+      var routineIdx = scheduled ? getRoutineSlotForDate(cellDate) : -1;
 
       var cls = 'calendar-day clickable';
       if (isToday) cls += ' today';
       if (isSelected) cls += ' selected';
       if (isFuture) cls += ' future';
-      if (attended !== undefined) {
-        cls += ' attended';
+
+      if (attended !== undefined && attended >= 0) {
+        // Done: attended
+        cls += ' attended done';
         cls += attended === 0 ? ' routine-push' : attended === 1 ? ' routine-pull' : ' routine-legs';
-      } else if (isFuture) {
-        // Predict routine for future dates
-        var futureRI = predictFutureRoutine(cellDate);
-        if (futureRI >= 0) {
-          cls += ' future-pred';
-          cls += futureRI === 0 ? ' routine-push' : futureRI === 1 ? ' routine-pull' : ' routine-legs';
-        }
+      } else if (scheduled && isToday) {
+        // Planned for today (not yet done)
+        cls += ' routine-push'; // Will be overridden by routine class below
+        cls += routineIdx === 0 ? ' routine-push' : routineIdx === 1 ? ' routine-pull' : ' routine-legs';
+      } else if (scheduled && isFuture) {
+        // Planned future
+        cls += ' planned';
+        cls += routineIdx === 0 ? ' routine-push' : routineIdx === 1 ? ' routine-pull' : ' routine-legs';
+      } else if (scheduled && isPast) {
+        // Missed (scheduled but not done)
+        cls += ' missed';
+        cls += routineIdx === 0 ? ' routine-push' : routineIdx === 1 ? ' routine-pull' : ' routine-legs';
+      } else {
+        // Rest day
+        cls += ' rest';
       }
 
       html += '<div class="' + cls + '" data-date="' + cellDate + '">';
-      if (attended !== undefined && attended >= 0) html += '<span class="cal-day-emoji">' + getPhase(cellDate).days[attended].emoji + '</span>';
-      else if (isFuture) {
-        var fri = predictFutureRoutine(cellDate);
-        if (fri >= 0) html += '<span class="cal-day-emoji small">' + getPhase(cellDate).days[fri].emoji + '</span>';
+      if (attended !== undefined && attended >= 0) {
+        html += '<span class="cal-day-emoji">' + getPhase(cellDate).days[attended].emoji + '</span>';
+      } else if (scheduled) {
+        html += '<span class="cal-day-emoji">' + getPhase(cellDate).days[routineIdx].emoji + '</span>';
+      } else {
+        html += '<span class="cal-day-emoji rest-dot">·</span>';
       }
-      html += '<span class="cal-day-num">' + day + '</span></div>';
+      html += '<span class="cal-day-num">' + day + '</span>';
+      if (attended !== undefined && attended >= 0) {
+        html += '<span class="cal-day-check">✓</span>';
+      }
+      html += '</div>';
     }
 
     html += '  </div>';
@@ -648,12 +779,38 @@
     html += '    <span class="calendar-legend-item"><span class="legend-box" style="background:#e94560;"></span> Empuje</span>';
     html += '    <span class="calendar-legend-item"><span class="legend-box" style="background:#0f3460;"></span> Tirón</span>';
     html += '    <span class="calendar-legend-item"><span class="legend-box" style="background:#2ecc71;"></span> Pierna</span>';
-    html += '    <span class="calendar-legend-item"><span class="legend-box" style="background:transparent;border:1px dashed var(--text-muted);"></span> Predicción</span>';
+    html += '    <span class="calendar-legend-item"><span class="legend-box rest-box"></span> Descanso</span>';
     html += '  </div>';
     html += '</div>';
 
     html += '<div class="day-detail" id="dayDetail">' + renderDayDetail(selectedDate) + '</div>';
     container.innerHTML = html;
+
+    // Weekday chip toggle
+    container.querySelectorAll('.weekday-chip').forEach(function (chip) {
+      chip.addEventListener('click', function () {
+        var dayVal = parseInt(chip.dataset.day, 10);
+        var days = state.settings.trainingDays.slice();
+        var idx = days.indexOf(dayVal);
+        if (idx !== -1) {
+          if (days.length <= 1) {
+            showToast('Selecciona al menos un día');
+            return;
+          }
+          days.splice(idx, 1);
+        } else {
+          days.push(dayVal);
+        }
+        state.settings.trainingDays = days;
+        saveState();
+        // Preserve selected date
+        var selDate = container.dataset.selectedDate;
+        renderHome();
+        // Re-apply selected date
+        var newContainer = document.getElementById('homeContent');
+        if (newContainer && selDate) newContainer.dataset.selectedDate = selDate;
+      });
+    });
 
     var prevBtn = document.getElementById('calPrev');
     var nextBtn = document.getElementById('calNext');
@@ -671,54 +828,64 @@
     });
   }
 
-  function predictFutureRoutine(dateKey) {
-    // Walk backwards from the given date to find the last known workout
-    var checkDate = new Date(dateKey + 'T12:00:00');
-    for (var i = 1; i <= 14; i++) { // Look back up to 14 days
-      checkDate.setDate(checkDate.getDate() - 1);
-      var ck = getDateKey(checkDate);
-      var completions = state.completions[ck];
-      if (completions) {
-        var hasAny = false;
-        for (var k in completions) { hasAny = true; break; }
-        if (hasAny) {
-          var lastRI = getRoutineForDate(ck);
-          if (lastRI !== null) {
-            // Count days since then
-            var futureD = new Date(dateKey + 'T12:00:00');
-            var pastD = new Date(ck + 'T12:00:00');
-            var diffDays = Math.round((futureD - pastD) / (1000 * 60 * 60 * 24));
-            // Every other day: next routine after 2+ days
-            if (diffDays <= 1) return -1; // Would be rest
-            var steps = Math.floor((diffDays + 1) / 2); // How many workouts in between
-            return (lastRI + steps) % 3;
-          }
-        }
-      }
-    }
-    return 0; // No history, start with push
-  }
-
   function renderDayDetail(dateKey) {
     var d = new Date(dateKey + 'T12:00:00');
     var dayNames = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
     var dayName = dayNames[d.getDay()];
     var formatted = formatDateShort(d);
     var todayKey = getTodayKey();
+    var isPast = dateKey < todayKey;
     var isFuture = dateKey > todayKey;
+    var isToday = dateKey === todayKey;
 
     // Determine phase for this date
     var phase = getPhase(dateKey);
     var weekNum = getWeekNumber(dateKey);
+    var scheduled = isTrainingDay(dateKey);
+    var routineIdx = scheduled ? getRoutineSlotForDate(dateKey) : -1;
+    var phaseInfo = ' · ' + phase.name;
 
-    if (isFuture) {
-      var routineIdx = predictFutureRoutine(dateKey);
-      var phaseInfo = ' · ' + phase.name;
-
-      if (routineIdx === -1) {
-        return '<div class="day-detail-empty"><div class="day-detail-date">' + formatted + ' (' + dayName + ')' + phaseInfo + '</div><div class="day-detail-msg">🛌 Descanso</div><div class="day-detail-sub">Toca recuperación. Vuelve mañana 💪</div></div>';
+    // Check for completions / weight data
+    var completions = getCompletionsForDate(dateKey);
+    var hasData = false;
+    for (var k in completions) { hasData = true; break; }
+    if (!hasData) {
+      for (var exId in state.progress) {
+        for (var i = 0; i < state.progress[exId].length; i++) {
+          if (state.progress[exId][i].date === dateKey) { hasData = true; break; }
+        }
+        if (hasData) break;
       }
-      var day = phase.days[routineIdx];
+    }
+
+    // If there's data (completions or weights), show the data view
+    if (hasData) {
+      return renderDayDetailWithData(dateKey, completions, formatted, dayName, phase, weekNum);
+    }
+
+    // Rest day (not scheduled, no data)
+    if (!scheduled) {
+      var nextDate = null;
+      var checkD = new Date(dateKey + 'T12:00:00');
+      for (var ci = 1; ci <= 7; ci++) {
+        checkD.setDate(checkD.getDate() + 1);
+        var ck = getDateKey(checkD);
+        if (isTrainingDay(ck)) { nextDate = ck; break; }
+      }
+      var nextText = '';
+      if (nextDate) {
+        var nd = new Date(nextDate + 'T12:00:00');
+        nextText = ' Próximo entreno: ' + dayNames[nd.getDay()] + ' ' + formatDateShort(nd) + '.';
+      }
+      return '<div class="day-detail-empty"><div class="day-detail-date">' + formatted + ' (' + dayName + ')' + phaseInfo + '</div><div class="day-detail-msg">🛌 Descanso</div><div class="day-detail-sub">Día libre. Aprovecha para recuperar 💪' + nextText + '</div></div>';
+    }
+
+    // Scheduled training day
+    var day = phase.days[routineIdx];
+
+    if (isFuture || isToday) {
+      // Future or today (not yet done)
+      var verb = isFuture ? 'Te tocará' : 'Hoy toca';
       var html = '<div class="day-detail-data">';
       html += '  <div class="day-detail-date">' + formatted + ' (' + dayName + ')' + phaseInfo + '</div>';
       html += '  <div class="day-detail-routine">' + day.emoji + ' ' + day.day + ' · Semana ' + weekNum + '</div>';
@@ -727,30 +894,23 @@
         html += '    <div class="day-detail-ex-item"><div class="dd-ex-name">' + ex.name + '</div><div class="dd-ex-meta"><span class="dd-ex-muscle">' + ex.muscle + '</span><span class="dd-ex-reps">' + ex.series + '×' + ex.reps + '</span></div></div>';
       });
       html += '  </div>';
-      html += '  <div class="day-detail-summary">🔮 Día de entrenamiento · ' + day.exercises.length + ' ejercicios</div>';
+      html += '  <div class="day-detail-summary">📋 ' + verb + ' ' + day.day + ' · ' + day.exercises.length + ' ejercicios</div>';
       html += '</div>';
       return html;
     }
 
-    var completions = getCompletionsForDate(dateKey);
-    var hasData = false;
-    for (var k in completions) { hasData = true; break; }
-
-    if (!hasData) {
-      // Check if there's weight data
-      var hasWeight = false;
-      for (var exId in state.progress) {
-        for (var i = 0; i < state.progress[exId].length; i++) {
-          if (state.progress[exId][i].date === dateKey) { hasWeight = true; break; }
-        }
-        if (hasWeight) break;
-      }
-      if (hasWeight) return renderDayDetailWithData(dateKey, completions, formatted, dayName, phase, weekNum);
-
-      return '<div class="day-detail-empty"><div class="day-detail-date">' + formatted + ' (' + dayName + ')</div><div class="day-detail-msg">🛌 Descanso</div><div class="day-detail-sub">No hubo entrenamiento este día</div></div>';
-    }
-
-    return renderDayDetailWithData(dateKey, completions, formatted, dayName, phase, weekNum);
+    // Past scheduled day with no data (missed)
+    var html = '<div class="day-detail-data">';
+    html += '  <div class="day-detail-date">' + formatted + ' (' + dayName + ')' + phaseInfo + '</div>';
+    html += '  <div class="day-detail-routine">' + day.emoji + ' ' + day.day + ' · Semana ' + weekNum + '</div>';
+    html += '  <div class="day-detail-exercises">';
+    day.exercises.forEach(function (ex) {
+      html += '    <div class="day-detail-ex-item"><div class="dd-ex-name">' + ex.name + '</div><div class="dd-ex-meta"><span class="dd-ex-muscle">' + ex.muscle + '</span><span class="dd-ex-reps">' + ex.series + '×' + ex.reps + '</span></div></div>';
+    });
+    html += '  </div>';
+    html += '  <div class="day-detail-summary">📋 Entrenamiento planificado (sin registrar) · ' + day.exercises.length + ' ejercicios</div>';
+    html += '</div>';
+    return html;
   }
 
   function renderDayDetailWithData(dateKey, completions, formatted, dayName, phase, weekNum) {
@@ -826,12 +986,12 @@
 
   function getWeeklyConsistency() {
     var dates = getWorkoutDates();
+    var trainingDays = getTrainingDays();
+    var totalDays = trainingDays.length;
     var weeks = {};
     dates.forEach(function (dateStr) {
       var d = new Date(dateStr + 'T12:00:00');
-      var day = d.getDay();
-      var diff = d.getDate() - day + (day === 0 ? -6 : 1);
-      var monday = new Date(d); monday.setDate(diff);
+      var monday = getMonday(d);
       var weekKey = getDateKey(monday);
       if (!weeks[weekKey]) weeks[weekKey] = { monday: monday, dates: [] };
       weeks[weekKey].dates.push(dateStr);
@@ -840,11 +1000,16 @@
     for (var wk in weeks) {
       var dayNs = weeks[wk].dates.map(function (d) { return new Date(d + 'T12:00:00').getDay(); });
       var attended = 0;
-      if (dayNs.indexOf(1) >= 0) attended++;
-      if (dayNs.indexOf(3) >= 0) attended++;
-      if (dayNs.indexOf(5) >= 0) attended++;
-      dayNs.forEach(function (day) { if (day !== 1 && day !== 3 && day !== 5) attended = Math.max(attended, 1); });
-      weeklyData.push({ weekStart: weeks[wk].monday, attended: Math.min(attended, 3), total: 3 });
+      trainingDays.forEach(function (td) {
+        if (dayNs.indexOf(td) >= 0) attended++;
+      });
+      // Extra sessions on non-programmed days count up to total
+      var extraCount = 0;
+      dayNs.forEach(function (day) {
+        if (trainingDays.indexOf(day) === -1) extraCount++;
+      });
+      attended = Math.min(attended + extraCount, totalDays);
+      weeklyData.push({ weekStart: weeks[wk].monday, attended: attended, total: totalDays });
     }
     weeklyData.sort(function (a, b) { return b.weekStart - a.weekStart; });
     return weeklyData.slice(0, 8);
@@ -932,7 +1097,11 @@
     else {
       weeklyData.forEach(function (w) {
         var pct = Math.round((w.attended / w.total) * 100);
-        html += '<div class="weekly-row"><span class="week-label">' + formatDateShort(w.weekStart) + '</span><div class="week-days"><span class="week-dot ' + (w.attended >= 1 ? 'done' : '') + '">W</span><span class="week-dot ' + (w.attended >= 2 ? 'done' : '') + '">W</span><span class="week-dot ' + (w.attended >= 3 ? 'done' : '') + '">W</span></div><span class="week-count">' + w.attended + '/3 (' + pct + '%)</span></div>';
+        var dots = '';
+        for (var di = 0; di < w.total; di++) {
+          dots += '<span class="week-dot ' + (w.attended > di ? 'done' : '') + '">W</span>';
+        }
+        html += '<div class="weekly-row"><span class="week-label">' + formatDateShort(w.weekStart) + '</span><div class="week-days">' + dots + '</div><span class="week-count">' + w.attended + '/' + w.total + ' (' + pct + '%)</span></div>';
       });
     }
     html += '</div>';
@@ -1073,7 +1242,7 @@
       window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js').catch(function () {}); });
     }
 
-    console.log('🏋️ Gym Calendar v3 — Plan 3 meses!');
+    console.log('🏋️ Gym Calendar v4 — Horario semanal configurable!');
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);

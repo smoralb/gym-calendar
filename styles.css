@@ -1088,17 +1088,6 @@ body {
   border-radius: 6px;
 }
 
-.calendar-day.clickable .cal-day-emoji {
-  font-size: 0.6rem;
-  line-height: 1;
-  pointer-events: none;
-}
-
-.calendar-day.clickable .cal-day-num {
-  font-size: 0.65rem;
-  pointer-events: none;
-}
-
 /* Routine colors for calendar days */
 .calendar-day.clickable.routine-push {
   background: rgba(233, 69, 96, 0.2);
@@ -1270,31 +1259,178 @@ body {
   margin-left: 34px;
 }
 
-/* ===== FUTURE DATE PREDICTION STYLES ===== */
-.calendar-day.clickable.future-pred {
-  border: 1px dashed rgba(233, 69, 96, 0.3);
-  background: rgba(233, 69, 96, 0.04);
+/* ===== SCHEDULE SETTINGS (day selector) ===== */
+.schedule-settings {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  margin-bottom: 16px;
 }
 
-.calendar-day.clickable.future-pred .cal-day-emoji.small {
-  font-size: 0.5rem;
+.schedule-settings-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 12px;
 }
 
-.calendar-day.clickable.future-pred.routine-push {
-  border-color: rgba(233, 69, 96, 0.4);
-  background: rgba(233, 69, 96, 0.06);
+.schedule-settings-chips {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
 }
 
-.calendar-day.clickable.future-pred.routine-pull {
-  border-color: rgba(15, 52, 96, 0.4);
-  background: rgba(15, 52, 96, 0.08);
+.weekday-chip {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 2px solid var(--border-color);
+  background: var(--bg-input);
+  color: var(--text-secondary);
+  font-family: var(--font);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition);
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
 
-.calendar-day.clickable.future-pred.routine-legs {
-  border-color: rgba(46, 204, 113, 0.4);
-  background: rgba(46, 204, 113, 0.06);
+.weekday-chip:active {
+  transform: scale(0.9);
 }
 
+.weekday-chip.active {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+  color: #fff;
+}
+
+.schedule-settings-hint {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  text-align: center;
+  margin-top: 10px;
+}
+
+/* ===== WARMUP CARD ===== */
+.warmup-card {
+  display: flex;
+  gap: 10px;
+  padding: 12px 14px;
+  margin-bottom: 16px;
+  background: rgba(243, 156, 18, 0.08);
+  border: 1px solid rgba(243, 156, 18, 0.2);
+  border-radius: var(--radius-md);
+  border-left: 3px solid var(--accent-yellow);
+  animation: slideUp 0.3s ease;
+}
+
+.warmup-card-icon {
+  font-size: 1.3rem;
+  flex-shrink: 0;
+  line-height: 1.3;
+}
+
+.warmup-card-content {
+  flex: 1;
+}
+
+.warmup-card-text {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin-bottom: 2px;
+}
+
+.warmup-card-emphasis {
+  font-size: 0.72rem;
+  color: var(--accent-yellow);
+  font-weight: 500;
+  margin-top: 4px;
+  line-height: 1.4;
+}
+
+/* ===== NEW CALENDAR STATES ===== */
+.calendar-day.clickable.planned {
+  border: 1px solid rgba(233, 69, 96, 0.2);
+}
+
+.calendar-day.clickable.planned.routine-push {
+  background: rgba(233, 69, 96, 0.10);
+  border-color: rgba(233, 69, 96, 0.25);
+  color: var(--text-primary);
+}
+
+.calendar-day.clickable.planned.routine-pull {
+  background: rgba(15, 52, 96, 0.20);
+  border-color: rgba(15, 52, 96, 0.25);
+  color: var(--text-primary);
+}
+
+.calendar-day.clickable.planned.routine-legs {
+  background: rgba(46, 204, 113, 0.10);
+  border-color: rgba(46, 204, 113, 0.25);
+  color: var(--text-primary);
+}
+
+.calendar-day.clickable.missed {
+  opacity: 0.5;
+}
+
+.calendar-day.clickable.missed .cal-day-emoji {
+  opacity: 0.4;
+}
+
+.calendar-day.clickable.missed .cal-day-num {
+  opacity: 0.5;
+}
+
+.calendar-day.clickable.rest {
+  color: var(--text-muted);
+}
+
+.calendar-day.clickable.rest .cal-day-emoji.rest-dot {
+  font-size: 0.6rem;
+  color: var(--text-muted);
+  opacity: 0.6;
+}
+
+.calendar-day.clickable.done {
+  position: relative;
+}
+
+.calendar-day.clickable.done .cal-day-check {
+  position: absolute;
+  top: 1px;
+  right: 3px;
+  font-size: 0.45rem;
+  color: var(--accent-green);
+  font-weight: 700;
+  pointer-events: none;
+}
+
+.calendar-day.clickable .cal-day-emoji {
+  font-size: 0.6rem;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.calendar-day.clickable .cal-day-num {
+  font-size: 0.65rem;
+  pointer-events: none;
+}
+
+.legend-box.rest-box {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  border: 1px solid var(--text-muted);
+  background: transparent;
+}
+
+/* Override opaque future num to not conflict */
 .calendar-day.clickable.future .cal-day-num {
   opacity: 0.6;
 }
