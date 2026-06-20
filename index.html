@@ -38,9 +38,28 @@
         </svg>
         <span>
           Gym Calendar
-          <span class="subtitle">3 días por semana</span>
+          <span class="subtitle" id="appSubtitle">3 días por semana</span>
           <span id="appVersion" class="app-version"></span>
         </span>
+        <button id="profileBadge" class="profile-badge" aria-label="Cambiar perfil">S</button>
+      </div>
+
+      <!-- PROFILE SELECTOR MODAL -->
+      <div id="profileModal" class="profile-modal hidden">
+        <div class="profile-modal-overlay" id="profileModalOverlay"></div>
+        <div class="profile-modal-sheet">
+          <div class="profile-modal-title">¿Quién entrena hoy?</div>
+          <div class="profile-modal-options">
+            <button class="profile-option" data-profile="sergio">
+              <span class="profile-option-initial">S</span>
+              <span class="profile-option-name">Sergio</span>
+            </button>
+            <button class="profile-option" data-profile="eva">
+              <span class="profile-option-initial">E</span>
+              <span class="profile-option-name">Eva</span>
+            </button>
+          </div>
+        </div>
       </div>
       <!-- TAB BAR -->
       <div class="tab-bar">

@@ -1,19 +1,17 @@
 /* =============================================
    Gym Calendar - App de Rutina de Ejercicios
-   Versión: 4.0.1 — Horario semanal configurable
+   Versión: 4.1.0 — Horario semanal configurable
    ============================================= */
 
 (function () {
   'use strict';
 
-  var APP_VERSION = '4.0.1';
+  var APP_VERSION = '4.1.0';
 
   // =============================================
-  // PHASES: 3 meses de progresión
-  // Los ejercicios con el mismo ID comparten historial
-  // de progreso (misma mancuerna / mismo movimiento)
+  // SERGIO_PHASES: plan Push/Pull/Pierna 3 días/semana
   // =============================================
-  var PHASES = [
+  var SERGIO_PHASES = [
     // ---- MES 1: Adaptación y Técnica (Semanas 1-4) ----
     {
       id: 'mes1',
@@ -140,6 +138,107 @@
   ];
 
   // =============================================
+  // EVA_PHASES: plan postparto Full Body 2 días/semana
+  // =============================================
+  var EVA_PHASES = [
+    // ---- MES 1: Reactivación (Semanas 1-4) ----
+    {
+      id: 'eva_mes1',
+      name: 'Mes 1 · Reactivación',
+      subtitle: 'Semanas 1 a 4 — Activa el cuerpo con suavidad',
+      weeks: [1, 2, 3, 4],
+      days: [
+        {
+          id: 'diaA', day: 'Día A', emoji: '🌸',
+          title: 'Piernas + Empuje',
+          exercises: [
+            { id: 'sentadilla_goblet_eva', name: 'Sentadilla Goblet', muscle: 'Cuádriceps / Glúteo', series: 2, reps: '12', repsMin: 12, repsMax: 12, rest: '90 seg', focus: 'Mancuerna al pecho. Baja como si te sentaras. Espalda recta, rodillas no hacia dentro. Muy ligero.', weightHint: '3 kg (1 mancuerna)' },
+            { id: 'puente_gluteo', name: 'Puente de glúteos', muscle: 'Glúteos / Core', series: 2, reps: '15', repsMin: 15, repsMax: 15, rest: '60 seg', focus: 'Tumbada boca arriba, pies apoyados. Sube cadera apretando glúteo. Aguanta 1 segundo arriba.', weightHint: 'Peso corporal' },
+            { id: 'press_pecho_eva', name: 'Press de pecho con mancuernas', muscle: 'Pecho / Tríceps', series: 2, reps: '12', repsMin: 12, repsMax: 12, rest: '90 seg', focus: 'Tumbada en banco o suelo. Controla la bajada. Empieza muy ligero, siente el pecho.', weightHint: '2-3 kg / mancuerna' },
+            { id: 'remo_una_mano_eva', name: 'Remo a una mano en banco', muscle: 'Espalda / Bíceps', series: 2, reps: '12', repsMin: 12, repsMax: 12, rest: '90 seg', focus: 'Apoya rodilla y mano en el banco. Trayecto hacia la cadera. Siente la espalda.', weightHint: '3-5 kg / mancuerna' },
+            { id: 'plancha_rodillas', name: 'Plancha con rodillas', muscle: 'Core', series: 2, reps: '20 seg', repsMin: 20, repsMax: 20, rest: '60 seg', isTimed: true, focus: 'Rodillas en el suelo, cuerpo recto desde cabeza a rodillas. Aprieta abdomen. Respira.', weightHint: 'Peso corporal' }
+          ]
+        },
+        {
+          id: 'diaB', day: 'Día B', emoji: '💜',
+          title: 'Glúteos + Tirón',
+          exercises: [
+            { id: 'peso_muerto_rumano_eva', name: 'Peso muerto rumano con mancuernas', muscle: 'Isquios / Glúteo', series: 2, reps: '12', repsMin: 12, repsMax: 12, rest: '90 seg', focus: 'Echa la cadera atrás. Nota tensión detrás del muslo. Espalda recta. Peso muy ligero al inicio.', weightHint: '3-5 kg / mancuerna' },
+            { id: 'zancada_eva', name: 'Zancada estática', muscle: 'Cuádriceps / Glúteo', series: 2, reps: '10 (por pierna)', repsMin: 10, repsMax: 10, rest: '60 seg', focus: 'Paso al frente y baja vertical. Rodilla trasera hacia el suelo sin tocar. Controlada.', weightHint: 'Peso corporal' },
+            { id: 'press_hombros_eva', name: 'Press de hombros sentada', muscle: 'Hombros', series: 2, reps: '12', repsMin: 12, repsMax: 12, rest: '90 seg', focus: 'Sentada con espalda apoyada. Empuja hacia arriba. Muy ligero, controla el movimiento.', weightHint: '2-3 kg / mancuerna' },
+            { id: 'curl_biceps_eva', name: 'Curl de bíceps con mancuernas', muscle: 'Bíceps', series: 2, reps: '12', repsMin: 12, repsMax: 12, rest: '60 seg', focus: 'Codos pegados al cuerpo. Sin balanceo. Sube y baja controlado.', weightHint: '2-3 kg / mancuerna' },
+            { id: 'bird_dog', name: 'Bird-Dog (cuadrupedia)', muscle: 'Core / Lumbar', series: 2, reps: '10 (por lado)', repsMin: 10, repsMax: 10, rest: '60 seg', focus: 'A cuatro patas, extiende brazo y pierna contrarios. Mantén 2 segundos. Muy estabilizador.', weightHint: 'Peso corporal' }
+          ]
+        }
+      ]
+    },
+
+    // ---- MES 2: Fuerza Base (Semanas 5-8) ----
+    {
+      id: 'eva_mes2',
+      name: 'Mes 2 · Fuerza Base',
+      subtitle: 'Semanas 5 a 8 — Más peso, más volumen',
+      weeks: [5, 6, 7, 8],
+      days: [
+        {
+          id: 'diaA', day: 'Día A', emoji: '🌸',
+          title: 'Piernas + Empuje',
+          exercises: [
+            { id: 'sentadilla_goblet_eva', name: 'Sentadilla Goblet', muscle: 'Cuádriceps / Glúteo', series: 3, reps: '10', repsMin: 10, repsMax: 10, rest: '90 seg', focus: 'Más profundidad que mes 1. Sube carga progresivamente.', weightHint: '+1-2 kg respecto mes 1' },
+            { id: 'hip_thrust_eva', name: 'Hip Thrust con mancuerna', muscle: 'Glúteos', series: 3, reps: '12', repsMin: 12, repsMax: 12, rest: '90 seg', focus: 'Espalda en banco, mancuerna en cadera. Sube cadera hasta paralelo. Aprieta glúteo arriba.', weightHint: '5-7.5 kg (1 mancuerna)' },
+            { id: 'press_pecho_eva', name: 'Press de pecho con mancuernas', muscle: 'Pecho / Tríceps', series: 3, reps: '10', repsMin: 10, repsMax: 10, rest: '90 seg', focus: 'Más peso que mes 1. Controla la bajada en 2 segundos.', weightHint: '' },
+            { id: 'remo_una_mano_eva', name: 'Remo a una mano en banco', muscle: 'Espalda / Bíceps', series: 3, reps: '10', repsMin: 10, repsMax: 10, rest: '90 seg', focus: 'Más peso. Sostén 1 segundo la contracción.', weightHint: '' },
+            { id: 'plancha_completa', name: 'Plancha clásica (completa)', muscle: 'Core', series: 2, reps: '25 seg', repsMin: 25, repsMax: 25, rest: '60 seg', isTimed: true, focus: 'Ya sin rodillas. Cuerpo recto como tabla. Aprieta todo el cuerpo.', weightHint: 'Peso corporal' }
+          ]
+        },
+        {
+          id: 'diaB', day: 'Día B', emoji: '💜',
+          title: 'Glúteos + Tirón',
+          exercises: [
+            { id: 'peso_muerto_rumano_eva', name: 'Peso muerto rumano con mancuernas', muscle: 'Isquios / Glúteo', series: 3, reps: '10', repsMin: 10, repsMax: 10, rest: '90 seg', focus: 'Más peso. Controla el descenso. Nota la tensión isquiotibial.', weightHint: '' },
+            { id: 'zancada_eva', name: 'Zancada estática con mancuernas', muscle: 'Cuádriceps / Glúteo', series: 3, reps: '10 (por pierna)', repsMin: 10, repsMax: 10, rest: '60 seg', focus: 'Añade mancuernas ligeras. Mantén torso firme.', weightHint: '2-3 kg / mancuerna' },
+            { id: 'press_hombros_eva', name: 'Press de hombros de pie', muscle: 'Hombros', series: 3, reps: '10', repsMin: 10, repsMax: 10, rest: '90 seg', focus: 'De pie, aprieta glúteo para no curvar la espalda.', weightHint: '' },
+            { id: 'curl_biceps_eva', name: 'Curl de bíceps con mancuernas', muscle: 'Bíceps', series: 3, reps: '12', repsMin: 12, repsMax: 12, rest: '60 seg', focus: 'Alternado o simultáneo. Sin balanceo.', weightHint: '' },
+            { id: 'extension_triceps_eva', name: 'Extensión de tríceps tras nuca', muscle: 'Tríceps', series: 3, reps: '12', repsMin: 12, repsMax: 12, rest: '60 seg', focus: 'Sentada, una mancuerna con ambas manos. Codos cerrados.', weightHint: '3-5 kg (1 mancuerna)' }
+          ]
+        }
+      ]
+    },
+
+    // ---- MES 3: Progresión (Semanas 9-12) ----
+    {
+      id: 'eva_mes3',
+      name: 'Mes 3 · Progresión',
+      subtitle: 'Semanas 9 a 12 — Intensidad y fuerza máxima',
+      weeks: [9, 10, 11, 12],
+      days: [
+        {
+          id: 'diaA', day: 'Día A', emoji: '🌸',
+          title: 'Piernas + Empuje',
+          exercises: [
+            { id: 'sentadilla_goblet_eva', name: 'Sentadilla Goblet', muscle: 'Cuádriceps / Glúteo', series: 3, reps: '8', repsMin: 8, repsMax: 8, rest: '90 seg', focus: 'Récord de peso. Profundidad máxima con técnica perfecta.', weightHint: 'Tu récord' },
+            { id: 'hip_thrust_eva', name: 'Hip Thrust con mancuerna', muscle: 'Glúteos', series: 4, reps: '10', repsMin: 10, repsMax: 10, rest: '90 seg', focus: 'Más peso. Pausa 2 segundos arriba apretando glúteo.', weightHint: '' },
+            { id: 'press_pecho_eva', name: 'Press de pecho con mancuernas', muscle: 'Pecho / Tríceps', series: 3, reps: '10', repsMin: 10, repsMax: 10, rest: '90 seg', focus: 'Consolida tu peso máximo. Exprimir el pectoral arriba.', weightHint: '' },
+            { id: 'remo_una_mano_eva', name: 'Remo a una mano en banco', muscle: 'Espalda / Bíceps', series: 3, reps: '10', repsMin: 10, repsMax: 10, rest: '90 seg', focus: 'Espalda paralela al suelo. Fuerza máxima.', weightHint: '' },
+            { id: 'plancha_completa', name: 'Plancha clásica (completa)', muscle: 'Core', series: 3, reps: '30 seg', repsMin: 30, repsMax: 30, rest: '60 seg', isTimed: true, focus: 'Tensión total. Respira despacio. ¡30 segundos!', weightHint: 'Peso corporal' }
+          ]
+        },
+        {
+          id: 'diaB', day: 'Día B', emoji: '💜',
+          title: 'Glúteos + Tirón',
+          exercises: [
+            { id: 'peso_muerto_rumano_eva', name: 'Peso muerto rumano con mancuernas', muscle: 'Isquios / Glúteo', series: 3, reps: '8', repsMin: 8, repsMax: 8, rest: '90 seg', focus: 'Récord de peso. Espalda perfectamente recta.', weightHint: 'Tu récord' },
+            { id: 'zancadas_caminando_eva', name: 'Zancadas caminando con mancuernas', muscle: 'Cuádriceps / Glúteo', series: 3, reps: '12 (pasos totales)', repsMin: 12, repsMax: 12, rest: '60 seg', focus: 'Dinámica. Mantén torso firme. Requiere más estabilidad.', weightHint: '3-5 kg / mancuerna' },
+            { id: 'press_hombros_eva', name: 'Press de hombros de pie', muscle: 'Hombros', series: 3, reps: '10', repsMin: 10, repsMax: 10, rest: '90 seg', focus: 'Bloqueo firme arriba. Consolida tu peso.', weightHint: '' },
+            { id: 'curl_biceps_eva', name: 'Curl de bíceps con mancuernas', muscle: 'Bíceps', series: 3, reps: '12', repsMin: 12, repsMax: 12, rest: '60 seg', focus: 'Alternado. Máxima contracción arriba.', weightHint: '' },
+            { id: 'extension_triceps_eva', name: 'Extensión de tríceps tras nuca', muscle: 'Tríceps', series: 3, reps: '12', repsMin: 12, repsMax: 12, rest: '60 seg', focus: 'Controla el descenso. Codos sin abrirse.', weightHint: '' }
+          ]
+        }
+      ]
+    }
+  ];
+
+  // =============================================
   // WARMUP
   // =============================================
   var WARMUP = {
@@ -147,25 +246,55 @@
     approach: '➕ 1-2 series de aproximación con peso ligero en el primer ejercicio'
   };
 
+  var WARMUP_EVA = {
+    general: '🌸 5 min de movilidad suave: cuello, hombros, caderas, tobillos',
+    approach: '➕ 1 serie de aproximación sin peso o muy ligero en el primer ejercicio'
+  };
+
+  // =============================================
+  // PROFILES
+  // =============================================
+  var PROFILES = {
+    sergio: { name: 'Sergio', initial: 'S', phases: SERGIO_PHASES, warmup: WARMUP, defaultDays: [1, 3, 5], daysLabel: '3 días por semana' },
+    eva:    { name: 'Eva',    initial: 'E', phases: EVA_PHASES,    warmup: WARMUP_EVA, defaultDays: [1, 4], daysLabel: '2 días por semana' }
+  };
+
+  function migrateOldData() {
+    var oldKey = 'gym_calendar_data';
+    var newKey = 'gym_calendar_data_sergio';
+    try {
+      if (!localStorage.getItem(newKey) && localStorage.getItem(oldKey)) {
+        localStorage.setItem(newKey, localStorage.getItem(oldKey));
+      }
+    } catch (e) {}
+  }
+
+  migrateOldData();
+
+  var activeProfile = localStorage.getItem('gym_active_profile') || 'sergio';
+
+  // These are updated by switchProfile()
+  var PHASES = PROFILES[activeProfile].phases;
+  var ACTIVE_WARMUP = PROFILES[activeProfile].warmup;
+
   // =============================================
   // STATE
   // =============================================
-  var STORAGE_KEY = 'gym_calendar_data';
+  function getStorageKey() { return 'gym_calendar_data_' + activeProfile; }
 
   function getDefaultState() {
-    return { progress: {}, completions: {}, settings: { trainingDays: [1,3,5] } };
+    return { progress: {}, completions: {}, settings: { trainingDays: PROFILES[activeProfile].defaultDays.slice() } };
   }
 
   function loadState() {
     try {
-      var raw = localStorage.getItem(STORAGE_KEY);
+      var raw = localStorage.getItem(getStorageKey());
       if (raw) {
         var data = JSON.parse(raw);
         var st = { progress: data.progress || {}, completions: data.completions || {} };
-        // Ensure settings exist (retrocompatibility with old data)
         st.settings = data.settings || {};
         if (!Array.isArray(st.settings.trainingDays) || st.settings.trainingDays.length === 0) {
-          st.settings.trainingDays = [1, 3, 5];
+          st.settings.trainingDays = PROFILES[activeProfile].defaultDays.slice();
         }
         return st;
       }
@@ -174,7 +303,7 @@
   }
 
   function saveState() {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {}
+    try { localStorage.setItem(getStorageKey(), JSON.stringify(state)); } catch (e) {}
   }
 
   var state = loadState();
@@ -215,7 +344,7 @@
     return 2;
   }
 
-  function getPhase(dateKey) { return PHASES[getPhaseIndex(dateKey)]; }
+  function getPhase(dateKey) { return PHASES[Math.min(getPhaseIndex(dateKey), PHASES.length - 1)]; }
 
   // =============================================
   // ISO WEEK & SCHEDULE HELPERS
@@ -301,13 +430,15 @@
   function getRoutineForDate(dateKey) {
     var dayCompletions = state.completions[dateKey];
     if (!dayCompletions) return null;
-    var counts = [0, 0, 0];
+    var numDays = PHASES[0].days.length;
+    var counts = [];
+    for (var ci = 0; ci < numDays; ci++) counts.push(0);
     for (var exId in dayCompletions) {
       var idx = findExerciseDay(exId);
-      if (idx >= 0) counts[idx]++;
+      if (idx >= 0 && idx < numDays) counts[idx]++;
     }
     var maxIdx = 0;
-    for (var i = 1; i < 3; i++) { if (counts[i] > counts[maxIdx]) maxIdx = i; }
+    for (var i = 1; i < numDays; i++) { if (counts[i] > counts[maxIdx]) maxIdx = i; }
     return counts[maxIdx] > 0 ? maxIdx : null;
   }
 
@@ -474,7 +605,7 @@
     for (var k in todayCompletions) { hasDoneAny = true; break; }
 
     // Determine current phase
-    var phaseIdx = getPhaseIndex(today);
+    var phaseIdx = Math.min(getPhaseIndex(today), PHASES.length - 1);
     var phase = PHASES[phaseIdx];
 
     var html = '';
@@ -556,12 +687,19 @@
 
     // Warmup card
     var phaseIdx = getPhaseIndex(getTodayKey());
-    var warmupEmphasis = phaseIdx === 0 ? '🔧 <strong>Mes 1: Prioriza la técnica sobre el peso.</strong> Aprende el movimiento, controla cada repetición. Empieza ligero, sube solo si la técnica es perfecta.' : '🔥 Calentamiento: movilidad articular + series de aproximación.';
+    var warmupEmphasis;
+    if (phaseIdx === 0) {
+      warmupEmphasis = activeProfile === 'eva'
+        ? '🌸 <strong>Mes 1: Movimientos suaves y controlados.</strong> Escucha tu cuerpo. Si algo duele, para. Empieza sin peso o muy ligero.'
+        : '🔧 <strong>Mes 1: Prioriza la técnica sobre el peso.</strong> Aprende el movimiento, controla cada repetición. Empieza ligero, sube solo si la técnica es perfecta.';
+    } else {
+      warmupEmphasis = '🔥 Calentamiento: movilidad articular + series de aproximación.';
+    }
     html += '<div class="warmup-card">';
     html += '  <div class="warmup-card-icon">🔥</div>';
     html += '  <div class="warmup-card-content">';
-    html += '    <div class="warmup-card-text">' + WARMUP.general + '</div>';
-    html += '    <div class="warmup-card-text">' + WARMUP.approach + '</div>';
+    html += '    <div class="warmup-card-text">' + ACTIVE_WARMUP.general + '</div>';
+    html += '    <div class="warmup-card-text">' + ACTIVE_WARMUP.approach + '</div>';
     html += '    <div class="warmup-card-emphasis">' + warmupEmphasis + '</div>';
     html += '  </div>';
     html += '</div>';
@@ -715,7 +853,7 @@
       html += '    <button class="weekday-chip' + (isActive ? ' active' : '') + '" data-day="' + dVal + '">' + dayLabelsShort[ci] + '</button>';
     }
     html += '  </div>';
-    html += '  <div class="schedule-settings-hint">Recomendado: 3 días/semana (un día sí, otro no)</div>';
+    html += '  <div class="schedule-settings-hint">Recomendado: ' + PROFILES[activeProfile].daysLabel + '</div>';
     html += '</div>';
 
     // ---- Calendar ----
@@ -778,9 +916,10 @@
 
     html += '  </div>';
     html += '  <div class="calendar-legend">';
-    html += '    <span class="calendar-legend-item"><span class="legend-box" style="background:#e94560;"></span> Empuje</span>';
-    html += '    <span class="calendar-legend-item"><span class="legend-box" style="background:#0f3460;"></span> Tirón</span>';
-    html += '    <span class="calendar-legend-item"><span class="legend-box" style="background:#2ecc71;"></span> Pierna</span>';
+    var legendColors = ['#e94560', '#0f3460', '#2ecc71'];
+    for (var li = 0; li < PHASES[0].days.length; li++) {
+      html += '    <span class="calendar-legend-item"><span class="legend-box" style="background:' + legendColors[li] + ';"></span> ' + PHASES[0].days[li].day + '</span>';
+    }
     html += '    <span class="calendar-legend-item"><span class="legend-box rest-box"></span> Descanso</span>';
     html += '  </div>';
     html += '</div>';
@@ -1225,12 +1364,58 @@
   function formatDateShort(d) { return String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0'); }
 
   // =============================================
+  // PROFILE SWITCHER
+  // =============================================
+  function updateProfileUI() {
+    var badge = document.getElementById('profileBadge');
+    var subtitle = document.getElementById('appSubtitle');
+    var profile = PROFILES[activeProfile];
+    if (badge) {
+      badge.textContent = profile.initial;
+      badge.dataset.profile = activeProfile;
+    }
+    if (subtitle) subtitle.textContent = profile.daysLabel;
+    // Mark active option in modal
+    document.querySelectorAll('.profile-option').forEach(function (btn) {
+      btn.classList.toggle('active', btn.dataset.profile === activeProfile);
+    });
+  }
+
+  function openProfileSelector() {
+    var modal = document.getElementById('profileModal');
+    if (modal) modal.classList.remove('hidden');
+  }
+
+  function closeProfileSelector() {
+    var modal = document.getElementById('profileModal');
+    if (modal) modal.classList.add('hidden');
+  }
+
+  function switchProfile(profileId) {
+    if (!PROFILES[profileId]) return;
+    activeProfile = profileId;
+    localStorage.setItem('gym_active_profile', activeProfile);
+    PHASES = PROFILES[activeProfile].phases;
+    ACTIVE_WARMUP = PROFILES[activeProfile].warmup;
+    state = loadState();
+    updateProfileUI();
+    renderRoutineStatus();
+    renderCurrentDay();
+    updateAll();
+    if (currentTab === 'home') renderHome();
+    if (currentTab === 'stats') renderStats();
+    closeProfileSelector();
+    showToast('Perfil: ' + PROFILES[activeProfile].name);
+  }
+
+  // =============================================
   // INIT
   // =============================================
   function init() {
     renderRoutineStatus();
     renderCurrentDay();
     updateAll();
+    updateProfileUI();
 
     document.querySelectorAll('.tab-btn').forEach(function (btn) {
       btn.addEventListener('click', function () { switchTab(btn.dataset.tab); });
@@ -1238,6 +1423,16 @@
 
     document.addEventListener('input', function (e) {
       if (e.target && e.target.classList.contains('weight-input')) scheduleSuggestionCheck();
+    });
+
+    var badge = document.getElementById('profileBadge');
+    if (badge) badge.addEventListener('click', openProfileSelector);
+
+    var overlay = document.getElementById('profileModalOverlay');
+    if (overlay) overlay.addEventListener('click', closeProfileSelector);
+
+    document.querySelectorAll('.profile-option').forEach(function (btn) {
+      btn.addEventListener('click', function () { switchProfile(btn.dataset.profile); });
     });
 
     if ('serviceWorker' in navigator) {
