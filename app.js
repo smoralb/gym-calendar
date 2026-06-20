@@ -1,12 +1,12 @@
 /* =============================================
    Gym Calendar - App de Rutina de Ejercicios
-   Versión: 4.1.0 — Horario semanal configurable
+   Versión: 4.2.0 — Horario semanal configurable
    ============================================= */
 
 (function () {
   'use strict';
 
-  var APP_VERSION = '4.1.0';
+  var APP_VERSION = '4.2.0';
 
   // =============================================
   // SERGIO_PHASES: plan Push/Pull/Pierna 3 días/semana
@@ -239,6 +239,288 @@
   ];
 
   // =============================================
+  // EXERCISE_META: descripción, video y alternativas
+  // =============================================
+  var EXERCISE_META = {
+    'press_plano': {
+      description: 'Tumbado en el banco con los pies bien apoyados en el suelo. Sujeta las mancuernas a la altura del pecho con codos a 45°. Empuja hacia arriba de forma controlada hasta casi extender los brazos. Baja lentamente en 2 segundos notando la tensión en el pecho.',
+      videoUrl: '',
+      alternatives: [
+        { id: 'alt_press_plano_flex', name: 'Flexiones de pecho', reason: 'Sin banco / sin mancuernas', muscle: 'Pecho / Tríceps', series: 3, reps: '12', rest: '60 seg', focus: 'Cuerpo recto de cabeza a talones. Baja el pecho rozando el suelo. Codos a 45°.', weightHint: 'Peso corporal' },
+        { id: 'alt_press_plano_suelo', name: 'Press de pecho en el suelo', reason: 'Sin banco', muscle: 'Pecho / Tríceps', series: 3, reps: '12', rest: '90 seg', focus: 'Mismo movimiento que press plano. Al bajar, los codos tocan el suelo. Rango parcial.', weightHint: 'Mismas mancuernas' }
+      ]
+    },
+    'press_inclinado': {
+      description: 'Banco a 30-45°. Sujeta las mancuernas a la altura del pecho. Empuja hacia arriba y ligeramente hacia atrás, en línea con el ángulo del banco. Baja controlado en 2 segundos notando el pecho superior.',
+      videoUrl: '',
+      alternatives: [
+        { id: 'alt_press_inc_pies', name: 'Flexiones con pies elevados', reason: 'Sin banco inclinado', muscle: 'Pecho Superior', series: 3, reps: '10', rest: '60 seg', focus: 'Pies en silla o step elevados. Simula el ángulo inclinado. Cuerpo recto, codos a 45°.', weightHint: 'Peso corporal' }
+      ]
+    },
+    'aperturas_planas': {
+      description: 'Tumbado en el banco. Con las mancuernas arriba y los codos ligeramente flexionados, abre los brazos hacia los lados en arco hasta notar estiramiento en el pecho. Vuelve al centro apretando el pectoral.',
+      videoUrl: '',
+      alternatives: [
+        { id: 'alt_aperturas_suelo', name: 'Aperturas en el suelo', reason: 'Sin banco', muscle: 'Pecho', series: 3, reps: '12', rest: '60 seg', focus: 'Igual que aperturas planas pero en el suelo. El rango de bajada es menor pero es seguro.', weightHint: 'Peso ligero' }
+      ]
+    },
+    'aperturas_inclinadas': {
+      description: 'Banco a 30°. Con mancuernas muy ligeras arriba, abre los brazos en arco controlado. El objetivo es sentir la zona alta del pecho, no mover mucho peso. Mantén siempre los codos ligeramente flexionados.',
+      videoUrl: '',
+      alternatives: [
+        { id: 'alt_apertura_inc_flex', name: 'Flexiones con pies elevados', reason: 'Sin banco inclinado', muscle: 'Pecho Superior', series: 3, reps: '10', rest: '60 seg', focus: 'Pies en silla. Simula el trabajo de pecho superior con peso corporal.', weightHint: 'Peso corporal' }
+      ]
+    },
+    'press_pecho_eva': {
+      description: 'Túmbate en un banco o en el suelo. Coge las mancuernas con los codos a 45°. Empuja suave y controlado hacia arriba. Baja lentamente. Con el suelo como alternativa, el rango de movimiento es más limitado pero seguro para postparto.',
+      videoUrl: '',
+      alternatives: [
+        { id: 'alt_press_pecho_eva_suelo', name: 'Press de pecho en el suelo', reason: 'Sin banco', muscle: 'Pecho / Tríceps', series: 2, reps: '12', rest: '90 seg', focus: 'Tumbada en el suelo. Codos tocan el suelo al bajar. Empuja suave y controlado.', weightHint: 'Mismas mancuernas' },
+        { id: 'alt_press_pecho_eva_flex', name: 'Flexiones en rodillas', reason: 'Sin mancuernas', muscle: 'Pecho / Tríceps', series: 2, reps: '10', rest: '60 seg', focus: 'Rodillas en el suelo, manos anchas. Baja el pecho al suelo. Cuerpo recto desde rodillas.', weightHint: 'Peso corporal' }
+      ]
+    },
+    'press_militar_sentado': {
+      description: 'Sentado con la espalda bien apoyada. Mancuernas a la altura de los hombros con palmas hacia adelante. Empuja hacia arriba sin arquear la zona lumbar. Baja controlado hasta la altura de los hombros.',
+      videoUrl: '',
+      alternatives: [
+        { id: 'alt_pm_arnold', name: 'Press Arnold sentado', reason: 'Variante más completa', muscle: 'Hombro', series: 3, reps: '12', rest: '90 seg', focus: 'Empieza con palmas hacia ti y rota mientras subes. Trabaja más cabezas del deltoides.', weightHint: 'Mismas mancuernas' }
+      ]
+    },
+    'press_militar_pie': {
+      description: 'De pie con los pies a la anchura de los hombros. Aprieta glúteos y abdomen para no arquear la espalda. Empuja las mancuernas verticalmente. Baja controlado a la altura de las orejas.',
+      videoUrl: '',
+      alternatives: [
+        { id: 'alt_pm_pie_sentado', name: 'Press de hombros sentado', reason: 'Más estabilidad', muscle: 'Hombro', series: 3, reps: '10', rest: '90 seg', focus: 'Sentado en banco o silla con espalda apoyada. Más control y seguridad.', weightHint: 'Mismas mancuernas' }
+      ]
+    },
+    'press_hombros_eva': {
+      description: 'Sentada en una silla o banco con la espalda bien apoyada. Mancuernas a la altura de los hombros. Empuja suave y controlado hacia arriba. Baja sin prisas. Peso muy ligero al inicio.',
+      videoUrl: '',
+      alternatives: [
+        { id: 'alt_ph_eva_pie', name: 'Press de hombros de pie', reason: 'Sin banco o silla', muscle: 'Hombros', series: 2, reps: '12', rest: '90 seg', focus: 'De pie. Aprieta el abdomen para proteger la espalda. Empuja controlado hacia arriba.', weightHint: 'Mismas mancuernas' }
+      ]
+    },
+    'elevaciones_laterales': {
+      description: 'De pie, mancuernas a los lados. Sube los brazos lateralmente hasta la altura de los hombros (no más). Codos ligeramente flexionados. Baja lentamente en 2 segundos. El peso debe ser muy ligero.',
+      videoUrl: '',
+      alternatives: [
+        { id: 'alt_el_lat_inc', name: 'Elevaciones laterales inclinado', reason: 'Mayor aislamiento', muscle: 'Hombro (Lateral)', series: 3, reps: '12', rest: '60 seg', focus: 'Apóyate en banco inclinado. Eliminas el balanceo y el aislamiento es mayor.', weightHint: 'Mismo peso o menos' }
+      ]
+    },
+    'remo_maquina': {
+      description: 'Siéntate en la máquina de remo con el pecho apoyado. Coge el agarre y tira hacia ti pensando en dar un codazo hacia atrás. Mantén la espalda recta. Sostén 1 segundo la contracción. Extiende los brazos controlado.',
+      videoUrl: '',
+      alternatives: [
+        { id: 'alt_remo_maq_mancuernas', name: 'Remo inclinado bilateral', reason: 'Sin máquina', muscle: 'Espalda', series: 3, reps: '12', rest: '90 seg', focus: 'Inclinado a 45° con una mancuerna en cada mano. Tira hacia la cadera. Espalda recta.', weightHint: '5-10 kg / mancuerna' }
+      ]
+    },
+    'remo_una_mano': {
+      description: 'Apoya una rodilla y la mano contraria en el banco. Coge la mancuerna y tira hacia la cadera en diagonal — no hacia arriba. La espalda debe quedar paralela al suelo. Siente la contracción del dorsal antes de bajar.',
+      videoUrl: '',
+      alternatives: [
+        { id: 'alt_remo_1m_inclinado', name: 'Remo bilateral inclinado', reason: 'Sin banco', muscle: 'Espalda / Bíceps', series: 3, reps: '12', rest: '90 seg', focus: 'De pie inclinado a 45° con dos mancuernas. Tira ambas hacia la cadera a la vez.', weightHint: '5-10 kg / mancuerna' }
+      ]
+    },
+    'remo_una_mano_eva': {
+      description: 'Apoya una rodilla y la mano contraria en el banco. Coge la mancuerna con suavidad. Tira hacia la cadera manteniendo la espalda recta. Siente el dorsal trabajar. Peso ligero y control total.',
+      videoUrl: '',
+      alternatives: [
+        { id: 'alt_remo_1m_eva_bilatrl', name: 'Remo inclinado bilateral', reason: 'Sin banco', muscle: 'Espalda / Bíceps', series: 2, reps: '12', rest: '90 seg', focus: 'De pie inclinada 45°. Dos mancuernas. Tira hacia las caderas. Espalda recta.', weightHint: 'Mismas mancuernas' }
+      ]
+    },
+    'pajaro': {
+      description: 'Sentado, inclínate con el pecho pegado a los muslos. Con las mancuernas colgando, sube los brazos hacia los lados en arco hasta la altura de los hombros. Movimiento lento y controlado. Peso muy ligero.',
+      videoUrl: '',
+      alternatives: [
+        { id: 'alt_pajaro_de_pie', name: 'Pájaro de pie inclinado', reason: 'Sin banco', muscle: 'Hombro (Atrás)', series: 3, reps: '12', rest: '60 seg', focus: 'De pie, inclinado a 90°. Mismo movimiento. Peso muy ligero para no usar impulso.', weightHint: 'Mismo peso' }
+      ]
+    },
+    'remo_menton': {
+      description: 'De pie, mancuernas delante del cuerpo. Tira hacia arriba manteniendo las mancuernas cerca del torso hasta la altura del mentón. Codos por encima de las manos. Baja controlado.',
+      videoUrl: '',
+      alternatives: [
+        { id: 'alt_remo_ment_pajaro', name: 'Pájaro con mancuernas', reason: 'Si molesta el hombro', muscle: 'Hombro (Atrás)', series: 3, reps: '12', rest: '60 seg', focus: 'Alternativa más segura para el manguito rotador. Trabaja hombro posterior.', weightHint: 'Mismo peso o menos' }
+      ]
+    },
+    'combo_hombro': {
+      description: 'Superserie sin descanso: 12 rep de pájaro seguidas de 10 rep de remo al mentón. Objetivo: fatigar completamente hombro posterior y espalda alta. Peso muy ligero.',
+      videoUrl: '',
+      alternatives: [
+        { id: 'alt_combo_hombro_sep', name: 'Pájaro + El. laterales (separado)', reason: 'Más control', muscle: 'Hombro', series: 3, reps: '12+12', rest: '90 seg', focus: 'Dos ejercicios separados con 60 seg de descanso. Más controlado que la superserie.', weightHint: 'Peso ligero' }
+      ]
+    },
+    'curl_biceps': {
+      description: 'De pie con los codos pegados al cuerpo. Sube las mancuernas doblando el codo hasta cerca del hombro. Aprieta el bíceps arriba. Baja lentamente en 2 segundos. Sin balancear el torso.',
+      videoUrl: '',
+      alternatives: [
+        { id: 'alt_curl_alternado', name: 'Curl de bíceps alternado', reason: 'Más concentración', muscle: 'Bíceps', series: 3, reps: '12', rest: '60 seg', focus: 'Un brazo cada vez. Mayor concentración y control que el bilateral.', weightHint: 'Mismas mancuernas' }
+      ]
+    },
+    'curl_biceps_eva': {
+      description: 'De pie o sentada con los codos pegados al cuerpo. Sube las mancuernas suavemente hasta los hombros. Aprieta el bíceps. Baja lentamente. Sin balanceo. Peso ligero y control total.',
+      videoUrl: '',
+      alternatives: [
+        { id: 'alt_curl_ev_botella', name: 'Curl con botella de agua', reason: 'Sin mancuernas', muscle: 'Bíceps', series: 2, reps: '15', rest: '60 seg', focus: 'Usa una botella de agua llena. Mismo movimiento. Enfócate en sentir el bíceps.', weightHint: 'Botella 1-2 litros' }
+      ]
+    },
+    'curl_martillo': {
+      description: 'De pie, mancuernas a los lados con las palmas mirándose (agarre neutro). Sube ambas o alternando. Trabaja el braquiorradial y el grosor del brazo. Sin balanceo.',
+      videoUrl: '',
+      alternatives: [
+        { id: 'alt_curl_mart_alt', name: 'Curl martillo alternado', reason: 'Más concentración', muscle: 'Bíceps / Antebrazo', series: 3, reps: '12', rest: '60 seg', focus: 'Un brazo cada vez con agarre neutro. Mayor control del movimiento.', weightHint: 'Mismas mancuernas' }
+      ]
+    },
+    'curl_concentrado': {
+      description: 'Sentado, apoya el codo en la parte interna del muslo. Sube la mancuerna hasta el hombro apretando el bíceps al máximo. Baja muy lento. Aísla el bíceps al 100%. Peso moderado.',
+      videoUrl: '',
+      alternatives: [
+        { id: 'alt_curl_conc_normal', name: 'Curl de bíceps normal', reason: 'Sin banco', muscle: 'Bíceps', series: 3, reps: '12', rest: '60 seg', focus: 'De pie, codos pegados. Menos aislamiento pero más peso posible.', weightHint: 'Mismas mancuernas' }
+      ]
+    },
+    'extension_triceps': {
+      description: 'Sentado o de pie, coge la mancuerna con ambas manos por encima de la cabeza. Baja doblando los codos hacia atrás sin que se abran. Extiende de vuelta apretando el tríceps. Codos cerrados siempre.',
+      videoUrl: '',
+      alternatives: [
+        { id: 'alt_ext_tric_patada', name: 'Patada de tríceps (kickback)', reason: 'Variante más sencilla', muscle: 'Tríceps', series: 3, reps: '12', rest: '60 seg', focus: 'Inclinado a 45°, codo pegado al cuerpo a 90°. Extiende el brazo hacia atrás apretando.', weightHint: 'Mismas mancuernas' }
+      ]
+    },
+    'extension_triceps_eva': {
+      description: 'Sentada, coge una mancuerna ligera con ambas manos por encima de la cabeza. Baja doblando los codos hacia atrás. Extiende suavemente. Codos siempre cerrados hacia adelante. Peso muy ligero.',
+      videoUrl: '',
+      alternatives: [
+        { id: 'alt_ext_tric_eva_patada', name: 'Patada de tríceps', reason: 'Más sencillo', muscle: 'Tríceps', series: 3, reps: '12', rest: '60 seg', focus: 'Inclinada a 45°, codo fijo a 90°. Extiende el brazo hacia atrás apretando el tríceps.', weightHint: 'Mismas mancuernas' }
+      ]
+    },
+    'fondos_triceps': {
+      description: 'Apoya las manos en el borde de un banco con los dedos hacia adelante. Baja doblando los codos hacia atrás (no a los lados) hasta 90°. Empuja de vuelta arriba. Para más facilidad, dobla las rodillas.',
+      videoUrl: '',
+      alternatives: [
+        { id: 'alt_fondos_diamante', name: 'Flexiones diamante', reason: 'Sin banco', muscle: 'Tríceps', series: 3, reps: '10', rest: '60 seg', focus: 'Manos juntas formando un diamante. Aisla el tríceps. Más difícil que flexión normal.', weightHint: 'Peso corporal' }
+      ]
+    },
+    'combo_triceps': {
+      description: 'Superserie: extensión tras nuca seguida de fondos en banco sin descanso entre ellos. La combinación fatiga el tríceps completamente. Descansa solo al terminar ambos movimientos.',
+      videoUrl: '',
+      alternatives: [
+        { id: 'alt_combo_tric_sep', name: 'Extensión + Patadas (separado)', reason: 'Más control', muscle: 'Tríceps', series: 3, reps: '10+10', rest: '90 seg', focus: 'Dos ejercicios separados con 60 seg de descanso entre ellos. Más controlado.', weightHint: 'Mismo peso' }
+      ]
+    },
+    'flexiones': {
+      description: 'Apoya manos y pies en el suelo, cuerpo recto de cabeza a talones. Baja el pecho al suelo con los codos a 45°. Empuja de vuelta hasta casi extender. Si es difícil, empieza con las rodillas en el suelo.',
+      videoUrl: '',
+      alternatives: [
+        { id: 'alt_flex_elevadas', name: 'Flexiones con manos elevadas', reason: 'Versión más fácil', muscle: 'Pecho / Tríceps', series: 3, reps: '12', rest: '60 seg', focus: 'Manos en banco o escalón. El ángulo reduce el porcentaje de peso corporal. Más sencillo.', weightHint: 'Peso corporal' }
+      ]
+    },
+    'sentadilla_goblet': {
+      description: 'De pie, pies separados a la anchura de los hombros con dedos ligeramente hacia afuera. Sostén la mancuerna vertical contra el pecho. Baja como si te sentaras, espalda recta, rodillas siguiendo la dirección de los pies. Sube empujando desde los talones.',
+      videoUrl: '',
+      alternatives: [
+        { id: 'alt_sq_goblet_pc', name: 'Sentadilla con peso corporal', reason: 'Sin mancuerna', muscle: 'Cuádriceps / Glúteo', series: 3, reps: '15', rest: '60 seg', focus: 'Misma técnica sin peso. Perfecto para repasar el patrón de movimiento.', weightHint: 'Peso corporal' },
+        { id: 'alt_sq_goblet_bulgara', name: 'Sentadilla búlgara', reason: 'Más intensidad unilateral', muscle: 'Cuádriceps / Glúteo', series: 3, reps: '10 (por pierna)', rest: '90 seg', focus: 'Pie trasero en banco. Baja con peso en el pie delantero. Muy efectivo para glúteo.', weightHint: 'Mismas mancuernas o menos' }
+      ]
+    },
+    'sentadilla_goblet_eva': {
+      description: 'De pie, pies separados a la anchura de los hombros. Sostén la mancuerna ligera contra el pecho. Baja lentamente como si te sentaras en una silla. Espalda recta. Rodillas en línea con los pies. Sube empujando desde los talones.',
+      videoUrl: '',
+      alternatives: [
+        { id: 'alt_sq_goblet_eva_pc', name: 'Sentadilla con peso corporal', reason: 'Sin mancuerna', muscle: 'Cuádriceps / Glúteo', series: 2, reps: '15', rest: '60 seg', focus: 'Misma técnica sin peso. Muy seguro para postparto. Céntrate en la profundidad y técnica.', weightHint: 'Peso corporal' }
+      ]
+    },
+    'zancadas_estaticas': {
+      description: 'Da un paso largo al frente. Mantén el torso recto y baja verticalmente hasta que la rodilla trasera casi toque el suelo. Empuja desde el pie delantero para volver. Alterna piernas o completa todas de un lado.',
+      videoUrl: '',
+      alternatives: [
+        { id: 'alt_zan_stat_split', name: 'Sentadilla split (estática)', reason: 'Más estabilidad', muscle: 'Cuádriceps / Glúteo', series: 3, reps: '10 (por pierna)', rest: '60 seg', focus: 'Pies fijos en posición de zancada. Sube y baja sin mover los pies. Más control.', weightHint: 'Peso corporal' }
+      ]
+    },
+    'zancada_eva': {
+      description: 'Da un paso largo al frente manteniendo el torso recto. Baja verticalmente con la rodilla trasera hacia el suelo (sin tocar). Vuelve al punto de partida empujando con el pie delantero. Controla el equilibrio en todo momento.',
+      videoUrl: '',
+      alternatives: [
+        { id: 'alt_zan_eva_step', name: 'Step up (subida al escalón)', reason: 'Más equilibrio / menos impacto', muscle: 'Cuádriceps / Glúteo', series: 2, reps: '10 (por pierna)', rest: '60 seg', focus: 'Sube un pie a un escalón o step. Empuja con el talón. Baja controlado. Muy seguro.', weightHint: 'Peso corporal' }
+      ]
+    },
+    'zancadas_caminando': {
+      description: 'Coge las mancuernas y avanza dando pasos de zancada. Mantén el torso erguido y la rodilla delantera alineada con el pie. Más coordinación y estabilidad que las zancadas estáticas.',
+      videoUrl: '',
+      alternatives: [
+        { id: 'alt_zan_cam_stat', name: 'Zancadas estáticas con mancuernas', reason: 'Menos espacio / más control', muscle: 'Cuádriceps / Glúteo', series: 3, reps: '10 (por pierna)', rest: '60 seg', focus: 'Mismo trabajo sin avanzar. Más control del movimiento. Muy útil en espacios reducidos.', weightHint: 'Mismas mancuernas' }
+      ]
+    },
+    'zancadas_caminando_eva': {
+      description: 'Con mancuernas ligeras, avanza dando pasos de zancada. Mantén el torso erguido. Rodilla delantera en línea con el pie. Más dinámica que la estática; requiere coordinación y algo de equilibrio.',
+      videoUrl: '',
+      alternatives: [
+        { id: 'alt_zan_cam_eva_stat', name: 'Zancada estática con mancuernas', reason: 'Menos coordinación', muscle: 'Cuádriceps / Glúteo', series: 3, reps: '10 (por pierna)', rest: '60 seg', focus: 'Sin avanzar. Mismo trabajo con más control. Mismas mancuernas.', weightHint: 'Mismas mancuernas' }
+      ]
+    },
+    'peso_muerto_rumano': {
+      description: 'De pie, mancuernas delante de los muslos. Empuja la cadera hacia atrás bajando las mancuernas por las piernas con la espalda recta. Nota el estiramiento detrás del muslo. Cuando sientas la tensión máxima, sube volviendo a la posición apretando glúteos.',
+      videoUrl: '',
+      alternatives: [
+        { id: 'alt_pdr_una_pierna', name: 'Peso muerto a una pierna', reason: 'Mayor desafío unilateral', muscle: 'Isquios / Glúteo', series: 3, reps: '10 (por pierna)', rest: '90 seg', focus: 'Una mancuerna. Baja inclinando el cuerpo mientras la pierna libre sube detrás. Requiere equilibrio.', weightHint: 'Menos peso (1 mancuerna)' }
+      ]
+    },
+    'peso_muerto_rumano_eva': {
+      description: 'De pie con mancuernas delante de los muslos. Empuja la cadera hacia atrás bajando suavemente las mancuernas por las piernas. Espalda recta en todo momento. Nota la tensión en los isquiotibiales. Sube empujando caderas hacia adelante y apretando los glúteos.',
+      videoUrl: '',
+      alternatives: [
+        { id: 'alt_pdr_eva_rodillas', name: 'Peso muerto rodillas semiflexionadas', reason: 'Menos flexibilidad requerida', muscle: 'Isquios / Glúteo', series: 2, reps: '12', rest: '90 seg', focus: 'Igual pero con rodillas más flexionadas. Reduce la exigencia de flexibilidad de isquiotibiales.', weightHint: 'Mismas mancuernas' }
+      ]
+    },
+    'puente_gluteo': {
+      description: 'Tumbada boca arriba con las rodillas flexionadas y pies apoyados en el suelo. Aprieta los glúteos y sube las caderas hasta formar una línea recta desde hombros a rodillas. Mantén 1-2 segundos arriba. Baja lentamente.',
+      videoUrl: '',
+      alternatives: [
+        { id: 'alt_puente_gl_una_pierna', name: 'Puente de glúteos a una pierna', reason: 'Mayor intensidad', muscle: 'Glúteos / Core', series: 2, reps: '12 (por pierna)', rest: '60 seg', focus: 'Igual pero con una pierna extendida. Más difícil. Ideal cuando el ejercicio base se vuelve fácil.', weightHint: 'Peso corporal' }
+      ]
+    },
+    'hip_thrust_eva': {
+      description: 'Espalda apoyada en el banco (borde a la altura de los omóplatos). Mancuerna sobre las caderas. Pies apoyados en el suelo. Sube las caderas apretando los glúteos hasta paralelo. Pausa 1-2 segundos arriba. Baja controlado.',
+      videoUrl: '',
+      alternatives: [
+        { id: 'alt_hip_thrust_suelo', name: 'Puente de glúteos con mancuerna', reason: 'Sin banco', muscle: 'Glúteos', series: 3, reps: '12', rest: '90 seg', focus: 'Tumbada en el suelo. Mancuerna sobre caderas. Menor rango que el hip thrust pero muy efectivo.', weightHint: 'Misma mancuerna' }
+      ]
+    },
+    'plancha': {
+      description: 'Apóyate en los antebrazos y las puntas de los pies. El cuerpo debe formar una línea recta desde los talones hasta la cabeza. Aprieta abdomen, glúteos y cuádriceps. Mantén la posición respirando con normalidad.',
+      videoUrl: '',
+      alternatives: [
+        { id: 'alt_plancha_rodillas', name: 'Plancha con rodillas', reason: 'Versión más sencilla', muscle: 'Core', series: 3, reps: '30 seg', rest: '60 seg', isTimed: true, focus: 'Rodillas en el suelo. Mismo alineamiento de cadera y hombros. Excelente para empezar.', weightHint: 'Peso corporal' }
+      ]
+    },
+    'plancha_rodillas': {
+      description: 'Apóyate en los antebrazos y las rodillas. El cuerpo forma una línea recta desde las rodillas hasta la cabeza. Aprieta el abdomen. Mantén sin hundir las caderas ni levantarlas. Respira con calma.',
+      videoUrl: '',
+      alternatives: [
+        { id: 'alt_plancha_full_prog', name: 'Plancha clásica completa', reason: 'Progresión natural', muscle: 'Core', series: 2, reps: '15 seg', rest: '60 seg', isTimed: true, focus: 'Sin rodillas. Apunta a mantenerla 15 segundos primero y progresa cada semana.', weightHint: 'Peso corporal' }
+      ]
+    },
+    'plancha_completa': {
+      description: 'Apóyate en los antebrazos y las puntas de los pies. Cuerpo recto de cabeza a talones. Aprieta todo el cuerpo: abdomen, glúteos, cuádriceps. No hundas las caderas ni las subas demasiado. Respiración constante y tranquila.',
+      videoUrl: '',
+      alternatives: [
+        { id: 'alt_plancha_lateral', name: 'Plancha lateral', reason: 'Variante oblicuos', muscle: 'Core / Oblicuos', series: 2, reps: '20 seg (por lado)', rest: '60 seg', isTimed: true, focus: 'Apóyate en un antebrazo lateralmente. Cuerpo en línea recta de lado. Trabaja oblicuos.', weightHint: 'Peso corporal' }
+      ]
+    },
+    'crunch': {
+      description: 'Tumbado boca arriba con las rodillas flexionadas. Manos detrás de las orejas sin tirar del cuello. Despega las escápulas del suelo apretando el abdomen. Baja controlado sin llegar a apoyar completamente.',
+      videoUrl: '',
+      alternatives: [
+        { id: 'alt_crunch_bici', name: 'Crunch de bicicleta', reason: 'Más músculos activados', muscle: 'Abdomen / Oblicuos', series: 3, reps: '15', rest: '—', focus: 'Codo derecho hacia rodilla izquierda alternando. Activa más fibras abdominales.', weightHint: 'Peso corporal' }
+      ]
+    },
+    'bird_dog': {
+      description: 'A cuatro patas con las manos bajo los hombros y las rodillas bajo las caderas. Extiende simultáneamente el brazo derecho y la pierna izquierda hasta quedar en línea con el cuerpo. Mantén 2 segundos. Vuelve sin apoyar y repite con el otro lado.',
+      videoUrl: '',
+      alternatives: [
+        { id: 'alt_dead_bug', name: 'Dead bug', reason: 'En el suelo, más sencillo', muscle: 'Core / Lumbar', series: 2, reps: '10 (por lado)', rest: '60 seg', focus: 'Tumbada boca arriba. Extiende brazo y pierna contrarios hacia el suelo lentamente. Espalda baja plana.', weightHint: 'Peso corporal' }
+      ]
+    }
+  };
+
+  // =============================================
   // WARMUP
   // =============================================
   var WARMUP = {
@@ -283,7 +565,7 @@
   function getStorageKey() { return 'gym_calendar_data_' + activeProfile; }
 
   function getDefaultState() {
-    return { progress: {}, completions: {}, settings: { trainingDays: PROFILES[activeProfile].defaultDays.slice() } };
+    return { progress: {}, completions: {}, swaps: {}, settings: { trainingDays: PROFILES[activeProfile].defaultDays.slice() } };
   }
 
   function loadState() {
@@ -291,7 +573,7 @@
       var raw = localStorage.getItem(getStorageKey());
       if (raw) {
         var data = JSON.parse(raw);
-        var st = { progress: data.progress || {}, completions: data.completions || {} };
+        var st = { progress: data.progress || {}, completions: data.completions || {}, swaps: data.swaps || {} };
         st.settings = data.settings || {};
         if (!Array.isArray(st.settings.trainingDays) || st.settings.trainingDays.length === 0) {
           st.settings.trainingDays = PROFILES[activeProfile].defaultDays.slice();
@@ -662,8 +944,48 @@
   }
 
   // =============================================
-  // DAY SELECTOR
+  // EXPAND / COLLAPSE & EXERCISE SWAP
   // =============================================
+  var expandedCards = {};
+
+  function getEffectiveExercises(day, dateKey) {
+    var key = dateKey || getTodayKey();
+    var todaySwaps = (state.swaps && state.swaps[key]) ? state.swaps[key] : {};
+    return day.exercises.map(function(origEx) {
+      var swapped = todaySwaps[origEx.id];
+      return { ex: swapped || origEx, originalId: origEx.id, isSwapped: !!swapped };
+    });
+  }
+
+  function toggleExpand(originalId) {
+    expandedCards[originalId] = !expandedCards[originalId];
+    var body = document.getElementById('body-' + originalId);
+    var chevron = document.getElementById('chevron-' + originalId);
+    if (body) body.classList.toggle('expanded', !!expandedCards[originalId]);
+    if (chevron) chevron.textContent = expandedCards[originalId] ? '˅' : '›';
+  }
+
+  function swapExercise(originalId, altExercise) {
+    if (!state.swaps) state.swaps = {};
+    var key = getTodayKey();
+    if (!state.swaps[key]) state.swaps[key] = {};
+    state.swaps[key][originalId] = altExercise;
+    saveState();
+    expandedCards[originalId] = true;
+    renderCurrentDay();
+    showToast('↔ ' + altExercise.name);
+  }
+
+  function revertSwap(originalId) {
+    var key = getTodayKey();
+    if (state.swaps && state.swaps[key]) {
+      delete state.swaps[key][originalId];
+      saveState();
+    }
+    renderCurrentDay();
+    showToast('Ejercicio original restaurado');
+  }
+
   // =============================================
   // RENDER TODAY'S ROUTINE
   // =============================================
@@ -704,44 +1026,129 @@
     html += '  </div>';
     html += '</div>';
 
-    day.exercises.forEach(function (ex, idx) {
+    var effectiveExercises = getEffectiveExercises(day);
+
+    effectiveExercises.forEach(function (item, idx) {
+      var ex = item.ex;
+      var originalId = item.originalId;
+      var isSwapped = item.isSwapped;
       var isCompleted = !!completions[ex.id];
       var lastWeight = getLastWeight(ex.id);
-      var sessionCount = getSessionCount(ex.id);
-      var progress = getExerciseProgress(ex.id);
+      var meta = EXERCISE_META[ex.id] || EXERCISE_META[originalId] || {};
+      var isExpanded = !!expandedCards[originalId];
+      var repsLabel = ex.series + '×' + ex.reps;
 
-      html += '<div class="exercise-card ' + (isCompleted ? 'completed' : '') + '" id="card-' + ex.id + '">';
-      html += '  <div class="exercise-top"><div class="exercise-info"><div class="exercise-name">' + (idx + 1) + '. ' + ex.name + '</div><span class="exercise-muscle">' + ex.muscle + '</span>';
-      if (ex.weightHint) html += '<span class="exercise-weight-hint">💡 ' + ex.weightHint + '</span>';
-      html += '  </div><div class="exercise-check"><button class="check-btn ' + (isCompleted ? 'checked' : '') + '" data-ex="' + ex.id + '">' + (isCompleted ? '✓' : '') + '</button></div></div>';
+      html += '<div class="exercise-card' + (isCompleted ? ' completed' : '') + '" id="card-' + originalId + '">';
+
+      // HEADER (always visible)
+      html += '<div class="exercise-header" id="header-' + originalId + '">';
+      html += '  <div class="exercise-info">';
+      html += '    <div class="exercise-name">' + (idx + 1) + '. ' + ex.name + '</div>';
+      html += '    <div class="exercise-header-meta">';
+      html += '      <span class="exercise-muscle">' + ex.muscle + '</span>';
+      html += '      <span class="exercise-collapsed-meta">' + repsLabel + '</span>';
+      if (isSwapped) html += '      <span class="exercise-swap-badge">↔</span>';
+      html += '    </div>';
+      html += '  </div>';
+      html += '  <button class="check-btn' + (isCompleted ? ' checked' : '') + '" data-ex="' + ex.id + '" data-orig="' + originalId + '">' + (isCompleted ? '✓' : '') + '</button>';
+      html += '  <span class="exercise-chevron" id="chevron-' + originalId + '">' + (isExpanded ? '˅' : '›') + '</span>';
+      html += '</div>';
+
+      // BODY (expandable)
+      html += '<div class="exercise-body' + (isExpanded ? ' expanded' : '') + '" id="body-' + originalId + '">';
+
       html += '  <div class="exercise-details">';
       html += '    <div class="exercise-detail-item"><span class="icon">🔄</span><span><span class="label">Series: </span><span class="value">' + ex.series + '</span></span></div>';
       html += '    <div class="exercise-detail-item"><span class="icon">🔁</span><span><span class="label">Reps: </span><span class="value">' + ex.reps + '</span></span></div>';
       html += '    <div class="exercise-detail-item"><span class="icon">⏱️</span><span><span class="label">Descanso: </span><span class="value">' + ex.rest + '</span></span></div>';
       html += '  </div>';
+
       html += '  <div class="exercise-focus"><div class="focus-label">💡 Enfoque clave</div>' + ex.focus + '</div>';
+
+      if (meta.description) {
+        html += '  <div class="exercise-description">' + meta.description + '</div>';
+      }
+
+      if (meta.videoUrl) {
+        html += '  <div class="exercise-video-wrapper"><iframe src="' + meta.videoUrl + '?rel=0&modestbranding=1" allowfullscreen loading="lazy" title="' + ex.name + '"></iframe></div>';
+      }
+
+      if (ex.weightHint) {
+        html += '  <div class="exercise-weight-hint">💡 ' + ex.weightHint + '</div>';
+      }
+
       html += '  <div class="exercise-weight-section">';
       html += '    <div class="weight-row"><div class="weight-input-group"><input type="number" class="weight-input" id="weight-' + ex.id + '" value="' + (lastWeight !== null ? lastWeight : '') + '" placeholder="' + (lastWeight !== null ? lastWeight : '0') + '" inputmode="decimal" step="0.5" min="0"><span class="weight-unit">kg</span></div><button class="weight-save-btn" data-ex="' + ex.id + '">Guardar</button></div>';
       html += '    <div class="weight-history" id="history-' + ex.id + '">' + renderWeightHistory(ex.id) + '</div>';
       html += '    <div id="suggestion-' + ex.id + '"></div>';
-      html += '  </div></div>';
+      html += '  </div>';
+
+      if (!isSwapped && meta.alternatives && meta.alternatives.length > 0) {
+        html += '  <div class="exercise-alternatives">';
+        html += '    <div class="alternatives-title">🔀 Alternativas</div>';
+        meta.alternatives.forEach(function(alt, ai) {
+          html += '    <div class="alternative-item">';
+          html += '      <div class="alternative-info"><div class="alternative-name">' + alt.name + '</div><div class="alternative-reason">' + alt.reason + '</div></div>';
+          html += '      <button class="swap-btn" data-orig="' + originalId + '" data-alt-idx="' + ai + '">Usar</button>';
+          html += '    </div>';
+        });
+        html += '  </div>';
+      }
+
+      if (isSwapped) {
+        html += '  <div class="swap-indicator">⇔ Usando alternativa · <button class="revert-btn" data-orig="' + originalId + '">Volver al original</button></div>';
+      }
+
+      html += '</div>'; // end exercise-body
+      html += '</div>'; // end exercise-card
     });
 
     container.innerHTML = html;
 
-    day.exercises.forEach(function (ex) {
-      var checkBtn = container.querySelector('.check-btn[data-ex="' + ex.id + '"]');
-      if (checkBtn) checkBtn.addEventListener('click', function () { toggleCompletion(ex.id); });
-      var saveBtn = container.querySelector('.weight-save-btn[data-ex="' + ex.id + '"]');
-      var weightInput = container.querySelector('#weight-' + ex.id);
-      if (saveBtn && weightInput) {
-        saveBtn.addEventListener('click', function () {
-          var val = weightInput.value.trim();
-          if (val && parseFloat(val) >= 0) saveWeight(ex.id, parseFloat(val));
-          else showToast('Introduce un peso válido');
-        });
-        weightInput.addEventListener('keydown', function (e) { if (e.key === 'Enter') saveBtn.click(); });
-      }
+    container.querySelectorAll('.exercise-header').forEach(function(header) {
+      var origId = header.id.replace('header-', '');
+      header.addEventListener('click', function(e) {
+        if (e.target.closest('.check-btn')) return;
+        toggleExpand(origId);
+      });
+    });
+
+    container.querySelectorAll('.check-btn').forEach(function(btn) {
+      btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        toggleCompletion(btn.dataset.ex);
+      });
+    });
+
+    container.querySelectorAll('.weight-save-btn').forEach(function(btn) {
+      (function(exId) {
+        var weightInput = container.querySelector('#weight-' + exId);
+        if (weightInput) {
+          btn.addEventListener('click', function() {
+            var val = weightInput.value.trim();
+            if (val && parseFloat(val) >= 0) saveWeight(exId, parseFloat(val));
+            else showToast('Introduce un peso válido');
+          });
+          weightInput.addEventListener('keydown', function(e) { if (e.key === 'Enter') btn.click(); });
+        }
+      })(btn.dataset.ex);
+    });
+
+    container.querySelectorAll('.swap-btn').forEach(function(btn) {
+      btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        var origId = btn.dataset.orig;
+        var ai = parseInt(btn.dataset.altIdx, 10);
+        var meta = EXERCISE_META[origId] || {};
+        if (meta.alternatives && meta.alternatives[ai]) swapExercise(origId, meta.alternatives[ai]);
+      });
+    });
+
+    container.querySelectorAll('.revert-btn').forEach(function(btn) {
+      btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        revertSwap(btn.dataset.orig);
+      });
     });
 
     updateProgress();
@@ -769,8 +1176,9 @@
     if (!day) return;
     var completions = getTodayCompletions();
     var done = 0;
-    day.exercises.forEach(function (ex) { if (completions[ex.id]) done++; });
-    var pct = day.exercises.length > 0 ? Math.round((done / day.exercises.length) * 100) : 0;
+    var effExs = getEffectiveExercises(day);
+    effExs.forEach(function (item) { if (completions[item.ex.id]) done++; });
+    var pct = effExs.length > 0 ? Math.round((done / effExs.length) * 100) : 0;
     var fill = document.getElementById('progressFill');
     var label = document.getElementById('progressLabel');
     var text = document.getElementById('progressText');
@@ -785,7 +1193,8 @@
     if (routineIdx === -1) return;
     var day = phase.days[routineIdx];
     if (!day) return;
-    day.exercises.forEach(function (ex) {
+    getEffectiveExercises(day).forEach(function (item) {
+      var ex = item.ex;
       var container = document.getElementById('suggestion-' + ex.id);
       if (!container) return;
       var weightInput = document.getElementById('weight-' + ex.id);
