@@ -764,10 +764,71 @@
       state.completions[key][exerciseId] = true;
       playCompleteSound();
       vibrate();
+      // Check if all exercises done (Eva motivational message)
+      if (activeProfile === 'eva') checkEvaWorkoutComplete();
     }
     saveState();
     renderCurrentDay();
     updateAll();
+  }
+
+  function EVA_MESSAGES() {
+    return [
+      '¡Lo has hecho genial! 🌸 Cada día más fuerte 💪',
+      '¡Entrenazo! Tu constancia es tu superpoder ✨',
+      '¡Buen trabajo! Un pasito más cerca de tu meta 🎯',
+      '¡Orgulloso de ti! Cada gota de sudor cuenta 💜',
+      '¡Eres una máquina! No hay quien te pare 🚀',
+      '¡A darle! Ya has terminado, disfruta el logro 🌟',
+      '¡Qué bien lo has hecho! Esta Eva es imparable 🔥',
+      '¡Clase! Entreno completado con nota 👏',
+      '¡Bravo! Tu fuerza crece cada día 🌷',
+      '¡Enhorabuena! Hoy has vuelto a demostrar de qué estás hecha 💪'
+    ];
+  }
+
+  function checkEvaWorkoutComplete() {
+    var today = getTodayKey();
+    var routineIdx = getTodayRoutine();
+    if (routineIdx === -1) return;
+    var phase = getPhase(today);
+    var day = phase.days[routineIdx];
+    if (!day) return;
+    var completions = getTodayCompletions();
+    var effective = getEffectiveExercises(day);
+    var allDone = effective.every(function (item) { return completions[item.ex.id]; });
+    if (allDone) {
+      var messages = EVA_MESSAGES();
+      var msg = messages[Math.floor(Math.random() * messages.length)];
+      showEvaMotivation(msg);
+    }
+  }
+
+  function showEvaMotivation(msg) {
+    var existing = document.getElementById('evaMotivation');
+    if (existing) existing.remove();
+
+    var overlay = document.createElement('div');
+    overlay.id = 'evaMotivation';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.55);animation:fadeIn 0.3s ease;';
+    overlay.addEventListener('click', function () { overlay.remove(); });
+
+    var card = document.createElement('div');
+    card.style.cssText = 'background:var(--bg-card);border:2px solid #9b59b6;border-radius:var(--radius-xl);padding:32px 28px;max-width:320px;width:90%;text-align:center;box-shadow:var(--shadow);animation:slideUp 0.4s ease;';
+    card.onclick = function (e) { e.stopPropagation(); };
+
+    card.innerHTML = '<div style="font-size:2.5rem;margin-bottom:12px;">🌸</div>'
+      + '<div style="font-size:1.1rem;font-weight:600;color:var(--text-primary);margin-bottom:8px;line-height:1.4;">' + msg + '</div>'
+      + '<button id="evaMotivationBtn" style="margin-top:16px;padding:10px 28px;border:none;border-radius:var(--radius-md);background:#9b59b6;color:#fff;font-family:var(--font);font-size:0.9rem;font-weight:600;cursor:pointer;-webkit-tap-highlight-color:transparent;">¡Gracias! 💜</button>';
+
+    overlay.appendChild(card);
+    document.body.appendChild(overlay);
+
+    var btn = document.getElementById('evaMotivationBtn');
+    btn.addEventListener('click', function () { overlay.remove(); });
+    overlay.addEventListener('keydown', function(e) { if (e.key === 'Escape') overlay.remove(); });
+
+    setTimeout(function () { if (overlay.parentNode) overlay.remove(); }, 8000);
   }
 
   function saveWeight(exerciseId, weight) {
@@ -944,9 +1005,83 @@
   }
 
   // =============================================
+  // REST TIMER
+  // =============================================
+  var activeTimer = null;
+
+  function parseRestSeconds(restStr) {
+    if (!restStr || restStr === '—' || restStr === '-') return 0;
+    var match = restStr.match(/(\d+)/);
+    return match ? parseInt(match[1], 10) : 0;
+  }
+
+  function formatTimerDisplay(seconds) {
+    var m = Math.floor(seconds / 60);
+    var s = seconds % 60;
+    return String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+  }
+
+  function clearActiveTimer() {
+    if (activeTimer) {
+      clearInterval(activeTimer.interval);
+      var el = document.getElementById('timer-' + activeTimer.exerciseId);
+      if (el) el.classList.remove('timer-active', 'timer-finished');
+      var icon = document.getElementById('timer-icon-' + activeTimer.exerciseId);
+      if (icon) icon.textContent = '⏱️';
+      activeTimer = null;
+    }
+  }
+
+  function startRestTimer(exerciseId, totalSeconds) {
+    if (totalSeconds <= 0) return;
+    clearActiveTimer();
+
+    var remaining = totalSeconds;
+    var timerDisplay = document.getElementById('timer-display-' + exerciseId);
+    var timerContainer = document.getElementById('timer-' + exerciseId);
+    var timerIcon = document.getElementById('timer-icon-' + exerciseId);
+
+    if (!timerContainer || !timerDisplay) return;
+
+    timerContainer.classList.add('timer-active');
+    if (timerIcon) timerIcon.textContent = '⏳';
+    timerDisplay.textContent = formatTimerDisplay(remaining);
+
+    activeTimer = {
+      exerciseId: exerciseId,
+      interval: setInterval(function () {
+        remaining--;
+        timerDisplay.textContent = formatTimerDisplay(remaining);
+
+        if (remaining <= 5 && remaining > 0) {
+          timerContainer.classList.add('timer-warning');
+        }
+
+        if (remaining <= 0) {
+          clearActiveTimer();
+          timerContainer.classList.remove('timer-warning');
+          timerContainer.classList.add('timer-finished');
+          if (timerIcon) timerIcon.textContent = '✅';
+          try { if (navigator.vibrate) navigator.vibrate([200, 100, 200]); } catch (e) {}
+          showToast('⏰ ¡Descanso terminado!');
+        }
+      }, 1000)
+    };
+  }
+
+  // =============================================
   // EXPAND / COLLAPSE & EXERCISE SWAP
   // =============================================
   var expandedCards = {};
+  var homeExpandedCards = {};
+
+  function toggleHomeExpand(exerciseId) {
+    homeExpandedCards[exerciseId] = !homeExpandedCards[exerciseId];
+    var body = document.getElementById('home-body-' + exerciseId);
+    var chevron = document.getElementById('home-chevron-' + exerciseId);
+    if (body) body.classList.toggle('expanded', !!homeExpandedCards[exerciseId]);
+    if (chevron) chevron.textContent = homeExpandedCards[exerciseId] ? '˅' : '›';
+  }
 
   function getEffectiveExercises(day, dateKey) {
     var key = dateKey || getTodayKey();
@@ -1060,8 +1195,16 @@
       html += '  <div class="exercise-details">';
       html += '    <div class="exercise-detail-item"><span class="icon">🔄</span><span><span class="label">Series: </span><span class="value">' + ex.series + '</span></span></div>';
       html += '    <div class="exercise-detail-item"><span class="icon">🔁</span><span><span class="label">Reps: </span><span class="value">' + ex.reps + '</span></span></div>';
-      html += '    <div class="exercise-detail-item"><span class="icon">⏱️</span><span><span class="label">Descanso: </span><span class="value">' + ex.rest + '</span></span></div>';
+      var restSecs = parseRestSeconds(ex.rest);
+      html += '    <div class="exercise-detail-item"><span class="icon" id="timer-icon-' + originalId + '">⏱️</span><span><span class="label">Descanso: </span><span class="value">' + ex.rest + '</span></span>' + (restSecs > 0 ? '<button class="timer-start-btn" data-ex="' + originalId + '" data-secs="' + restSecs + '">Iniciar</button>' : '') + '</div>';
       html += '  </div>';
+
+      if (restSecs > 0) {
+        html += '  <div class="timer-container" id="timer-' + originalId + '">';
+        html += '    <div class="timer-display" id="timer-display-' + originalId + '">' + formatTimerDisplay(restSecs) + '</div>';
+        html += '    <button class="timer-cancel-btn" data-ex="' + originalId + '">Cancelar</button>';
+        html += '  </div>';
+      }
 
       html += '  <div class="exercise-focus"><div class="focus-label">💡 Enfoque clave</div>' + ex.focus + '</div>';
 
@@ -1148,6 +1291,20 @@
       btn.addEventListener('click', function(e) {
         e.stopPropagation();
         revertSwap(btn.dataset.orig);
+      });
+    });
+
+    container.querySelectorAll('.timer-start-btn').forEach(function(btn) {
+      btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        startRestTimer(btn.dataset.ex, parseInt(btn.dataset.secs, 10));
+      });
+    });
+
+    container.querySelectorAll('.timer-cancel-btn').forEach(function(btn) {
+      btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        clearActiveTimer();
       });
     });
 
@@ -1367,6 +1524,8 @@
     if (prevBtn) prevBtn.addEventListener('click', function () { homeMonthOffset--; renderHome(); });
     if (nextBtn) nextBtn.addEventListener('click', function () { homeMonthOffset++; renderHome(); });
 
+    bindHomeCardListeners();
+
     container.querySelectorAll('.calendar-day.clickable').forEach(function (el) {
       el.addEventListener('click', function () {
         container.dataset.selectedDate = el.dataset.date;
@@ -1374,8 +1533,84 @@
         if (detailEl) detailEl.innerHTML = renderDayDetail(el.dataset.date);
         container.querySelectorAll('.calendar-day.clickable').forEach(function (d) { d.classList.remove('selected'); });
         el.classList.add('selected');
+        bindHomeCardListeners();
       });
     });
+  }
+
+  function bindHomeCardListeners() {
+    var detailEl = document.getElementById('dayDetail');
+    if (!detailEl) return;
+    detailEl.querySelectorAll('.home-ex-header').forEach(function(header) {
+      header.addEventListener('click', function() {
+        var exId = header.id.replace('home-header-', '');
+        toggleHomeExpand(exId);
+      });
+    });
+  }
+
+  function renderExerciseDetailItemForHome(ex, meta) {
+    var restStr = ex.rest || '—';
+    var isExpanded = !!homeExpandedCards[ex.id];
+    var html = '';
+
+    html += '<div class="day-detail-ex-item home-ex-card" id="home-card-' + ex.id + '">';
+
+    // Clickable header
+    html += '<div class="home-ex-header" id="home-header-' + ex.id + '">';
+    html += '  <div class="home-ex-info">';
+    html += '    <div class="dd-ex-name">' + ex.name + '</div>';
+    html += '    <div class="dd-ex-meta"><span class="dd-ex-muscle">' + ex.muscle + '</span><span class="dd-ex-reps">' + ex.series + '×' + ex.reps + '</span></div>';
+    html += '  </div>';
+    html += '  <span class="exercise-chevron" id="home-chevron-' + ex.id + '">' + (isExpanded ? '˅' : '›') + '</span>';
+    html += '</div>';
+
+    // Expandable body
+    html += '<div class="exercise-body' + (isExpanded ? ' expanded' : '') + '" id="home-body-' + ex.id + '">';
+
+    // Details grid
+    html += '  <div class="exercise-details">';
+    html += '    <div class="exercise-detail-item"><span class="icon">🔄</span><span><span class="label">Series: </span><span class="value">' + ex.series + '</span></span></div>';
+    html += '    <div class="exercise-detail-item"><span class="icon">🔁</span><span><span class="label">Reps: </span><span class="value">' + ex.reps + '</span></span></div>';
+    html += '    <div class="exercise-detail-item"><span class="icon">⏱️</span><span><span class="label">Descanso: </span><span class="value">' + restStr + '</span></span></div>';
+    html += '  </div>';
+
+    // Focus
+    if (ex.focus) {
+      html += '  <div class="exercise-focus"><div class="focus-label">💡 Enfoque clave</div>' + ex.focus + '</div>';
+    }
+
+    // Description
+    if (meta && meta.description) {
+      html += '  <div class="exercise-description">' + meta.description + '</div>';
+    }
+
+    // Video
+    if (meta && meta.videoUrl) {
+      html += '  <div class="exercise-video-wrapper"><iframe src="' + meta.videoUrl + '?rel=0&modestbranding=1" allowfullscreen loading="lazy" title="' + ex.name + '"></iframe></div>';
+    }
+
+    // Weight hint
+    if (ex.weightHint) {
+      html += '  <div class="exercise-weight-hint">💡 ' + ex.weightHint + '</div>';
+    }
+
+    // Alternatives
+    if (meta && meta.alternatives && meta.alternatives.length > 0) {
+      html += '  <div class="exercise-alternatives">';
+      html += '    <div class="alternatives-title">🔀 Alternativas</div>';
+      meta.alternatives.forEach(function(alt) {
+        html += '    <div class="alternative-item">';
+        html += '      <div class="alternative-info"><div class="alternative-name">' + alt.name + '</div><div class="alternative-reason">' + alt.reason + '</div></div>';
+        html += '    </div>';
+      });
+      html += '  </div>';
+    }
+
+    html += '</div>'; // end exercise-body
+    html += '</div>'; // end day-detail-ex-item
+
+    return html;
   }
 
   function renderDayDetail(dateKey) {
@@ -1441,7 +1676,8 @@
       html += '  <div class="day-detail-routine">' + day.emoji + ' ' + day.day + ' · Semana ' + weekNum + '</div>';
       html += '  <div class="day-detail-exercises">';
       day.exercises.forEach(function (ex) {
-        html += '    <div class="day-detail-ex-item"><div class="dd-ex-name">' + ex.name + '</div><div class="dd-ex-meta"><span class="dd-ex-muscle">' + ex.muscle + '</span><span class="dd-ex-reps">' + ex.series + '×' + ex.reps + '</span></div></div>';
+        var meta = EXERCISE_META[ex.id] || {};
+        html += renderExerciseDetailItemForHome(ex, meta);
       });
       html += '  </div>';
       html += '  <div class="day-detail-summary">📋 ' + verb + ' ' + day.day + ' · ' + day.exercises.length + ' ejercicios</div>';
@@ -1455,7 +1691,8 @@
     html += '  <div class="day-detail-routine">' + day.emoji + ' ' + day.day + ' · Semana ' + weekNum + '</div>';
     html += '  <div class="day-detail-exercises">';
     day.exercises.forEach(function (ex) {
-      html += '    <div class="day-detail-ex-item"><div class="dd-ex-name">' + ex.name + '</div><div class="dd-ex-meta"><span class="dd-ex-muscle">' + ex.muscle + '</span><span class="dd-ex-reps">' + ex.series + '×' + ex.reps + '</span></div></div>';
+      var meta = EXERCISE_META[ex.id] || {};
+      html += renderExerciseDetailItemForHome(ex, meta);
     });
     html += '  </div>';
     html += '  <div class="day-detail-summary">📋 Entrenamiento planificado (sin registrar) · ' + day.exercises.length + ' ejercicios</div>';
@@ -1492,7 +1729,33 @@
           if (weightEntries[w].date === dateKey) { weightStr = weightEntries[w].weight + ' kg'; break; }
         }
       }
-      html += '    <div class="day-detail-ex-item"><div class="dd-ex-name">' + ex.name + '</div><div class="dd-ex-meta"><span class="dd-ex-muscle">' + ex.muscle + '</span><span class="dd-ex-weight">🏋️ ' + weightStr + '</span></div></div>';
+      var meta = EXERCISE_META[ex.id] || {};
+      html += '<div class="day-detail-ex-item home-ex-card" id="home-card-' + ex.id + '">';
+      html += '<div class="home-ex-header" id="home-header-' + ex.id + '">';
+      html += '  <div class="home-ex-info">';
+      html += '    <div class="dd-ex-name">' + ex.name + '</div>';
+      html += '    <div class="dd-ex-meta"><span class="dd-ex-muscle">' + ex.muscle + '</span><span class="dd-ex-weight">🏋️ ' + weightStr + '</span></div>';
+      html += '  </div>';
+      var isExpandedDone = !!homeExpandedCards[ex.id];
+      html += '  <span class="exercise-chevron" id="home-chevron-' + ex.id + '">' + (isExpandedDone ? '˅' : '›') + '</span>';
+      html += '</div>';
+      html += '<div class="exercise-body' + (isExpandedDone ? ' expanded' : '') + '" id="home-body-' + ex.id + '">';
+      html += '  <div class="exercise-details">';
+      html += '    <div class="exercise-detail-item"><span class="icon">🔄</span><span><span class="label">Series: </span><span class="value">' + ex.series + '</span></span></div>';
+      html += '    <div class="exercise-detail-item"><span class="icon">🔁</span><span><span class="label">Reps: </span><span class="value">' + ex.reps + '</span></span></div>';
+      html += '    <div class="exercise-detail-item"><span class="icon">⏱️</span><span><span class="label">Descanso: </span><span class="value">' + (ex.rest || '—') + '</span></span></div>';
+      html += '  </div>';
+      if (ex.focus) html += '  <div class="exercise-focus"><div class="focus-label">💡 Enfoque clave</div>' + ex.focus + '</div>';
+      if (meta.description) html += '  <div class="exercise-description">' + meta.description + '</div>';
+      if (meta.videoUrl) html += '  <div class="exercise-video-wrapper"><iframe src="' + meta.videoUrl + '?rel=0&modestbranding=1" allowfullscreen loading="lazy" title="' + ex.name + '"></iframe></div>';
+      if (ex.weightHint) html += '  <div class="exercise-weight-hint">💡 ' + ex.weightHint + '</div>';
+      if (meta.alternatives && meta.alternatives.length > 0) {
+        html += '  <div class="exercise-alternatives"><div class="alternatives-title">🔀 Alternativas</div>';
+        meta.alternatives.forEach(function(alt) { html += '<div class="alternative-item"><div class="alternative-info"><div class="alternative-name">' + alt.name + '</div><div class="alternative-reason">' + alt.reason + '</div></div></div>'; });
+        html += '  </div>';
+      }
+      html += '</div>';
+      html += '</div>';
     });
 
     html += '  </div>';
