@@ -1957,3 +1957,128 @@ body {
   text-decoration: underline;
   padding: 0;
 }
+
+/* =============================================
+   CUSTOM DAYS — CALENDARIO
+   ============================================= */
+.calendar-day.custom-training {
+  box-shadow: 0 0 0 2px var(--accent-green) inset;
+}
+
+.calendar-day.skipped .cal-day-emoji {
+  opacity: 0.3;
+  text-decoration: line-through;
+}
+
+/* =============================================
+   BOTONES DE ACCIÓN EN DETALLE DE DÍA
+   ============================================= */
+.day-action-btn {
+  display: block;
+  width: calc(100% - 32px);
+  margin: 12px 16px 4px;
+  padding: 10px 16px;
+  border-radius: 10px;
+  border: none;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  letter-spacing: 0.01em;
+}
+
+.day-action-add {
+  background: var(--accent-green);
+  color: #fff;
+}
+
+.day-action-skip {
+  background: var(--surface-2, #1e2235);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+}
+
+.day-action-remove {
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+  font-weight: 500;
+}
+
+.day-action-recover {
+  background: var(--accent-primary);
+  color: #fff;
+}
+
+/* =============================================
+   MODAL SELECTOR DE RUTINA
+   ============================================= */
+.routine-picker-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 1000;
+  padding: 0;
+}
+
+.routine-picker-modal {
+  background: var(--surface-1, #16192a);
+  border-radius: 20px 20px 0 0;
+  padding: 24px 20px 32px;
+  width: 100%;
+  max-width: 480px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.routine-picker-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  text-align: center;
+  margin-bottom: 8px;
+}
+
+.routine-picker-btn {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 18px;
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
+  background: var(--surface-2, #1e2235);
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+}
+
+.routine-picker-btn:active {
+  background: var(--accent-primary);
+  color: #fff;
+  border-color: var(--accent-primary);
+}
+
+.rp-emoji {
+  font-size: 1.4rem;
+  line-height: 1;
+}
+
+.rp-name {
+  flex: 1;
+}
+
+.routine-picker-cancel {
+  margin-top: 4px;
+  padding: 12px;
+  border: none;
+  background: none;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  cursor: pointer;
+  text-align: center;
+}

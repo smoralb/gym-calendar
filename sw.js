@@ -1,4 +1,4 @@
-const CACHE_NAME = 'gym-calendar-v4.2.0';
+const CACHE_NAME = 'gym-calendar-v4.3.0';
 const ASSETS = [
   '/gym-calendar/',
   '/gym-calendar/index.html',

@@ -1,12 +1,12 @@
 /* =============================================
    Gym Calendar - App de Rutina de Ejercicios
-   Versión: 4.2.0 — Horario semanal configurable
+   Versión: 4.3.0 — Días de entrenamiento personalizados
    ============================================= */
 
 (function () {
   'use strict';
 
-  var APP_VERSION = '4.2.0';
+  var APP_VERSION = '4.3.0';
 
   // =============================================
   // SERGIO_PHASES: plan Push/Pull/Pierna 3 días/semana
@@ -565,7 +565,7 @@
   function getStorageKey() { return 'gym_calendar_data_' + activeProfile; }
 
   function getDefaultState() {
-    return { progress: {}, completions: {}, swaps: {}, settings: { trainingDays: PROFILES[activeProfile].defaultDays.slice() } };
+    return { progress: {}, completions: {}, swaps: {}, customDays: {}, settings: { trainingDays: PROFILES[activeProfile].defaultDays.slice() } };
   }
 
   function loadState() {
@@ -573,7 +573,7 @@
       var raw = localStorage.getItem(getStorageKey());
       if (raw) {
         var data = JSON.parse(raw);
-        var st = { progress: data.progress || {}, completions: data.completions || {}, swaps: data.swaps || {} };
+        var st = { progress: data.progress || {}, completions: data.completions || {}, swaps: data.swaps || {}, customDays: data.customDays || {} };
         st.settings = data.settings || {};
         if (!Array.isArray(st.settings.trainingDays) || st.settings.trainingDays.length === 0) {
           st.settings.trainingDays = PROFILES[activeProfile].defaultDays.slice();
@@ -668,12 +668,17 @@
   }
 
   function isTrainingDay(dateKey) {
+    var custom = state.customDays && state.customDays[dateKey];
+    if (custom === 'rest') return false;
+    if (custom && typeof custom === 'object') return true;
     var d = new Date(dateKey + 'T12:00:00');
     var day = d.getDay();
     return getTrainingDays().indexOf(day) !== -1;
   }
 
   function getRoutineSlotForDate(dateKey) {
+    var custom = state.customDays && state.customDays[dateKey];
+    if (custom && typeof custom === 'object') return custom.routineIdx;
     if (!isTrainingDay(dateKey)) return -1;
     var d = new Date(dateKey + 'T12:00:00');
     var day = d.getDay();
@@ -682,6 +687,78 @@
     if (slot === -1) return -1;
     var phase = getPhase(dateKey);
     return slot % phase.days.length;
+  }
+
+  // =============================================
+  // CUSTOM DAY ACTIONS
+  // =============================================
+  function addCustomTraining(dateKey, routineIdx) {
+    if (!state.customDays) state.customDays = {};
+    state.customDays[dateKey] = { routineIdx: routineIdx };
+    saveState();
+    renderHome();
+    if (dateKey === getTodayKey()) renderCurrentDay();
+  }
+
+  function skipDay(dateKey) {
+    if (!state.customDays) state.customDays = {};
+    state.customDays[dateKey] = 'rest';
+    saveState();
+    renderHome();
+    if (dateKey === getTodayKey()) renderCurrentDay();
+  }
+
+  function removeCustomDay(dateKey) {
+    if (state.customDays) delete state.customDays[dateKey];
+    saveState();
+    renderHome();
+    if (dateKey === getTodayKey()) renderCurrentDay();
+  }
+
+  function showRoutinePickerModal(dateKey) {
+    var existing = document.getElementById('routinePickerOverlay');
+    if (existing) existing.remove();
+
+    var phase = getPhase(dateKey);
+    var overlay = document.createElement('div');
+    overlay.id = 'routinePickerOverlay';
+    overlay.className = 'routine-picker-overlay';
+
+    var modal = document.createElement('div');
+    modal.className = 'routine-picker-modal';
+
+    var title = document.createElement('div');
+    title.className = 'routine-picker-title';
+    title.textContent = '¿Qué rutina vas a hacer?';
+    modal.appendChild(title);
+
+    phase.days.forEach(function(day, idx) {
+      var btn = document.createElement('button');
+      btn.className = 'routine-picker-btn';
+      btn.innerHTML = '<span class="rp-emoji">' + day.emoji + '</span><span class="rp-name">' + day.day + '</span>';
+      btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        addCustomTraining(dateKey, idx);
+        overlay.remove();
+        // Re-render day detail
+        var detailEl = document.getElementById('dayDetail');
+        if (detailEl) {
+          detailEl.innerHTML = renderDayDetail(dateKey);
+          bindHomeCardListeners();
+        }
+      });
+      modal.appendChild(btn);
+    });
+
+    var cancelBtn = document.createElement('button');
+    cancelBtn.className = 'routine-picker-cancel';
+    cancelBtn.textContent = 'Cancelar';
+    cancelBtn.addEventListener('click', function() { overlay.remove(); });
+    modal.appendChild(cancelBtn);
+
+    overlay.appendChild(modal);
+    overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
+    document.body.appendChild(overlay);
   }
 
   // =============================================
@@ -1439,10 +1516,16 @@
       var scheduled = isTrainingDay(cellDate);
       var routineIdx = scheduled ? getRoutineSlotForDate(cellDate) : -1;
 
+      var customVal = state.customDays && state.customDays[cellDate];
+      var isCustomTraining = customVal && typeof customVal === 'object';
+      var isSkipped = customVal === 'rest';
+
       var cls = 'calendar-day clickable';
       if (isToday) cls += ' today';
       if (isSelected) cls += ' selected';
       if (isFuture) cls += ' future';
+      if (isCustomTraining) cls += ' custom-training';
+      if (isSkipped) cls += ' skipped';
 
       if (attended !== undefined && attended >= 0) {
         // Done: attended
@@ -1547,6 +1630,39 @@
         toggleHomeExpand(exId);
       });
     });
+    detailEl.querySelectorAll('.day-action-btn').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var action = btn.dataset.action;
+        var dateKey = btn.dataset.date;
+        if (action === 'add-training') {
+          showRoutinePickerModal(dateKey);
+        } else if (action === 'skip-day') {
+          skipDay(dateKey);
+          var container = document.getElementById('homeContent');
+          var selDate = container ? container.dataset.selectedDate : null;
+          if (selDate) {
+            detailEl.innerHTML = renderDayDetail(selDate);
+            bindHomeCardListeners();
+          }
+        } else if (action === 'remove-custom') {
+          removeCustomDay(dateKey);
+          var container = document.getElementById('homeContent');
+          var selDate = container ? container.dataset.selectedDate : null;
+          if (selDate) {
+            detailEl.innerHTML = renderDayDetail(selDate);
+            bindHomeCardListeners();
+          }
+        } else if (action === 'recover-day') {
+          removeCustomDay(dateKey);
+          var container = document.getElementById('homeContent');
+          var selDate = container ? container.dataset.selectedDate : null;
+          if (selDate) {
+            detailEl.innerHTML = renderDayDetail(selDate);
+            bindHomeCardListeners();
+          }
+        }
+      });
+    });
   }
 
   function renderExerciseDetailItemForHome(ex, meta) {
@@ -1648,6 +1764,28 @@
       return renderDayDetailWithData(dateKey, completions, formatted, dayName, phase, weekNum);
     }
 
+    // Determine custom day state for action buttons
+    var customVal = state.customDays && state.customDays[dateKey];
+    var isCustomTraining = customVal && typeof customVal === 'object';
+    var isSkipped = customVal === 'rest';
+    var isBaseScheduled = (function() {
+      var d2 = new Date(dateKey + 'T12:00:00');
+      return getTrainingDays().indexOf(d2.getDay()) !== -1;
+    })();
+
+    function buildActionBtn(dateKey) {
+      if (isCustomTraining) {
+        return '<button class="day-action-btn day-action-remove" data-action="remove-custom" data-date="' + dateKey + '">✕ Quitar entrenamiento añadido</button>';
+      }
+      if (isSkipped) {
+        return '<button class="day-action-btn day-action-recover" data-action="recover-day" data-date="' + dateKey + '">↩ Recuperar entrenamiento</button>';
+      }
+      if (isBaseScheduled) {
+        return '<button class="day-action-btn day-action-skip" data-action="skip-day" data-date="' + dateKey + '">↷ Saltar este día</button>';
+      }
+      return '<button class="day-action-btn day-action-add" data-action="add-training" data-date="' + dateKey + '">＋ Añadir entrenamiento</button>';
+    }
+
     // Rest day (not scheduled, no data)
     if (!scheduled) {
       var nextDate = null;
@@ -1662,7 +1800,8 @@
         var nd = new Date(nextDate + 'T12:00:00');
         nextText = ' Próximo entreno: ' + dayNames[nd.getDay()] + ' ' + formatDateShort(nd) + '.';
       }
-      return '<div class="day-detail-empty"><div class="day-detail-date">' + formatted + ' (' + dayName + ')' + phaseInfo + '</div><div class="day-detail-msg">🛌 Descanso</div><div class="day-detail-sub">Día libre. Aprovecha para recuperar 💪' + nextText + '</div></div>';
+      var actionHtml = buildActionBtn(dateKey);
+      return '<div class="day-detail-empty"><div class="day-detail-date">' + formatted + ' (' + dayName + ')' + phaseInfo + '</div><div class="day-detail-msg">🛌 Descanso</div><div class="day-detail-sub">Día libre. Aprovecha para recuperar 💪' + nextText + '</div>' + actionHtml + '</div>';
     }
 
     // Scheduled training day
@@ -1681,6 +1820,7 @@
       });
       html += '  </div>';
       html += '  <div class="day-detail-summary">📋 ' + verb + ' ' + day.day + ' · ' + day.exercises.length + ' ejercicios</div>';
+      html += buildActionBtn(dateKey);
       html += '</div>';
       return html;
     }
@@ -1696,6 +1836,7 @@
     });
     html += '  </div>';
     html += '  <div class="day-detail-summary">📋 Entrenamiento planificado (sin registrar) · ' + day.exercises.length + ' ejercicios</div>';
+    html += buildActionBtn(dateKey);
     html += '</div>';
     return html;
   }
