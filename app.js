@@ -239,6 +239,149 @@
   ];
 
   // =============================================
+  // GELY_PHASES: plan tonificación Full Body 3 días/semana + remo
+  // =============================================
+  var GELY_PHASES = [
+    // ---- MES 1: Fundamentos (Semanas 1-4) ----
+    {
+      id: 'gely_mes1',
+      name: 'Mes 1 · Fundamentos',
+      subtitle: 'Semanas 1 a 4 — Aprende la técnica, pesa ligero',
+      weeks: [1, 2, 3, 4],
+      days: [
+        {
+          id: 'diaA', day: 'Tren Inferior', emoji: '🍑',
+          title: 'Glúteos, Piernas y Core',
+          exercises: [
+            { id: 'sentadilla_goblet_gely', name: 'Sentadilla Goblet', muscle: 'Cuádriceps / Glúteo', series: 3, reps: '12', repsMin: 12, repsMax: 12, rest: '90 seg', focus: 'Mancuerna al pecho. Baja como si te sentaras. Espalda recta. Peso ligero, domina la técnica.', weightHint: '3-5 kg (1 mancuerna)' },
+            { id: 'hip_thrust_gely', name: 'Hip Thrust con mancuerna', muscle: 'Glúteos', series: 3, reps: '15', repsMin: 15, repsMax: 15, rest: '90 seg', focus: 'Espalda en el banco. Mancuerna sobre caderas. Sube apretando glúteo. Pausa 1 seg arriba.', weightHint: '5-7.5 kg (1 mancuerna)' },
+            { id: 'peso_muerto_rumano', name: 'Peso muerto rumano con mancuernas', muscle: 'Isquios / Glúteo', series: 3, reps: '12', repsMin: 12, repsMax: 12, rest: '90 seg', focus: 'Empuja cadera atrás. Espalda recta. Siente el estiramiento detrás del muslo.', weightHint: '3-5 kg / mancuerna' },
+            { id: 'zancada_gely', name: 'Zancada estática', muscle: 'Piernas en general', series: 2, reps: '10 (por pierna)', repsMin: 10, repsMax: 10, rest: '60 seg', focus: 'Paso al frente y baja vertical. Rodilla trasera hacia el suelo. Solo peso corporal al inicio.', weightHint: 'Peso corporal' },
+            { id: 'plancha', name: 'Plancha abdominal', muscle: 'Core', series: 3, reps: '30 seg', repsMin: 30, repsMax: 30, rest: '60 seg', isTimed: true, focus: 'Cuerpo recto de cabeza a talones. Aprieta abdomen y glúteos. Respira constante.', weightHint: 'Peso corporal' },
+            { id: 'elevacion_cadera_gely', name: 'Puente de glúteos', muscle: 'Glúteos', series: 2, reps: '15', repsMin: 15, repsMax: 15, rest: '60 seg', focus: 'Tumbada boca arriba. Sube cadera apretando glúteo. 1 seg arriba. Baja controlado.', weightHint: 'Peso corporal' }
+          ]
+        },
+        {
+          id: 'diaB', day: 'Tren Superior', emoji: '💪',
+          title: 'Pecho, Espalda, Hombros y Brazos',
+          exercises: [
+            { id: 'press_pecho_gely', name: 'Press de pecho con mancuernas', muscle: 'Pecho / Tríceps', series: 3, reps: '12', repsMin: 12, repsMax: 12, rest: '90 seg', focus: 'Tumbada en el banco. Controla la bajada. Empuja suave. Peso ligero, siente el pecho.', weightHint: '2-3 kg / mancuerna' },
+            { id: 'remo_una_mano', name: 'Remo a una mano en banco', muscle: 'Espalda / Bíceps', series: 3, reps: '12 (por brazo)', repsMin: 12, repsMax: 12, rest: '90 seg', focus: 'Apoya rodilla y mano en banco. Tira hacia la cadera. Espalda paralela al suelo.', weightHint: '3-5 kg / mancuerna' },
+            { id: 'press_militar_sentado', name: 'Press de hombros sentada', muscle: 'Hombros', series: 3, reps: '12', repsMin: 12, repsMax: 12, rest: '90 seg', focus: 'Sentada con espalda apoyada. Empuja hacia arriba. Muy ligero, controla el movimiento.', weightHint: '2-3 kg / mancuerna' },
+            { id: 'elevaciones_laterales', name: 'Elevaciones laterales', muscle: 'Hombro (Lateral)', series: 3, reps: '12', repsMin: 12, repsMax: 12, rest: '60 seg', focus: 'Sube brazos a los lados. Peso muy ligero. Sin balanceo. Siente el hombro.', weightHint: '1-2 kg / mancuerna' },
+            { id: 'curl_biceps', name: 'Curl de bíceps con mancuernas', muscle: 'Bíceps', series: 3, reps: '12', repsMin: 12, repsMax: 12, rest: '60 seg', focus: 'Codos pegados al cuerpo. Sin balanceo. Sube y baja controlado.', weightHint: '2-3 kg / mancuerna' },
+            { id: 'extension_triceps', name: 'Extensión de tríceps tras nuca', muscle: 'Tríceps', series: 3, reps: '12', repsMin: 12, repsMax: 12, rest: '60 seg', focus: 'Una mancuerna con ambas manos. Codos cerrados. Baja detrás de la cabeza.', weightHint: '3-5 kg (1 mancuerna)' }
+          ]
+        },
+        {
+          id: 'diaC', day: 'Cuerpo Completo', emoji: '⚡',
+          title: 'Full Body + Glúteo',
+          exercises: [
+            { id: 'sentadilla_bulgara_gely', name: 'Sentadilla búlgara', muscle: 'Cuádriceps / Glúteo', series: 3, reps: '10 (por pierna)', repsMin: 10, repsMax: 10, rest: '90 seg', focus: 'Pie trasero en el banco. Baja con control. Rodilla delantera alineada. Peso corporal.', weightHint: 'Peso corporal' },
+            { id: 'remo_inclinado_gely', name: 'Remo inclinado bilateral', muscle: 'Espalda (Grosor)', series: 3, reps: '12', repsMin: 12, repsMax: 12, rest: '90 seg', focus: 'Inclinada a 45° con una mancuerna en cada mano. Tira hacia la cadera. Espalda recta.', weightHint: '3-5 kg / mancuerna' },
+            { id: 'hip_thrust_gely', name: 'Hip Thrust con mancuerna', muscle: 'Glúteos', series: 3, reps: '12', repsMin: 12, repsMax: 12, rest: '90 seg', focus: 'Más repeticiones concentradas. Pausa 1 seg arriba apretando el glúteo.', weightHint: '5-7.5 kg (1 mancuerna)' },
+            { id: 'flexiones', name: 'Flexiones de pecho', muscle: 'Pecho / Tríceps', series: 3, reps: '8', repsMin: 8, repsMax: 8, rest: '60 seg', focus: 'Cuerpo recto de cabeza a talones. Baja el pecho al suelo. Codos a 45°.', weightHint: 'Peso corporal' },
+            { id: 'bird_dog', name: 'Bird-Dog (cuadrupedia)', muscle: 'Core / Lumbar', series: 3, reps: '10 (por lado)', repsMin: 10, repsMax: 10, rest: '60 seg', focus: 'A cuatro patas. Extiende brazo y pierna contrarios. Mantén 2 seg. Muy estabilizador.', weightHint: 'Peso corporal' },
+            { id: 'patada_gluteo_gely', name: 'Patada de glúteo en cuadrupedia', muscle: 'Glúteos', series: 3, reps: '15 (por pierna)', repsMin: 15, repsMax: 15, rest: '60 seg', focus: 'A cuatro patas. Eleva pierna flexionada hacia arriba. Aprieta glúteo arriba. Controlado.', weightHint: 'Peso corporal' }
+          ]
+        }
+      ]
+    },
+
+    // ---- MES 2: Activación (Semanas 5-8) ----
+    {
+      id: 'gely_mes2',
+      name: 'Mes 2 · Activación',
+      subtitle: 'Semanas 5 a 8 — Más peso, más volumen',
+      weeks: [5, 6, 7, 8],
+      days: [
+        {
+          id: 'diaA', day: 'Tren Inferior', emoji: '🍑',
+          title: 'Glúteos, Piernas y Core',
+          exercises: [
+            { id: 'sentadilla_goblet_gely', name: 'Sentadilla Goblet', muscle: 'Cuádriceps / Glúteo', series: 3, reps: '10', repsMin: 10, repsMax: 10, rest: '90 seg', focus: 'Más profundidad que mes 1. Sube carga progresivamente. Controla la bajada.', weightHint: '+1-2 kg respecto mes 1' },
+            { id: 'hip_thrust_gely', name: 'Hip Thrust con mancuerna', muscle: 'Glúteos', series: 3, reps: '12', repsMin: 12, repsMax: 12, rest: '90 seg', focus: 'Más peso. Pausa 2 segundos arriba apretando el glúteo. Nota la contracción.', weightHint: '+2 kg respecto mes 1' },
+            { id: 'peso_muerto_rumano', name: 'Peso muerto rumano con mancuernas', muscle: 'Isquios / Glúteo', series: 3, reps: '10', repsMin: 10, repsMax: 10, rest: '90 seg', focus: 'Más peso. Controla el descenso. Nota la tensión isquiotibial.', weightHint: '+1-2 kg respecto mes 1' },
+            { id: 'zancada_gely', name: 'Zancada estática con mancuernas', muscle: 'Piernas en general', series: 3, reps: '10 (por pierna)', repsMin: 10, repsMax: 10, rest: '60 seg', focus: 'Añade mancuernas ligeras. Mantén torso firme. Rodilla trasera sin tocar suelo.', weightHint: '2-3 kg / mancuerna' },
+            { id: 'plancha', name: 'Plancha abdominal', muscle: 'Core', series: 3, reps: '40 seg', repsMin: 40, repsMax: 40, rest: '60 seg', isTimed: true, focus: 'Mantén la tensión 40 seg. Aprieta abdomen y glúteos. Respira constante.', weightHint: 'Peso corporal' },
+            { id: 'elevacion_cadera_gely', name: 'Puente de glúteos a una pierna', muscle: 'Glúteos', series: 3, reps: '15 (por pierna)', repsMin: 15, repsMax: 15, rest: '60 seg', focus: 'Una pierna extendida. Sube cadera apretando glúteo. Más intenso que bilateral.', weightHint: 'Peso corporal' }
+          ]
+        },
+        {
+          id: 'diaB', day: 'Tren Superior', emoji: '💪',
+          title: 'Pecho, Espalda, Hombros y Brazos',
+          exercises: [
+            { id: 'press_pecho_gely', name: 'Press de pecho con mancuernas', muscle: 'Pecho / Tríceps', series: 3, reps: '10', repsMin: 10, repsMax: 10, rest: '90 seg', focus: 'Más peso que mes 1. Controla la bajada en 2 segundos.', weightHint: '+1 kg respecto mes 1' },
+            { id: 'remo_una_mano', name: 'Remo a una mano en banco', muscle: 'Espalda / Bíceps', series: 3, reps: '10 (por brazo)', repsMin: 10, repsMax: 10, rest: '90 seg', focus: 'Más peso. Sostén 1 segundo la contracción. Espalda paralela al suelo.', weightHint: '+1-2 kg respecto mes 1' },
+            { id: 'press_arnold_gely', name: 'Press Arnold sentada', muscle: 'Hombros', series: 3, reps: '10', repsMin: 10, repsMax: 10, rest: '90 seg', focus: 'Empieza con palmas hacia ti. Rota mientras subes. Trabaja más cabezas del hombro.', weightHint: '2-3 kg / mancuerna' },
+            { id: 'pajaro', name: 'Pájaro con mancuernas (sentada)', muscle: 'Hombro (Posterior)', series: 3, reps: '12', repsMin: 12, repsMax: 12, rest: '60 seg', focus: 'Pecho pegado a los muslos. Peso muy ligero. Movimiento sin balanceo.', weightHint: '1-2 kg / mancuerna' },
+            { id: 'curl_martillo', name: 'Curl de bíceps tipo martillo', muscle: 'Bíceps / Antebrazo', series: 3, reps: '12', repsMin: 12, repsMax: 12, rest: '60 seg', focus: 'Palmas mirándose entre sí. Trabaja grosor del brazo. Sin balanceo.', weightHint: '2-3 kg / mancuerna' },
+            { id: 'fondos_triceps', name: 'Fondos de tríceps en banco', muscle: 'Tríceps', series: 3, reps: '10', repsMin: 10, repsMax: 10, rest: '60 seg', focus: 'Manos en el banco. Flexiona codos hacia atrás. Baja y sube controlado.', weightHint: 'Peso corporal' }
+          ]
+        },
+        {
+          id: 'diaC', day: 'Cuerpo Completo', emoji: '⚡',
+          title: 'Full Body + Glúteo',
+          exercises: [
+            { id: 'sentadilla_bulgara_gely', name: 'Sentadilla búlgara con mancuernas', muscle: 'Cuádriceps / Glúteo', series: 3, reps: '10 (por pierna)', repsMin: 10, repsMax: 10, rest: '90 seg', focus: 'Añade mancuernas. Pie trasero en banco. Baja controlado. Rodilla alineada.', weightHint: '2-3 kg / mancuerna' },
+            { id: 'remo_inclinado_gely', name: 'Remo inclinado bilateral', muscle: 'Espalda (Grosor)', series: 3, reps: '10', repsMin: 10, repsMax: 10, rest: '90 seg', focus: 'Más peso que mes 1. Tira hacia la cadera. Sostén 1 seg la contracción.', weightHint: '+1-2 kg respecto mes 1' },
+            { id: 'hip_thrust_gely', name: 'Hip Thrust con mancuerna', muscle: 'Glúteos', series: 3, reps: '12', repsMin: 12, repsMax: 12, rest: '90 seg', focus: 'Consolida tu peso. Pausa 2 seg arriba. Máxima contracción de glúteo.', weightHint: '' },
+            { id: 'flexiones', name: 'Flexiones de pecho', muscle: 'Pecho / Tríceps', series: 3, reps: '10', repsMin: 10, repsMax: 10, rest: '60 seg', focus: 'Cuerpo recto. Baja pecho al suelo. Si es necesario, rodillas en suelo.', weightHint: 'Peso corporal' },
+            { id: 'dead_bug_gely', name: 'Dead bug', muscle: 'Core / Lumbar', series: 3, reps: '10 (por lado)', repsMin: 10, repsMax: 10, rest: '60 seg', focus: 'Tumbada boca arriba. Extiende brazo y pierna contrarios lentamente. Espalda baja plana.', weightHint: 'Peso corporal' },
+            { id: 'patada_gluteo_gely', name: 'Patada de glúteo con mancuerna', muscle: 'Glúteos', series: 3, reps: '12 (por pierna)', repsMin: 12, repsMax: 12, rest: '60 seg', focus: 'A cuatro patas con mancuerna en la corva. Eleva pierna flexionada. Control total.', weightHint: '1-2 kg (1 mancuerna)' }
+          ]
+        }
+      ]
+    },
+
+    // ---- MES 3: Tono (Semanas 9-12) ----
+    {
+      id: 'gely_mes3',
+      name: 'Mes 3 · Tono',
+      subtitle: 'Semanas 9 a 12 — Intensidad y fuerza máxima',
+      weeks: [9, 10, 11, 12],
+      days: [
+        {
+          id: 'diaA', day: 'Tren Inferior', emoji: '🍑',
+          title: 'Glúteos, Piernas y Core',
+          exercises: [
+            { id: 'sentadilla_goblet_gely', name: 'Sentadilla Goblet', muscle: 'Cuádriceps / Glúteo', series: 4, reps: '8', repsMin: 8, repsMax: 8, rest: '90 seg', focus: 'Récord de peso. Profundidad máxima con técnica perfecta.', weightHint: 'Tu récord' },
+            { id: 'hip_thrust_gely', name: 'Hip Thrust con mancuerna', muscle: 'Glúteos', series: 4, reps: '10', repsMin: 10, repsMax: 10, rest: '90 seg', focus: 'Tu récord de peso. Pausa 2 segundos arriba apretando el glúteo.', weightHint: 'Tu récord' },
+            { id: 'peso_muerto_rumano', name: 'Peso muerto rumano con mancuernas', muscle: 'Isquios / Glúteo', series: 3, reps: '10', repsMin: 10, repsMax: 10, rest: '90 seg', focus: 'Récord de peso. Espalda perfectamente recta. Controla el descenso.', weightHint: 'Tu récord' },
+            { id: 'zancada_gely', name: 'Zancada estática con mancuernas', muscle: 'Piernas en general', series: 3, reps: '10 (por pierna)', repsMin: 10, repsMax: 10, rest: '60 seg', focus: 'Más peso. Mantén torso firme. Rodilla trasera cerca del suelo sin tocar.', weightHint: '3-5 kg / mancuerna' },
+            { id: 'plancha_lateral_gely', name: 'Plancha lateral', muscle: 'Core / Oblicuos', series: 3, reps: '30 seg (por lado)', repsMin: 30, repsMax: 30, rest: '60 seg', isTimed: true, focus: 'Apóyate en un antebrazo lateralmente. Cuerpo en línea recta. Trabaja oblicuos.', weightHint: 'Peso corporal' },
+            { id: 'elevacion_cadera_gely', name: 'Puente de glúteos a una pierna con peso', muscle: 'Glúteos', series: 3, reps: '15 (por pierna)', repsMin: 15, repsMax: 15, rest: '60 seg', focus: 'Mancuerna sobre cadera. Una pierna extendida. Sube y baja controlado.', weightHint: '3-5 kg (1 mancuerna)' }
+          ]
+        },
+        {
+          id: 'diaB', day: 'Tren Superior', emoji: '💪',
+          title: 'Pecho, Espalda, Hombros y Brazos',
+          exercises: [
+            { id: 'press_pecho_gely', name: 'Press de pecho con mancuernas', muscle: 'Pecho / Tríceps', series: 4, reps: '8', repsMin: 8, repsMax: 8, rest: '90 seg', focus: 'Récord de peso. Exprimir el pectoral arriba. Controla la bajada en 3 seg.', weightHint: 'Tu récord' },
+            { id: 'remo_una_mano', name: 'Remo a una mano en banco', muscle: 'Espalda / Bíceps', series: 4, reps: '8 (por brazo)', repsMin: 8, repsMax: 8, rest: '90 seg', focus: 'Récord de peso. Tracciona con máxima energía. Espalda paralela.', weightHint: 'Tu récord' },
+            { id: 'press_militar_sentado', name: 'Press de hombros sentada', muscle: 'Hombros', series: 3, reps: '10', repsMin: 10, repsMax: 10, rest: '90 seg', focus: 'Consolida tu peso. Bloqueo firme arriba. Espalda bien apoyada.', weightHint: '' },
+            { id: 'combo_hombro_gely', name: 'Elev. laterales + Pájaro (combo)', muscle: 'Hombro', series: 2, reps: '12+12', repsMin: 12, repsMax: 12, rest: '—', focus: 'Sin descanso entre ambos. Quemazón total en hombros. Peso muy ligero.', weightHint: '1-2 kg / mancuerna' },
+            { id: 'curl_concentrado', name: 'Curl de bíceps concentrado', muscle: 'Bíceps', series: 3, reps: '12', repsMin: 12, repsMax: 12, rest: '60 seg', focus: 'Sentada, codo apoyado en muslo. Aísla el bíceps al 100%. Pausa arriba.', weightHint: '3-5 kg / mancuerna' },
+            { id: 'combo_triceps_gely', name: 'Ext. tras nuca + Fondos (combo)', muscle: 'Tríceps', series: 2, reps: '10+10', repsMin: 10, repsMax: 10, rest: '—', focus: 'Sin descanso entre ambos. Fatiga máxima de tríceps.', weightHint: '3-5 kg + peso corporal' }
+          ]
+        },
+        {
+          id: 'diaC', day: 'Cuerpo Completo', emoji: '⚡',
+          title: 'Full Body + Glúteo',
+          exercises: [
+            { id: 'sentadilla_bulgara_gely', name: 'Sentadilla búlgara con mancuernas', muscle: 'Cuádriceps / Glúteo', series: 4, reps: '8 (por pierna)', repsMin: 8, repsMax: 8, rest: '90 seg', focus: 'Récord de peso. Pie trasero en banco. Baja controlado. Fuerza máxima.', weightHint: '3-5 kg / mancuerna' },
+            { id: 'remo_inclinado_gely', name: 'Remo inclinado bilateral', muscle: 'Espalda (Grosor)', series: 4, reps: '8', repsMin: 8, repsMax: 8, rest: '90 seg', focus: 'Récord de peso. Tracciona con energía. Sostén 1 seg la contracción.', weightHint: 'Tu récord' },
+            { id: 'hip_thrust_gely', name: 'Hip Thrust con mancuerna', muscle: 'Glúteos', series: 4, reps: '10', repsMin: 10, repsMax: 10, rest: '90 seg', focus: 'Peso máximo. Pausa 2 seg arriba. Contracción total de glúteo.', weightHint: 'Tu récord' },
+            { id: 'flexiones', name: 'Flexiones de pecho', muscle: 'Pecho / Tríceps', series: 3, reps: '12', repsMin: 12, repsMax: 12, rest: '60 seg', focus: 'Máximo volumen. Baja pecho al suelo. Codos a 45°. Cuerpo recto.', weightHint: 'Peso corporal' },
+            { id: 'plancha', name: 'Plancha abdominal', muscle: 'Core', series: 3, reps: '45 seg', repsMin: 45, repsMax: 45, rest: '60 seg', isTimed: true, focus: 'Máxima tensión global. 45 segundos. Aprieta abdomen y glúteos.', weightHint: 'Peso corporal' },
+            { id: 'patada_gluteo_gely', name: 'Patada de glúteo con mancuerna', muscle: 'Glúteos', series: 3, reps: '15 (por pierna)', repsMin: 15, repsMax: 15, rest: '60 seg', focus: 'Máximo volumen. Mancuerna en la corva. Eleva y aprieta. Controla la bajada.', weightHint: '1-2 kg (1 mancuerna)' }
+          ]
+        }
+      ]
+    }
+  ];
+
+  // =============================================
   // EXERCISE_META: descripción, video y alternativas
   // =============================================
   var EXERCISE_META = {
@@ -517,6 +660,107 @@
       alternatives: [
         { id: 'alt_dead_bug', name: 'Dead bug', reason: 'En el suelo, más sencillo', muscle: 'Core / Lumbar', series: 2, reps: '10 (por lado)', rest: '60 seg', focus: 'Tumbada boca arriba. Extiende brazo y pierna contrarios hacia el suelo lentamente. Espalda baja plana.', weightHint: 'Peso corporal' }
       ]
+    },
+
+    // ---- GELY exercises ----
+    'sentadilla_goblet_gely': {
+      description: 'De pie, pies separados a la anchura de los hombros con dedos ligeramente hacia afuera. Sostén la mancuerna vertical contra el pecho. Baja como si te sentaras, espalda recta, rodillas siguiendo la dirección de los pies. Sube empujando desde los talones.',
+      videoUrl: '',
+      alternatives: [
+        { id: 'alt_sq_goblet_gely_pc', name: 'Sentadilla con peso corporal', reason: 'Sin mancuerna', muscle: 'Cuádriceps / Glúteo', series: 3, reps: '15', rest: '60 seg', focus: 'Misma técnica sin peso. Perfecto para repasar el patrón de movimiento.', weightHint: 'Peso corporal' },
+        { id: 'alt_sq_goblet_gely_band', name: 'Sentadilla con banda elástica', reason: 'Variante con banda', muscle: 'Cuádriceps / Glúteo', series: 3, reps: '15', rest: '60 seg', focus: 'Banda por encima de las rodillas. Activa glúteo medio al bajar y subir.', weightHint: 'Banda ligera' }
+      ]
+    },
+    'hip_thrust_gely': {
+      description: 'Espalda apoyada en el banco (borde a la altura de los omóplatos). Mancuerna sobre las caderas. Pies apoyados en el suelo. Sube las caderas apretando los glúteos hasta paralelo. Pausa 1-2 segundos arriba. Baja controlado.',
+      videoUrl: '',
+      alternatives: [
+        { id: 'alt_hip_thrust_gely_suelo', name: 'Puente de glúteos con mancuerna', reason: 'Sin banco', muscle: 'Glúteos', series: 3, reps: '15', rest: '90 seg', focus: 'Tumbada en el suelo. Mancuerna sobre caderas. Menor rango pero muy efectivo.', weightHint: 'Misma mancuerna' },
+        { id: 'alt_hip_thrust_gely_unilateral', name: 'Hip Thrust a una pierna', reason: 'Mayor intensidad unilateral', muscle: 'Glúteos', series: 3, reps: '12 (por pierna)', rest: '90 seg', focus: 'Una pierna elevada. Solo peso corporal. Más difícil y activador.', weightHint: 'Peso corporal' }
+      ]
+    },
+    'zancada_gely': {
+      description: 'De pie, da un paso largo al frente manteniendo el torso recto. Baja verticalmente hasta que la rodilla trasera casi toque el suelo. Empuja desde el pie delantero para volver. Controla el equilibrio en todo momento.',
+      videoUrl: '',
+      alternatives: [
+        { id: 'alt_zan_gely_split', name: 'Sentadilla split estática', reason: 'Más estabilidad', muscle: 'Cuádriceps / Glúteo', series: 3, reps: '10 (por pierna)', rest: '60 seg', focus: 'Pies fijos en posición de zancada. Sube y baja sin mover los pies.', weightHint: 'Peso corporal' },
+        { id: 'alt_zan_gely_step', name: 'Step up al banco', reason: 'Menos impacto', muscle: 'Cuádriceps / Glúteo', series: 3, reps: '10 (por pierna)', rest: '60 seg', focus: 'Sube un pie al banco. Empuja con el talón. Baja controlado.', weightHint: 'Peso corporal' }
+      ]
+    },
+    'elevacion_cadera_gely': {
+      description: 'Tumbada boca arriba con las rodillas flexionadas y pies apoyados en el suelo. Aprieta los glúteos y sube las caderas hasta formar una línea recta desde hombros a rodillas. Mantén 1-2 segundos arriba. Baja lentamente.',
+      videoUrl: '',
+      alternatives: [
+        { id: 'alt_elev_cad_gely_peso', name: 'Puente con mancuerna', reason: 'Más resistencia', muscle: 'Glúteos', series: 3, reps: '12', rest: '60 seg', focus: 'Mancuerna sobre las caderas. Mismo movimiento con peso añadido.', weightHint: '3-5 kg (1 mancuerna)' }
+      ]
+    },
+    'press_pecho_gely': {
+      description: 'Tumbada en el banco con los pies bien apoyados. Sujeta las mancuernas a la altura del pecho con codos a 45°. Empuja hacia arriba de forma controlada hasta casi extender los brazos. Baja lentamente en 2 segundos.',
+      videoUrl: '',
+      alternatives: [
+        { id: 'alt_press_pecho_gely_suelo', name: 'Press de pecho en el suelo', reason: 'Sin banco', muscle: 'Pecho / Tríceps', series: 3, reps: '12', rest: '90 seg', focus: 'Tumbada en el suelo. Codos tocan el suelo al bajar. Rango parcial pero seguro.', weightHint: 'Mismas mancuernas' },
+        { id: 'alt_press_pecho_gely_flex', name: 'Flexiones de pecho', reason: 'Sin mancuernas', muscle: 'Pecho / Tríceps', series: 3, reps: '10', rest: '60 seg', focus: 'Cuerpo recto. Baja el pecho al suelo. Codos a 45°.', weightHint: 'Peso corporal' },
+        { id: 'alt_press_pecho_gely_band', name: 'Press con banda elástica', reason: 'Variante con banda', muscle: 'Pecho', series: 3, reps: '15', rest: '60 seg', focus: 'Banda sujeta detrás de la espalda. Empuja hacia adelante como un press.', weightHint: 'Banda ligera' }
+      ]
+    },
+    'remo_inclinado_gely': {
+      description: 'De pie, inclinada a 45° con la espalda recta. Una mancuerna en cada mano. Tira de ambas hacia la cadera a la vez, juntando los omóplatos. Baja controlado. Siente la espalda trabajar.',
+      videoUrl: '',
+      alternatives: [
+        { id: 'alt_remo_inc_gely_1m', name: 'Remo a una mano en banco', reason: 'Más apoyo lumbar', muscle: 'Espalda / Bíceps', series: 3, reps: '12 (por brazo)', rest: '90 seg', focus: 'Apoya rodilla y mano en banco. Tira hacia la cadera. Más estable para la espalda.', weightHint: 'Mismas mancuernas' },
+        { id: 'alt_remo_inc_gely_band', name: 'Remo con banda elástica', reason: 'Sin mancuernas', muscle: 'Espalda', series: 3, reps: '15', rest: '60 seg', focus: 'Banda sujeta a un punto fijo. Tira hacia ti. Aprieta omóplatos.', weightHint: 'Banda media' }
+      ]
+    },
+    'sentadilla_bulgara_gely': {
+      description: 'Coloca el pie trasero sobre el banco. El pie delantero está lo suficientemente lejos para que al bajar la rodilla no sobrepase la punta del pie. Baja flexionando la rodilla delantera hasta que el muslo quede paralelo al suelo. Vuelve a subir empujando con el talón.',
+      videoUrl: '',
+      alternatives: [
+        { id: 'alt_bulg_gely_split', name: 'Sentadilla split estática', reason: 'Menos equilibrio requerido', muscle: 'Cuádriceps / Glúteo', series: 3, reps: '10 (por pierna)', rest: '90 seg', focus: 'Ambos pies en el suelo. Baja y sube. Menos rango pero más estable.', weightHint: 'Mismas mancuernas' },
+        { id: 'alt_bulg_gely_zancada', name: 'Zancada estática con mancuernas', reason: 'Movimiento más natural', muscle: 'Cuádriceps / Glúteo', series: 3, reps: '10 (por pierna)', rest: '60 seg', focus: 'Paso al frente. Baja vertical. Controla el equilibrio.', weightHint: 'Mismas mancuernas' }
+      ]
+    },
+    'patada_gluteo_gely': {
+      description: 'A cuatro patas con las manos bajo los hombros y las rodillas bajo las caderas. Manteniendo la rodilla flexionada a 90°, eleva el pie hacia arriba apretando el glúteo. Baja controlado sin tocar el suelo. Repite todas las repeticiones antes de cambiar de pierna.',
+      videoUrl: '',
+      alternatives: [
+        { id: 'alt_pat_glu_gely_band', name: 'Patada con banda elástica', reason: 'Más resistencia', muscle: 'Glúteos', series: 3, reps: '15 (por pierna)', rest: '60 seg', focus: 'Banda alrededor de los tobillos. Más resistencia al elevar.', weightHint: 'Banda ligera' },
+        { id: 'alt_pat_glu_gely_plancha', name: 'Plancha con elevación de pierna', reason: 'Variante de core + glúteo', muscle: 'Glúteos / Core', series: 3, reps: '12 (por pierna)', rest: '60 seg', focus: 'En posición de plancha. Eleva una pierna hacia arriba. Activa core y glúteo.', weightHint: 'Peso corporal' }
+      ]
+    },
+    'press_arnold_gely': {
+      description: 'Sentada con la espalda apoyada. Mancuernas a la altura de los hombros con palmas hacia ti. Empuja hacia arriba rotando las palmas hacia adelante. Al bajar, invierte la rotación. Trabaja las tres cabezas del hombro.',
+      videoUrl: '',
+      alternatives: [
+        { id: 'alt_arnold_gely_normal', name: 'Press de hombros sentada', reason: 'Movimiento más simple', muscle: 'Hombros', series: 3, reps: '10', rest: '90 seg', focus: 'Sin rotación. Empuje vertical simple. Más control y peso.', weightHint: 'Mismas mancuernas o más' }
+      ]
+    },
+    'dead_bug_gely': {
+      description: 'Tumbada boca arriba con brazos extendidos hacia arriba y piernas elevadas a 90°. Mantén la espalda baja pegada al suelo. Extiende lentamente el brazo derecho y la pierna izquierda hacia el suelo sin tocar. Vuelve al centro y repite con el otro lado.',
+      videoUrl: '',
+      alternatives: [
+        { id: 'alt_dead_bug_gely_bird', name: 'Bird-Dog', reason: 'En cuadrupedia, más activo', muscle: 'Core / Lumbar', series: 3, reps: '10 (por lado)', rest: '60 seg', focus: 'A cuatro patas. Extiende brazo y pierna contrarios. Mantén 2 segundos.', weightHint: 'Peso corporal' }
+      ]
+    },
+    'plancha_lateral_gely': {
+      description: 'Túmbate de lado. Apóyate en el antebrazo con el codo bajo el hombro. Apila los pies o colócalos uno delante del otro. Eleva las caderas formando una línea recta de cabeza a pies. Mantén la posición apretando oblicuos y glúteos.',
+      videoUrl: '',
+      alternatives: [
+        { id: 'alt_plancha_lat_gely_clasica', name: 'Plancha clásica', reason: 'Menos rotación', muscle: 'Core', series: 3, reps: '30 seg', rest: '60 seg', isTimed: true, focus: 'Antebrazos y puntas de los pies. Cuerpo recto. Trabajo de core general.', weightHint: 'Peso corporal' }
+      ]
+    },
+    'combo_hombro_gely': {
+      description: 'Superserie sin descanso: 12 rep de elevaciones laterales seguidas de 12 rep de pájaro. Objetivo: fatigar completamente los hombros. Peso muy ligero. Concéntrate en la calidad del movimiento.',
+      videoUrl: '',
+      alternatives: [
+        { id: 'alt_combo_hombro_gely_sep', name: 'Elev. laterales + Pájaro (separado)', reason: 'Más control', muscle: 'Hombro', series: 3, reps: '12+12', rest: '90 seg', focus: 'Dos ejercicios separados con 60 seg de descanso entre ellos. Más controlado.', weightHint: 'Peso ligero' }
+      ]
+    },
+    'combo_triceps_gely': {
+      description: 'Superserie: extensión tras nuca seguida de fondos en banco sin descanso entre ellos. La combinación fatiga el tríceps completamente. Descansa solo al terminar ambos movimientos.',
+      videoUrl: '',
+      alternatives: [
+        { id: 'alt_combo_tric_gely_sep', name: 'Extensión + Fondos (separado)', reason: 'Más control', muscle: 'Tríceps', series: 3, reps: '10+10', rest: '90 seg', focus: 'Dos ejercicios separados con 60 seg de descanso entre ellos. Más controlado.', weightHint: '3-5 kg + peso corporal' }
+      ]
     }
   };
 
@@ -533,12 +777,18 @@
     approach: '➕ 1 serie de aproximación sin peso o muy ligero en el primer ejercicio'
   };
 
+  var WARMUP_GELY = {
+    general: '🌺 5 min de movilidad articular: cuello, hombros, muñecas, cadera, tobillos + activación de glúteos (10 elevaciones de cadera)',
+    approach: '➕ 1-2 series de aproximación con peso muy ligero en el primer ejercicio'
+  };
+
   // =============================================
   // PROFILES
   // =============================================
   var PROFILES = {
     sergio: { name: 'Sergio', initial: 'S', phases: SERGIO_PHASES, warmup: WARMUP, defaultDays: [1, 3, 5], daysLabel: '3 días por semana' },
-    eva:    { name: 'Eva',    initial: 'E', phases: EVA_PHASES,    warmup: WARMUP_EVA, defaultDays: [1, 4], daysLabel: '2 días por semana' }
+    eva:    { name: 'Eva',    initial: 'E', phases: EVA_PHASES,    warmup: WARMUP_EVA, defaultDays: [1, 4], daysLabel: '2 días por semana' },
+    gely:   { name: 'Gely',   initial: 'G', phases: GELY_PHASES,   warmup: WARMUP_GELY, defaultDays: [1, 3, 5], daysLabel: '3 días tono + remo' }
   };
 
   function migrateOldData() {
