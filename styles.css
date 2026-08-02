@@ -1922,7 +1922,8 @@ body {
   margin-top: 1px;
 }
 
-.swap-btn {
+.swap-btn,
+.home-swap-btn {
   font-size: 0.72rem;
   font-weight: 600;
   padding: 5px 12px;
@@ -1935,7 +1936,8 @@ body {
   transition: opacity 0.2s;
 }
 
-.swap-btn:active {
+.swap-btn:active,
+.home-swap-btn:active {
   opacity: 0.75;
 }
 
@@ -1947,7 +1949,8 @@ body {
   border-top: 1px solid var(--border-color);
 }
 
-.revert-btn {
+.revert-btn,
+.home-revert-btn {
   font-size: 0.72rem;
   font-weight: 600;
   background: none;
@@ -2082,3 +2085,176 @@ body {
   cursor: pointer;
   text-align: center;
 }
+
+/* =============================================
+   DATASET DE EJERCICIOS (exercises-dataset)
+   ============================================= */
+
+/* --- Bloque dentro de la tarjeta de ejercicio --- */
+.exercise-db-block {
+  margin: 12px 0;
+  padding: 12px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+}
+
+.exercise-db-gif {
+  display: block;
+  width: 180px;
+  max-width: 100%;
+  height: auto;
+  margin: 0 auto;
+  border-radius: var(--radius-sm);
+  background: #fff;
+}
+
+.exercise-db-caption {
+  margin-top: 8px;
+  text-align: center;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  text-transform: capitalize;
+}
+
+.exercise-db-steps {
+  margin: 12px 0 0;
+  padding-left: 20px;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.exercise-db-steps li { margin-bottom: 6px; }
+
+.exercise-db-credit {
+  margin-top: 10px;
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  text-align: right;
+}
+
+/* --- Pestaña exploradora --- */
+.db-view { padding: 16px; }
+
+.db-searchbar { margin-bottom: 12px; }
+
+.db-search-input {
+  width: 100%;
+  padding: 12px 14px;
+  font-size: 1rem;
+  font-family: var(--font);
+  color: var(--text-primary);
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  outline: none;
+  transition: border-color var(--transition);
+}
+
+.db-search-input:focus { border-color: var(--accent-primary); }
+
+.db-chips {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+  margin-bottom: 8px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.db-chips::-webkit-scrollbar { display: none; }
+
+.db-chip {
+  flex: 0 0 auto;
+  padding: 6px 14px;
+  font-size: 0.8rem;
+  font-family: var(--font);
+  color: var(--text-secondary);
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  cursor: pointer;
+  text-transform: capitalize;
+  transition: all var(--transition);
+}
+
+.db-chip.active {
+  color: #fff;
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+}
+
+.db-count {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+}
+
+.db-grid { display: flex; flex-direction: column; gap: 10px; }
+
+.db-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 10px;
+  cursor: pointer;
+  transition: background var(--transition);
+}
+
+.db-card:active { background: var(--bg-card-hover); }
+
+.db-card-head { display: flex; align-items: center; gap: 12px; }
+
+.db-thumb {
+  flex: 0 0 auto;
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+  border-radius: var(--radius-sm);
+  background: #fff;
+}
+
+.db-card.open .db-thumb { width: 140px; height: 140px; }
+
+.db-card-info { min-width: 0; }
+
+.db-card-name {
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  text-transform: capitalize;
+}
+
+.db-card-meta {
+  margin-top: 3px;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  text-transform: capitalize;
+}
+
+.db-steps {
+  margin: 12px 0 0;
+  padding-left: 20px;
+  font-size: 0.83rem;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.db-steps li { margin-bottom: 6px; }
+
+.db-loading {
+  padding: 30px 10px;
+  text-align: center;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+.db-credit {
+  margin-top: 20px;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.db-credit a { color: var(--text-secondary); }

@@ -1,12 +1,12 @@
 /* =============================================
    Gym Calendar - App de Rutina de Ejercicios
-   Versión: 4.3.0 — Días de entrenamiento personalizados
+   Versión: 4.4.0 — Dataset de ejercicios con animaciones
    ============================================= */
 
 (function () {
   'use strict';
 
-  var APP_VERSION = '4.3.0';
+  var APP_VERSION = '4.4.0';
 
   // =============================================
   // SERGIO_PHASES: plan Push/Pull/Pierna 3 días/semana
@@ -765,6 +765,371 @@
   };
 
   // =============================================
+  // EXERCISE_DB: acceso al dataset público de ejercicios
+  //   https://github.com/smoralb/exercises-dataset  (1.324 ejercicios)
+  //
+  // · El índice ligero (data/exercises-index.json, ~0.9 MB) se sirve
+  //   desde el propio repo y lo genera tools/build-exercise-index.ps1.
+  // · Las imágenes (180x180) y los GIFs se piden bajo demanda a jsDelivr,
+  //   así no metemos los 128 MB de media en este repo.
+  // =============================================
+  var EXERCISE_DB = (function () {
+    var DATASET_REF = 'main';   // rama o commit del dataset a fijar
+    var CDN = 'https://cdn.jsdelivr.net/gh/smoralb/exercises-dataset@' + DATASET_REF + '/';
+    var INDEX_URL = 'data/exercises-index.json';
+
+    var items = null;       // array crudo del índice
+    var byId = null;        // { "0289": rec }
+    var loading = null;     // Promise en vuelo (deduplica llamadas)
+
+    // Etiquetas en español para poder buscar sin saber inglés
+    var BODY_PART_ES = {
+      'back': 'espalda', 'cardio': 'cardio', 'chest': 'pecho',
+      'lower arms': 'antebrazos', 'lower legs': 'gemelos pantorrillas',
+      'neck': 'cuello', 'shoulders': 'hombros',
+      'upper arms': 'brazos biceps triceps', 'upper legs': 'piernas muslos',
+      'waist': 'core abdomen cintura'
+    };
+    var EQUIPMENT_ES = {
+      'body weight': 'peso corporal sin material', 'dumbbell': 'mancuerna mancuernas',
+      'barbell': 'barra', 'cable': 'polea cable', 'band': 'banda elastica',
+      'resistance band': 'banda elastica', 'kettlebell': 'kettlebell pesa rusa',
+      'leverage machine': 'maquina', 'smith machine': 'maquina smith multipower',
+      'stability ball': 'fitball pelota', 'ez barbell': 'barra z',
+      'olympic barbell': 'barra olimpica', 'weighted': 'con peso lastre',
+      'assisted': 'asistido', 'medicine ball': 'balon medicinal',
+      'rope': 'cuerda', 'roller': 'rueda abdominal', 'sled machine': 'maquina trineo'
+    };
+    var TARGET_ES = {
+      'abs': 'abdominales', 'biceps': 'biceps', 'triceps': 'triceps',
+      'pectorals': 'pectoral pecho', 'delts': 'deltoides hombro',
+      'lats': 'dorsal', 'upper back': 'espalda alta', 'traps': 'trapecio',
+      'glutes': 'gluteos', 'quads': 'cuadriceps', 'hamstrings': 'isquiotibiales femoral',
+      'calves': 'gemelos', 'adductors': 'aductores', 'abductors': 'abductores',
+      'forearms': 'antebrazos', 'spine': 'lumbar espalda baja',
+      'serratus anterior': 'serrato', 'levator scapulae': 'cuello',
+      'cardiovascular system': 'cardio'
+    };
+
+    // Quita acentos y baja a minúsculas para comparar
+    function norm(s) {
+      var t = String(s || '').toLowerCase();
+      if (t.normalize) t = t.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      return t;
+    }
+
+    // Glosario ES -> EN. El dataset sólo trae los nombres en inglés, así que
+    // cada palabra de la búsqueda se expande a sus equivalentes ingleses.
+    var ES_SYNONYMS = {
+      // movimientos
+      'sentadilla': ['squat'], 'sentadillas': ['squat'],
+      'zancada': ['lunge', 'split squat'], 'zancadas': ['lunge', 'split squat'],
+      'estocada': ['lunge'], 'bulgara': ['split squat'],
+      'peso muerto': ['deadlift'], 'muerto': ['deadlift'], 'peso': ['weight', 'deadlift'],
+      'remo': ['row'], 'jalon': ['pulldown'], 'dominada': ['pull-up'], 'dominadas': ['pull-up'],
+      'press': ['press'], 'empuje': ['press'],
+      'curl': ['curl'], 'flexion': ['push-up', 'curl'], 'flexiones': ['push-up'],
+      'fondo': ['dip'], 'fondos': ['dip'],
+      'apertura': ['fly'], 'aperturas': ['fly'], 'aleteo': ['fly'],
+      'elevacion': ['raise'], 'elevaciones': ['raise'],
+      'plancha': ['plank'], 'puente': ['bridge'], 'patada': ['kickback'],
+      'extension': ['extension'], 'encogimiento': ['shrug'],
+      'abdominal': ['crunch', 'sit-up'], 'abdominales': ['crunch', 'sit-up', 'abs'],
+      'crunch': ['crunch'], 'giro': ['twist'], 'rotacion': ['twist'],
+      'salto': ['jump'], 'zancada caminando': ['walking lunge'],
+      'martillo': ['hammer'], 'concentrado': ['concentration'],
+      'pullover': ['pullover'], 'arnold': ['arnold'], 'goblet': ['goblet'],
+      'hip': ['hip'], 'thrust': ['thrust'],
+      // material
+      'mancuerna': ['dumbbell'], 'mancuernas': ['dumbbell'],
+      'barra': ['barbell'], 'polea': ['cable'], 'cable': ['cable'],
+      'banda': ['band'], 'gomas': ['band'], 'elastica': ['band'],
+      'maquina': ['machine', 'lever'], 'multipower': ['smith'],
+      'banco': ['bench'], 'kettlebell': ['kettlebell'], 'pesa': ['kettlebell'],
+      'fitball': ['exercise ball', 'stability ball'], 'pelota': ['ball'],
+      'corporal': ['body weight'], 'lastre': ['weighted'],
+      // músculos y zonas
+      'pecho': ['chest', 'pectorals'], 'pectoral': ['pectorals'],
+      'espalda': ['back'], 'dorsal': ['lats'], 'dorsales': ['lats'],
+      'trapecio': ['traps'], 'lumbar': ['spine', 'lower back'],
+      'hombro': ['shoulder', 'delts'], 'hombros': ['shoulder', 'delts'],
+      'deltoides': ['delts'], 'biceps': ['biceps'], 'triceps': ['triceps'],
+      'antebrazo': ['forearms'], 'antebrazos': ['forearms'],
+      'gluteo': ['glutes'], 'gluteos': ['glutes'],
+      'pierna': ['leg', 'upper legs'], 'piernas': ['leg', 'upper legs'],
+      'cuadriceps': ['quads'], 'isquios': ['hamstrings'],
+      'isquiotibiales': ['hamstrings'], 'femoral': ['hamstrings'],
+      'gemelo': ['calves'], 'gemelos': ['calves'], 'pantorrilla': ['calves'],
+      'aductor': ['adductors'], 'aductores': ['adductors'],
+      'abductor': ['abductors'], 'abductores': ['abductors'],
+      'abdomen': ['abs', 'waist'], 'core': ['abs', 'waist'],
+      'oblicuos': ['obliques'], 'cadera': ['hip'], 'cuello': ['neck'],
+      'cardio': ['cardio', 'cardiovascular'],
+      // modificadores
+      'inclinado': ['incline'], 'inclinada': ['incline'],
+      'declinado': ['decline'], 'declinada': ['decline'],
+      'sentado': ['seated'], 'sentada': ['seated'],
+      'pie': ['standing'], 'tumbado': ['lying'], 'tumbada': ['lying'],
+      'lateral': ['lateral', 'side'], 'laterales': ['lateral', 'side'],
+      'frontal': ['front'], 'frontales': ['front'],
+      'posterior': ['rear', 'reverse'], 'posteriores': ['rear', 'reverse'],
+      'inverso': ['reverse'], 'inversa': ['reverse'],
+      'unilateral': ['one arm', 'single leg'], 'alterno': ['alternate'],
+      'agarre': ['grip'], 'estrecho': ['close-grip'], 'ancho': ['wide']
+    };
+
+    // Palabras vacías que se ignoran en la búsqueda
+    var STOPWORDS = {
+      'de': 1, 'del': 1, 'la': 1, 'las': 1, 'el': 1, 'los': 1, 'un': 1, 'una': 1,
+      'con': 1, 'sin': 1, 'en': 1, 'a': 1, 'al': 1, 'y': 1, 'o': 1, 'por': 1,
+      'para': 1, 'the': 1, 'of': 1, 'with': 1, 'and': 1
+    };
+
+    // Devuelve todas las formas que valen para una palabra de la búsqueda
+    function variants(word) {
+      var syn = ES_SYNONYMS[word];
+      return syn ? [word].concat(syn) : [word];
+    }
+
+    // Blob de texto sobre el que se busca (inglés + equivalentes en español)
+    function haystack(rec) {
+      if (rec._h) return rec._h;
+      rec._h = norm([
+        rec.n, rec.bp, rec.eq, rec.tg, rec.mg, (rec.sm || []).join(' '),
+        BODY_PART_ES[rec.bp], EQUIPMENT_ES[rec.eq], TARGET_ES[rec.tg]
+      ].join(' '));
+      return rec._h;
+    }
+
+    function load() {
+      if (items) return Promise.resolve(items);
+      if (loading) return loading;
+      loading = fetch(INDEX_URL)
+        .then(function (r) {
+          if (!r.ok) throw new Error('HTTP ' + r.status);
+          return r.json();
+        })
+        .then(function (data) {
+          items = data;
+          byId = {};
+          for (var i = 0; i < data.length; i++) byId[data[i].id] = data[i];
+          return items;
+        })
+        .catch(function (err) {
+          loading = null;   // permite reintentar
+          throw err;
+        });
+      return loading;
+    }
+
+    function get(id) { return byId ? (byId[id] || null) : null; }
+
+    // Búsqueda por palabras: todas las palabras deben aparecer.
+    // Ordena poniendo delante las coincidencias en el nombre.
+    function search(query, opts) {
+      if (!items) return [];
+      opts = opts || {};
+      // Se descartan las palabras vacías: son subcadenas de cualquier cosa
+      // ("de" está dentro de "side") y ensuciarían el resultado.
+      var words = norm(query).split(/\s+/).filter(function (w) {
+        return w && !STOPWORDS[w];
+      });
+      var limit = opts.limit || 40;
+      var results = [];
+
+      // Cada palabra se expande a sus equivalentes en inglés (ES_SYNONYMS)
+      var terms = words.map(variants);
+
+      for (var i = 0; i < items.length && results.length < 2000; i++) {
+        var rec = items[i];
+        if (opts.bodyPart && rec.bp !== opts.bodyPart) continue;
+        if (opts.equipment && rec.eq !== opts.equipment) continue;
+        var hay = haystack(rec);
+        var name = norm(rec.n);
+        var ok = true, score = 0;
+        for (var w = 0; w < terms.length; w++) {
+          var hit = false;
+          for (var v = 0; v < terms[w].length; v++) {
+            if (hay.indexOf(terms[w][v]) === -1) continue;
+            hit = true;
+            if (name.indexOf(terms[w][v]) !== -1) score += 2;
+          }
+          if (!hit) { ok = false; break; }
+          score += 1;
+        }
+        if (!ok) continue;
+        if (name.indexOf(norm(query)) === 0) score += 10;
+        results.push({ rec: rec, score: score });
+      }
+
+      // A igual puntuación gana el nombre más corto (suele ser el ejercicio base)
+      results.sort(function (a, b) {
+        return b.score - a.score || a.rec.n.length - b.rec.n.length || a.rec.n.localeCompare(b.rec.n);
+      });
+      return results.slice(0, limit).map(function (r) { return r.rec; });
+    }
+
+    function imageUrl(rec) { return rec ? CDN + 'images/' + rec.id + '-' + rec.mid + '.jpg' : ''; }
+    function gifUrl(rec) { return rec ? CDN + 'videos/' + rec.id + '-' + rec.mid + '.gif' : ''; }
+    function repoUrl(rec) {
+      return rec ? 'https://github.com/smoralb/exercises-dataset/blob/' + DATASET_REF + '/videos/' + rec.id + '-' + rec.mid + '.gif' : '';
+    }
+
+    function bodyParts() {
+      if (!items) return [];
+      var seen = {}, out = [];
+      items.forEach(function (r) { if (!seen[r.bp]) { seen[r.bp] = 1; out.push(r.bp); } });
+      return out.sort();
+    }
+
+    return {
+      CDN: CDN,
+      load: load, get: get, search: search,
+      imageUrl: imageUrl, gifUrl: gifUrl, repoUrl: repoUrl,
+      bodyParts: bodyParts,
+      labelBodyPart: function (bp) { return BODY_PART_ES[bp] ? BODY_PART_ES[bp].split(' ')[0] : bp; },
+      labelEquipment: function (eq) { return EQUIPMENT_ES[eq] ? EQUIPMENT_ES[eq].split(' ')[0] : eq; },
+      labelTarget: function (tg) { return TARGET_ES[tg] ? TARGET_ES[tg].split(' ')[0] : tg; },
+      isLoaded: function () { return !!items; },
+      count: function () { return items ? items.length : 0; }
+    };
+  })();
+
+  // Ejercicio de la rutina -> id en el dataset. null = no hay equivalente.
+  var EXERCISE_DB_MAP = {
+    // --- Sergio ---
+    'press_plano': '0289',            // dumbbell bench press
+    'press_inclinado': '0314',        // dumbbell incline bench press
+    'aperturas_planas': '0308',       // dumbbell fly
+    'aperturas_inclinadas': '0319',   // dumbbell incline fly
+    'press_militar_sentado': '0405',  // dumbbell seated shoulder press
+    'press_militar_pie': '0426',      // dumbbell standing overhead press
+    'extension_triceps': '2188',      // dumbbell seated triceps extension
+    'fondos_triceps': '0812',         // triceps dip (bench leg)
+    'combo_triceps': '2188',
+    'remo_maquina': '1350',           // lever seated row
+    'remo_una_mano': '0292',          // dumbbell one arm bent-over row
+    'remo_menton': '0437',            // dumbbell upright row
+    'pajaro': '0380',                 // dumbbell rear lateral raise
+    'combo_hombro': '0380',
+    'elevaciones_laterales': '0334',  // dumbbell lateral raise
+    'curl_biceps': '0416',            // dumbbell standing biceps curl
+    'curl_martillo': '0313',          // dumbbell hammer curl
+    'curl_concentrado': '0297',       // dumbbell concentration curl
+    'sentadilla_goblet': '1760',      // dumbbell goblet squat
+    'zancadas_estaticas': '2368',     // split squats
+    'zancadas_caminando': '1460',     // walking lunge
+    'peso_muerto_rumano': '1459',     // dumbbell romanian deadlift
+    'plancha': '0464',                // front plank with twist
+    'crunch': '3201',                 // quarter sit-up
+    'flexiones': '0493',              // incline push-up
+
+    // --- Eva ---
+    'sentadilla_goblet_eva': '1760',
+    'puente_gluteo': '3013',          // low glute bridge on floor
+    'press_pecho_eva': '0289',
+    'remo_una_mano_eva': '0292',
+    'plancha_rodillas': '3239',       // kneeling plank tap shoulder
+    'peso_muerto_rumano_eva': '1459',
+    'zancada_eva': '2368',
+    'press_hombros_eva': '0405',
+    'curl_biceps_eva': '0416',
+    'bird_dog': null,                 // no está en el dataset
+    'hip_thrust_eva': '1409',         // barbell glute bridge
+    'plancha_completa': '0464',
+    'extension_triceps_eva': '2188',
+    'zancadas_caminando_eva': '1460',
+
+    // --- Gely ---
+    'sentadilla_goblet_gely': '1760',
+    'hip_thrust_gely': '1409',
+    'zancada_gely': '2368',
+    'elevacion_cadera_gely': '3013',
+    'press_pecho_gely': '0289',
+    'sentadilla_bulgara_gely': '0410', // dumbbell single leg split squat
+    'remo_inclinado_gely': '0293',     // dumbbell bent over row
+    'patada_gluteo_gely': null,        // no está en el dataset
+    'press_arnold_gely': '0287',       // dumbbell arnold press v.2
+    'dead_bug_gely': '0276',           // dead bug
+    'plancha_lateral_gely': '3544',    // bodyweight incline side plank
+    'combo_hombro_gely': '0334',
+    'combo_triceps_gely': '2188',
+
+    // --- Alternativas (EXERCISE_META[*].alternatives) ---
+    'alt_press_plano_flex': '0662',          // push-up
+    'alt_press_pecho_gely_flex': '0662',
+    'alt_press_plano_suelo': null,           // no hay press de suelo con mancuernas
+    'alt_press_pecho_eva_suelo': null,
+    'alt_press_pecho_gely_suelo': null,
+    'alt_press_inc_pies': '0279',            // decline push-up (pies elevados)
+    'alt_apertura_inc_flex': '0279',
+    'alt_aperturas_suelo': '0308',           // dumbbell fly
+    'alt_press_pecho_eva_flex': '3211',      // kneeling push-up
+    'alt_press_pecho_gely_band': '1254',     // band bench press
+    'alt_flex_elevadas': '0493',             // incline push-up
+    'alt_fondos_diamante': '0283',           // diamond push-up
+    'alt_pm_arnold': '0287',                 // dumbbell arnold press
+    'alt_pm_pie_sentado': '0405',
+    'alt_ph_eva_pie': '0426',
+    'alt_arnold_gely_normal': '0405',
+    'alt_el_lat_inc': '0334',
+    'alt_pajaro_de_pie': '0380',
+    'alt_remo_ment_pajaro': '0380',
+    'alt_combo_hombro_sep': '0334',
+    'alt_combo_hombro_gely_sep': '0334',
+    'alt_remo_maq_mancuernas': '0293',
+    'alt_remo_1m_inclinado': '0293',
+    'alt_remo_1m_eva_bilatrl': '0293',
+    'alt_remo_inc_gely_1m': '0292',
+    'alt_remo_inc_gely_band': '3144',        // resistance band seated row
+    'alt_curl_alternado': '0285',            // dumbbell alternate biceps curl
+    'alt_curl_ev_botella': '0416',
+    'alt_curl_mart_alt': '1648',             // dumbbell alternate seated hammer curl
+    'alt_curl_conc_normal': '0416',
+    'alt_ext_tric_patada': '0333',           // dumbbell kickback
+    'alt_ext_tric_eva_patada': '0333',
+    'alt_combo_tric_sep': '0333',
+    'alt_combo_tric_gely_sep': '2188',
+    'alt_sq_goblet_pc': null,                // no hay sentadilla libre de peso corporal
+    'alt_sq_goblet_eva_pc': null,
+    'alt_sq_goblet_gely_pc': null,
+    'alt_sq_goblet_gely_band': '1004',       // band squat
+    'alt_sq_goblet_bulgara': '0410',
+    'alt_bulg_gely_split': '0410',
+    'alt_zan_stat_split': '2368',
+    'alt_zan_gely_split': '2368',
+    'alt_zan_cam_stat': '2368',
+    'alt_zan_cam_eva_stat': '2368',
+    'alt_bulg_gely_zancada': '2368',
+    'alt_zan_eva_step': '0431',              // dumbbell step-up
+    'alt_zan_gely_step': '0431',
+    'alt_pdr_una_pierna': '1757',            // dumbbell single leg deadlift
+    'alt_pdr_eva_rodillas': '1459',
+    'alt_puente_gl_una_pierna': '3645',      // single leg bridge
+    'alt_hip_thrust_gely_unilateral': '3645',
+    'alt_hip_thrust_suelo': '1409',
+    'alt_hip_thrust_gely_suelo': '1409',
+    'alt_elev_cad_gely_peso': '1409',
+    'alt_plancha_rodillas': '3239',
+    'alt_plancha_full_prog': '0464',
+    'alt_plancha_lat_gely_clasica': '0464',
+    'alt_plancha_lateral': '3544',
+    'alt_crunch_bici': '0003',               // air bike (crunch de bicicleta)
+    'alt_dead_bug': '0276',
+    'alt_dead_bug_gely_bird': null,          // bird-dog no está en el dataset
+    'alt_pat_glu_gely_band': '0980',         // band bent-over hip extension
+    'alt_pat_glu_gely_plancha': null
+  };
+
+  // Devuelve el registro del dataset para un ejercicio de la rutina.
+  // Sólo mapeos explícitos: adivinar por nombre daba animaciones equivocadas.
+  function getDbRecord(exerciseId) {
+    if (!EXERCISE_DB.isLoaded()) return null;
+    var mapped = EXERCISE_DB_MAP[exerciseId];
+    return mapped ? EXERCISE_DB.get(mapped) : null;
+  }
+
+  // =============================================
   // WARMUP
   // =============================================
   var WARMUP = {
@@ -1220,6 +1585,12 @@
 
   function vibrate() { try { if (navigator.vibrate) navigator.vibrate(30); } catch (e) {} }
 
+  function escapeHtml(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
   var toastTimeout = null;
   function showToast(msg) {
     var el = document.getElementById('toast'); if (!el) return;
@@ -1238,9 +1609,105 @@
     document.getElementById('homeView').style.display = tab === 'home' ? '' : 'none';
     document.getElementById('rutinaView').style.display = tab === 'rutina' ? '' : 'none';
     document.getElementById('statsView').style.display = tab === 'stats' ? '' : 'none';
+    var dbView = document.getElementById('dbView');
+    if (dbView) dbView.style.display = tab === 'db' ? '' : 'none';
     if (tab === 'rutina') { renderCurrentDay(); updateAll(); }
     if (tab === 'home') renderHome();
     if (tab === 'stats') renderStats();
+    if (tab === 'db') renderExerciseBrowser();
+  }
+
+  // =============================================
+  // EXPLORADOR DEL DATASET (pestaña "Ejercicios")
+  // =============================================
+  var dbQuery = '';
+  var dbFilterBodyPart = '';
+  var dbOpenId = null;
+
+  function renderExerciseBrowser() {
+    var el = document.getElementById('dbContent');
+    if (!el) return;
+
+    if (!EXERCISE_DB.isLoaded()) {
+      el.innerHTML = '<div class="db-loading">Cargando catálogo de ejercicios…</div>';
+      EXERCISE_DB.load().then(renderExerciseBrowser).catch(function () {
+        el.innerHTML = '<div class="db-loading">No se pudo cargar el catálogo. Comprueba tu conexión.</div>';
+      });
+      return;
+    }
+
+    var html = '';
+    html += '<div class="db-searchbar">';
+    html += '  <input type="search" id="dbSearchInput" class="db-search-input" placeholder="Buscar: sentadilla, mancuerna, glúteos…" value="' + escapeHtml(dbQuery) + '">';
+    html += '</div>';
+
+    html += '<div class="db-chips">';
+    html += '  <button class="db-chip' + (dbFilterBodyPart === '' ? ' active' : '') + '" data-bp="">Todos</button>';
+    EXERCISE_DB.bodyParts().forEach(function (bp) {
+      html += '  <button class="db-chip' + (dbFilterBodyPart === bp ? ' active' : '') + '" data-bp="' + escapeHtml(bp) + '">' + escapeHtml(EXERCISE_DB.labelBodyPart(bp)) + '</button>';
+    });
+    html += '</div>';
+
+    var results = EXERCISE_DB.search(dbQuery, { limit: 60, bodyPart: dbFilterBodyPart || null });
+    html += '<div class="db-count">' + results.length + ' de ' + EXERCISE_DB.count() + ' ejercicios</div>';
+
+    html += '<div class="db-grid">';
+    results.forEach(function (rec) {
+      var open = dbOpenId === rec.id;
+      html += '<div class="db-card' + (open ? ' open' : '') + '" data-id="' + rec.id + '">';
+      html += '  <div class="db-card-head">';
+      html += '    <img class="db-thumb" loading="lazy" alt="" src="' + (open ? EXERCISE_DB.gifUrl(rec) : EXERCISE_DB.imageUrl(rec)) + '">';
+      html += '    <div class="db-card-info">';
+      html += '      <div class="db-card-name">' + escapeHtml(rec.n) + '</div>';
+      html += '      <div class="db-card-meta">' + escapeHtml(EXERCISE_DB.labelTarget(rec.tg)) + ' · ' + escapeHtml(EXERCISE_DB.labelEquipment(rec.eq)) + '</div>';
+      html += '    </div>';
+      html += '  </div>';
+      if (open && rec.es && rec.es.length) {
+        html += '  <ol class="db-steps">';
+        rec.es.forEach(function (s) { html += '<li>' + escapeHtml(s) + '</li>'; });
+        html += '  </ol>';
+      }
+      html += '</div>';
+    });
+    html += '</div>';
+
+    if (results.length === 0) {
+      html += '<div class="db-loading">Sin resultados para «' + escapeHtml(dbQuery) + '».</div>';
+    }
+
+    html += '<div class="db-credit">Datos e imágenes: <a href="https://github.com/smoralb/exercises-dataset" target="_blank" rel="noopener">exercises-dataset</a> · © Gym visual</div>';
+
+    el.innerHTML = html;
+
+    var input = document.getElementById('dbSearchInput');
+    if (input) {
+      var t = null;
+      input.addEventListener('input', function () {
+        clearTimeout(t);
+        t = setTimeout(function () {
+          dbQuery = input.value;
+          dbOpenId = null;
+          renderExerciseBrowser();
+          var again = document.getElementById('dbSearchInput');
+          if (again) { again.focus(); again.setSelectionRange(again.value.length, again.value.length); }
+        }, 220);
+      });
+    }
+
+    el.querySelectorAll('.db-chip').forEach(function (chip) {
+      chip.addEventListener('click', function () {
+        dbFilterBodyPart = chip.dataset.bp;
+        dbOpenId = null;
+        renderExerciseBrowser();
+      });
+    });
+
+    el.querySelectorAll('.db-card').forEach(function (card) {
+      card.addEventListener('click', function () {
+        dbOpenId = (dbOpenId === card.dataset.id) ? null : card.dataset.id;
+        renderExerciseBrowser();
+      });
+    });
   }
 
   // =============================================
@@ -1427,25 +1894,37 @@
     if (chevron) chevron.textContent = expandedCards[originalId] ? '˅' : '›';
   }
 
-  function swapExercise(originalId, altExercise) {
+  function swapExercise(originalId, altExercise, dateKey) {
     if (!state.swaps) state.swaps = {};
-    var key = getTodayKey();
+    var key = dateKey || getTodayKey();
     if (!state.swaps[key]) state.swaps[key] = {};
     state.swaps[key][originalId] = altExercise;
     saveState();
     expandedCards[originalId] = true;
+    homeExpandedCards[originalId] = true;
     renderCurrentDay();
     showToast('↔ ' + altExercise.name);
   }
 
-  function revertSwap(originalId) {
-    var key = getTodayKey();
+  function revertSwap(originalId, dateKey) {
+    var key = dateKey || getTodayKey();
     if (state.swaps && state.swaps[key]) {
       delete state.swaps[key][originalId];
       saveState();
     }
     renderCurrentDay();
     showToast('Ejercicio original restaurado');
+  }
+
+  // Repinta el detalle del día seleccionado en la pestaña Inicio
+  function refreshHomeDayDetail() {
+    var container = document.getElementById('homeContent');
+    var detailEl = document.getElementById('dayDetail');
+    if (!container || !detailEl) return;
+    var selDate = container.dataset.selectedDate;
+    if (!selDate) return;
+    detailEl.innerHTML = renderDayDetail(selDate);
+    bindHomeCardListeners();
   }
 
   // =============================================
@@ -1541,6 +2020,21 @@
 
       if (meta.videoUrl) {
         html += '  <div class="exercise-video-wrapper"><iframe src="' + meta.videoUrl + '?rel=0&modestbranding=1" allowfullscreen loading="lazy" title="' + ex.name + '"></iframe></div>';
+      }
+
+      // Animación + instrucciones del dataset público (si hay equivalente)
+      var dbRec = getDbRecord(ex.id);
+      if (dbRec) {
+        html += '  <div class="exercise-db-block">';
+        html += '    <img class="exercise-db-gif" loading="lazy" alt="Animación: ' + escapeHtml(dbRec.n) + '" src="' + EXERCISE_DB.gifUrl(dbRec) + '">';
+        html += '    <div class="exercise-db-caption">' + escapeHtml(dbRec.n) + ' · ' + escapeHtml(EXERCISE_DB.labelEquipment(dbRec.eq)) + '</div>';
+        if (dbRec.es && dbRec.es.length) {
+          html += '    <ol class="exercise-db-steps">';
+          dbRec.es.forEach(function (s) { html += '<li>' + escapeHtml(s) + '</li>'; });
+          html += '    </ol>';
+        }
+        html += '    <div class="exercise-db-credit">© Gym visual · dataset de ejercicios</div>';
+        html += '  </div>';
       }
 
       if (ex.weightHint) {
@@ -1880,6 +2374,42 @@
         toggleHomeExpand(exId);
       });
     });
+    // Temporizador de descanso
+    detailEl.querySelectorAll('.timer-start-btn').forEach(function(btn) {
+      btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        startRestTimer(btn.dataset.ex, parseInt(btn.dataset.secs, 10));
+      });
+    });
+
+    detailEl.querySelectorAll('.timer-cancel-btn').forEach(function(btn) {
+      btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        clearActiveTimer();
+      });
+    });
+
+    // Cambiar el ejercicio por la alternativa propuesta
+    detailEl.querySelectorAll('.home-swap-btn').forEach(function(btn) {
+      btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        var origId = btn.dataset.orig;
+        var ai = parseInt(btn.dataset.altIdx, 10);
+        var meta = EXERCISE_META[origId] || {};
+        if (!meta.alternatives || !meta.alternatives[ai]) return;
+        swapExercise(origId, meta.alternatives[ai], btn.dataset.date || null);
+        refreshHomeDayDetail();
+      });
+    });
+
+    detailEl.querySelectorAll('.home-revert-btn').forEach(function(btn) {
+      btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        revertSwap(btn.dataset.orig, btn.dataset.date || null);
+        refreshHomeDayDetail();
+      });
+    });
+
     detailEl.querySelectorAll('.day-action-btn').forEach(function(btn) {
       btn.addEventListener('click', function() {
         var action = btn.dataset.action;
@@ -1915,31 +2445,55 @@
     });
   }
 
-  function renderExerciseDetailItemForHome(ex, meta) {
+  // Tarjeta de ejercicio del detalle de día (pestaña Inicio).
+  // opts: { dateKey, originalId, isSwapped, readOnly, weightStr }
+  //  - readOnly: día pasado ya registrado (sin temporizador ni cambio de alternativa)
+  function renderExerciseDetailItemForHome(ex, meta, opts) {
+    opts = opts || {};
+    var dateKey = opts.dateKey || null;
+    var originalId = opts.originalId || ex.id;
+    var isSwapped = !!opts.isSwapped;
+    var readOnly = !!opts.readOnly;
+    // Namespace propio para no chocar con los ids de la pestaña Rutina
+    var timerId = 'home-' + originalId;
     var restStr = ex.rest || '—';
-    var isExpanded = !!homeExpandedCards[ex.id];
+    var restSecs = parseRestSeconds(ex.rest);
+    var isExpanded = !!homeExpandedCards[originalId];
     var html = '';
 
-    html += '<div class="day-detail-ex-item home-ex-card" id="home-card-' + ex.id + '">';
+    html += '<div class="day-detail-ex-item home-ex-card" id="home-card-' + originalId + '">';
 
     // Clickable header
-    html += '<div class="home-ex-header" id="home-header-' + ex.id + '">';
+    html += '<div class="home-ex-header" id="home-header-' + originalId + '">';
     html += '  <div class="home-ex-info">';
-    html += '    <div class="dd-ex-name">' + ex.name + '</div>';
-    html += '    <div class="dd-ex-meta"><span class="dd-ex-muscle">' + ex.muscle + '</span><span class="dd-ex-reps">' + ex.series + '×' + ex.reps + '</span></div>';
+    html += '    <div class="dd-ex-name">' + ex.name + (isSwapped ? ' <span class="exercise-swap-badge">↔</span>' : '') + '</div>';
+    html += '    <div class="dd-ex-meta"><span class="dd-ex-muscle">' + ex.muscle + '</span>';
+    html += (readOnly && opts.weightStr)
+      ? '<span class="dd-ex-weight">🏋️ ' + opts.weightStr + '</span>'
+      : '<span class="dd-ex-reps">' + ex.series + '×' + ex.reps + '</span>';
+    html += '</div>';
     html += '  </div>';
-    html += '  <span class="exercise-chevron" id="home-chevron-' + ex.id + '">' + (isExpanded ? '˅' : '›') + '</span>';
+    html += '  <span class="exercise-chevron" id="home-chevron-' + originalId + '">' + (isExpanded ? '˅' : '›') + '</span>';
     html += '</div>';
 
     // Expandable body
-    html += '<div class="exercise-body' + (isExpanded ? ' expanded' : '') + '" id="home-body-' + ex.id + '">';
+    html += '<div class="exercise-body' + (isExpanded ? ' expanded' : '') + '" id="home-body-' + originalId + '">';
 
-    // Details grid
+    // Details grid (con botón de descanso salvo en días ya registrados)
     html += '  <div class="exercise-details">';
     html += '    <div class="exercise-detail-item"><span class="icon">🔄</span><span><span class="label">Series: </span><span class="value">' + ex.series + '</span></span></div>';
     html += '    <div class="exercise-detail-item"><span class="icon">🔁</span><span><span class="label">Reps: </span><span class="value">' + ex.reps + '</span></span></div>';
-    html += '    <div class="exercise-detail-item"><span class="icon">⏱️</span><span><span class="label">Descanso: </span><span class="value">' + restStr + '</span></span></div>';
+    html += '    <div class="exercise-detail-item"><span class="icon" id="timer-icon-' + timerId + '">⏱️</span><span><span class="label">Descanso: </span><span class="value">' + restStr + '</span></span>'
+         + (!readOnly && restSecs > 0 ? '<button class="timer-start-btn" data-ex="' + timerId + '" data-secs="' + restSecs + '">Iniciar</button>' : '')
+         + '</div>';
     html += '  </div>';
+
+    if (!readOnly && restSecs > 0) {
+      html += '  <div class="timer-container" id="timer-' + timerId + '">';
+      html += '    <div class="timer-display" id="timer-display-' + timerId + '">' + formatTimerDisplay(restSecs) + '</div>';
+      html += '    <button class="timer-cancel-btn" data-ex="' + timerId + '">Cancelar</button>';
+      html += '  </div>';
+    }
 
     // Focus
     if (ex.focus) {
@@ -1956,21 +2510,43 @@
       html += '  <div class="exercise-video-wrapper"><iframe src="' + meta.videoUrl + '?rel=0&modestbranding=1" allowfullscreen loading="lazy" title="' + ex.name + '"></iframe></div>';
     }
 
+    // Animación + instrucciones del dataset público
+    var dbRec = getDbRecord(ex.id);
+    if (dbRec) {
+      html += '  <div class="exercise-db-block">';
+      html += '    <img class="exercise-db-gif" loading="lazy" alt="Animación: ' + escapeHtml(dbRec.n) + '" src="' + EXERCISE_DB.gifUrl(dbRec) + '">';
+      html += '    <div class="exercise-db-caption">' + escapeHtml(dbRec.n) + ' · ' + escapeHtml(EXERCISE_DB.labelEquipment(dbRec.eq)) + '</div>';
+      if (dbRec.es && dbRec.es.length) {
+        html += '    <ol class="exercise-db-steps">';
+        dbRec.es.forEach(function (s) { html += '<li>' + escapeHtml(s) + '</li>'; });
+        html += '    </ol>';
+      }
+      html += '    <div class="exercise-db-credit">© Gym visual · dataset de ejercicios</div>';
+      html += '  </div>';
+    }
+
     // Weight hint
     if (ex.weightHint) {
       html += '  <div class="exercise-weight-hint">💡 ' + ex.weightHint + '</div>';
     }
 
     // Alternatives
-    if (meta && meta.alternatives && meta.alternatives.length > 0) {
+    if (!isSwapped && meta && meta.alternatives && meta.alternatives.length > 0) {
       html += '  <div class="exercise-alternatives">';
       html += '    <div class="alternatives-title">🔀 Alternativas</div>';
-      meta.alternatives.forEach(function(alt) {
+      meta.alternatives.forEach(function(alt, ai) {
         html += '    <div class="alternative-item">';
         html += '      <div class="alternative-info"><div class="alternative-name">' + alt.name + '</div><div class="alternative-reason">' + alt.reason + '</div></div>';
+        if (!readOnly) {
+          html += '      <button class="home-swap-btn" data-orig="' + originalId + '" data-alt-idx="' + ai + '" data-date="' + (dateKey || '') + '">Cambiar</button>';
+        }
         html += '    </div>';
       });
       html += '  </div>';
+    }
+
+    if (isSwapped && !readOnly) {
+      html += '  <div class="swap-indicator">⇔ Usando alternativa · <button class="home-revert-btn" data-orig="' + originalId + '" data-date="' + (dateKey || '') + '">Volver al original</button></div>';
     }
 
     html += '</div>'; // end exercise-body
@@ -2064,9 +2640,11 @@
       html += '  <div class="day-detail-date">' + formatted + ' (' + dayName + ')' + phaseInfo + '</div>';
       html += '  <div class="day-detail-routine">' + day.emoji + ' ' + day.day + ' · Semana ' + weekNum + '</div>';
       html += '  <div class="day-detail-exercises">';
-      day.exercises.forEach(function (ex) {
-        var meta = EXERCISE_META[ex.id] || {};
-        html += renderExerciseDetailItemForHome(ex, meta);
+      getEffectiveExercises(day, dateKey).forEach(function (item) {
+        var meta = EXERCISE_META[item.originalId] || {};
+        html += renderExerciseDetailItemForHome(item.ex, meta, {
+          dateKey: dateKey, originalId: item.originalId, isSwapped: item.isSwapped
+        });
       });
       html += '  </div>';
       html += '  <div class="day-detail-summary">📋 ' + verb + ' ' + day.day + ' · ' + day.exercises.length + ' ejercicios</div>';
@@ -2080,9 +2658,11 @@
     html += '  <div class="day-detail-date">' + formatted + ' (' + dayName + ')' + phaseInfo + '</div>';
     html += '  <div class="day-detail-routine">' + day.emoji + ' ' + day.day + ' · Semana ' + weekNum + '</div>';
     html += '  <div class="day-detail-exercises">';
-    day.exercises.forEach(function (ex) {
-      var meta = EXERCISE_META[ex.id] || {};
-      html += renderExerciseDetailItemForHome(ex, meta);
+    getEffectiveExercises(day, dateKey).forEach(function (item) {
+      var meta = EXERCISE_META[item.originalId] || {};
+      html += renderExerciseDetailItemForHome(item.ex, meta, {
+        dateKey: dateKey, originalId: item.originalId, isSwapped: item.isSwapped
+      });
     });
     html += '  </div>';
     html += '  <div class="day-detail-summary">📋 Entrenamiento planificado (sin registrar) · ' + day.exercises.length + ' ejercicios</div>';
@@ -2121,32 +2701,9 @@
         }
       }
       var meta = EXERCISE_META[ex.id] || {};
-      html += '<div class="day-detail-ex-item home-ex-card" id="home-card-' + ex.id + '">';
-      html += '<div class="home-ex-header" id="home-header-' + ex.id + '">';
-      html += '  <div class="home-ex-info">';
-      html += '    <div class="dd-ex-name">' + ex.name + '</div>';
-      html += '    <div class="dd-ex-meta"><span class="dd-ex-muscle">' + ex.muscle + '</span><span class="dd-ex-weight">🏋️ ' + weightStr + '</span></div>';
-      html += '  </div>';
-      var isExpandedDone = !!homeExpandedCards[ex.id];
-      html += '  <span class="exercise-chevron" id="home-chevron-' + ex.id + '">' + (isExpandedDone ? '˅' : '›') + '</span>';
-      html += '</div>';
-      html += '<div class="exercise-body' + (isExpandedDone ? ' expanded' : '') + '" id="home-body-' + ex.id + '">';
-      html += '  <div class="exercise-details">';
-      html += '    <div class="exercise-detail-item"><span class="icon">🔄</span><span><span class="label">Series: </span><span class="value">' + ex.series + '</span></span></div>';
-      html += '    <div class="exercise-detail-item"><span class="icon">🔁</span><span><span class="label">Reps: </span><span class="value">' + ex.reps + '</span></span></div>';
-      html += '    <div class="exercise-detail-item"><span class="icon">⏱️</span><span><span class="label">Descanso: </span><span class="value">' + (ex.rest || '—') + '</span></span></div>';
-      html += '  </div>';
-      if (ex.focus) html += '  <div class="exercise-focus"><div class="focus-label">💡 Enfoque clave</div>' + ex.focus + '</div>';
-      if (meta.description) html += '  <div class="exercise-description">' + meta.description + '</div>';
-      if (meta.videoUrl) html += '  <div class="exercise-video-wrapper"><iframe src="' + meta.videoUrl + '?rel=0&modestbranding=1" allowfullscreen loading="lazy" title="' + ex.name + '"></iframe></div>';
-      if (ex.weightHint) html += '  <div class="exercise-weight-hint">💡 ' + ex.weightHint + '</div>';
-      if (meta.alternatives && meta.alternatives.length > 0) {
-        html += '  <div class="exercise-alternatives"><div class="alternatives-title">🔀 Alternativas</div>';
-        meta.alternatives.forEach(function(alt) { html += '<div class="alternative-item"><div class="alternative-info"><div class="alternative-name">' + alt.name + '</div><div class="alternative-reason">' + alt.reason + '</div></div></div>'; });
-        html += '  </div>';
-      }
-      html += '</div>';
-      html += '</div>';
+      html += renderExerciseDetailItemForHome(ex, meta, {
+        dateKey: dateKey, originalId: ex.id, readOnly: true, weightStr: weightStr
+      });
     });
 
     html += '  </div>';
@@ -2501,6 +3058,12 @@
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js').catch(function () {}); });
     }
+
+    // Carga el catálogo en segundo plano y repinta cuando esté listo
+    EXERCISE_DB.load().then(function () {
+      if (currentTab === 'rutina') renderCurrentDay();
+      if (currentTab === 'db') renderExerciseBrowser();
+    }).catch(function () { /* sin catálogo la app funciona igual */ });
 
     var vEl = document.getElementById('appVersion');
     if (vEl) vEl.textContent = 'v' + APP_VERSION;
