@@ -2258,3 +2258,45 @@ body {
 }
 
 .db-credit a { color: var(--text-secondary); }
+/* --- Selector de colección (Catálogo / Recuperación running) --- */
+.db-collections {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.db-collection {
+  flex: 1;
+  padding: 10px 8px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  font-family: var(--font);
+  color: var(--text-secondary);
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--transition);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.db-collection.active {
+  color: #fff;
+  background: var(--accent-secondary);
+  border-color: var(--accent-primary);
+}
+
+.db-thumb-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.6rem;
+  background: var(--bg-input);
+}
+
+.db-card-desc {
+  margin-top: 12px;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--text-primary);
+}

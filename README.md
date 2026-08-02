@@ -13,6 +13,7 @@ Aplicación web progresiva (PWA) para seguir una rutina de ejercicios 3 días/se
 - 📊 Historial de progreso por ejercicio
 - 🎯 Sugerencias automáticas para subir de peso
 - 🔍 Catálogo de 1.324 ejercicios con animaciones e instrucciones en español
+- 🏃 Colección "Recuperación running": 29 ejercicios preventivos para corredores
 - 📱 PWA instalable en móvil (funciona offline)
 - 🌙 Modo oscuro
 
@@ -42,6 +43,11 @@ Cómo está integrado:
   porque el dataset sólo trae los nombres en inglés.
 - **`EXERCISE_DB_MAP`** (en `app.js`) — enlaza cada ejercicio de la rutina con su
   id en el dataset, para mostrar la animación dentro de la tarjeta del ejercicio.
+- **`RUNNING_RECOVERY`** (en `app.js`) — colección "Recuperación running": 29
+  ejercicios preventivos y de recuperación para corredores, con su propia
+  descripción, músculos y material. Es un catálogo consultable, no una rutina
+  (no lleva series ni repeticiones). Cada entrada apunta con `db` al id del
+  dataset del que saca la animación, o `null` si no hay equivalente.
 
 Para regenerar el índice cuando el dataset se actualice:
 

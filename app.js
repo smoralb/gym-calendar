@@ -991,9 +991,122 @@
       labelEquipment: function (eq) { return EQUIPMENT_ES[eq] ? EQUIPMENT_ES[eq].split(' ')[0] : eq; },
       labelTarget: function (tg) { return TARGET_ES[tg] ? TARGET_ES[tg].split(' ')[0] : tg; },
       isLoaded: function () { return !!items; },
-      count: function () { return items ? items.length : 0; }
+      count: function () { return items ? items.length : 0; },
+      norm: norm
     };
   })();
+
+  // =============================================
+  // RUNNING_RECOVERY: colección "Recuperación running"
+  // Trabajo preventivo y de recuperación para corredores. No es una rutina
+  // (no lleva series ni repeticiones), es un catálogo consultable.
+  // `db` = id en exercises-dataset para la animación; null si no hay equivalente.
+  // =============================================
+  var RUNNING_RECOVERY_LABEL = 'Recuperación running';
+
+  var RUNNING_RECOVERY = [
+    { id: 'foam_roller', name: 'Foam Roller', db: null,
+      description: 'Masajear lentamente las zonas cargadas como espalda, glúteos, isquiotibiales y gemelos.',
+      muscles: ['Espalda', 'Glúteos', 'Isquiotibiales', 'Gemelos'], equipment: ['Foam Roller'] },
+    { id: 'glute_bridge', name: 'Puente de glúteos', db: '3013',
+      description: 'Tumbado boca arriba, realiza una retroversión pélvica y eleva la cadera sin perder la posición lumbar.',
+      muscles: ['Glúteos', 'Core'], equipment: [] },
+    { id: 'single_leg_glute_bridge', name: 'Puente de glúteos a una pierna', db: '3645',
+      description: 'Eleva la cadera apoyándote sobre una sola pierna manteniendo la pelvis estable.',
+      muscles: ['Glúteos', 'Isquiotibiales', 'Core'], equipment: [] },
+    { id: 'hamstring_walkouts', name: 'Hamstring Walkouts', db: null,
+      description: 'Desde un puente de glúteos camina lentamente hacia delante con los talones y vuelve.',
+      muscles: ['Isquiotibiales', 'Glúteos', 'Core'], equipment: [] },
+    { id: 'short_glute_bridge', name: 'Puente de glúteos corto', db: '3013',
+      description: 'Puente con recorrido corto para mantener siempre el control de la pelvis.',
+      muscles: ['Glúteos', 'Core'], equipment: [] },
+    { id: 'dead_bug', name: 'Dead Bug', db: '0276',
+      description: 'Extiende brazo y pierna contrarios manteniendo la espalda pegada al suelo.',
+      muscles: ['Core'], equipment: [] },
+    { id: 'dead_bug_isometric', name: 'Dead Bug isométrico', db: '0276',
+      description: 'Empuja la mano contra la rodilla contraria mientras mantienes la pelvis estable.',
+      muscles: ['Core', 'Psoas'], equipment: [] },
+    { id: 'crab_walk', name: 'Crab Walk', db: '0628',
+      description: 'Camina lateralmente con una banda en los tobillos manteniendo tensión constante.',
+      muscles: ['Glúteo medio', 'Glúteos'], equipment: ['Banda elástica'] },
+    { id: 'c_band_walk', name: 'Caminata en C', db: '0628',
+      description: 'Realiza pequeños desplazamientos formando una C con los pies para activar los glúteos.',
+      muscles: ['Glúteos'], equipment: ['Banda elástica'] },
+    { id: 'hip_flexor_march', name: 'Marcha con banda', db: null,
+      description: 'Eleva la rodilla hasta la cadera manteniendo la pelvis neutra.',
+      muscles: ['Psoas', 'Flexores de cadera', 'Core'], equipment: ['Banda elástica'] },
+    { id: 'single_leg_squat', name: 'Sentadilla a una pierna', db: '1476',
+      description: 'Realiza una pequeña sentadilla manteniendo la rodilla alineada con el pie.',
+      muscles: ['Cuádriceps', 'Glúteos'], equipment: [] },
+    { id: 'banded_knee_raise', name: 'Elevación de rodilla con banda', db: null,
+      description: 'Con la banda sobre las rodillas eleva una rodilla en distintas direcciones.',
+      muscles: ['Glúteos', 'Cadera'], equipment: ['Banda elástica'] },
+    { id: 'double_calf_raise', name: 'Elevaciones de gemelos', db: '1373',
+      description: 'Sube lentamente sobre las puntas de los pies y baja de forma controlada.',
+      muscles: ['Gemelos'], equipment: [] },
+    { id: 'single_calf_raise', name: 'Elevaciones de gemelos a una pierna', db: '1387',
+      description: 'Realiza elevaciones de gemelo apoyando solo una pierna.',
+      muscles: ['Gemelos'], equipment: [] },
+    { id: 'hip_hike', name: 'Hip Hike', db: null,
+      description: 'Sobre un escalón baja y eleva la pelvis utilizando únicamente la cadera de apoyo.',
+      muscles: ['Glúteo medio', 'Cadera'], equipment: ['Escalón'] },
+    { id: 'toe_walk', name: 'Caminata de puntillas', db: null,
+      description: 'Camina únicamente sobre las puntas de los pies.',
+      muscles: ['Gemelos', 'Pie'], equipment: [] },
+    { id: 'toe_walk_pause', name: 'Caminata de puntillas con pausas', db: null,
+      description: 'Camina de puntillas realizando pequeñas pausas en cada paso.',
+      muscles: ['Gemelos'], equipment: [] },
+    { id: 'front_plank', name: 'Plancha frontal', db: '0464',
+      description: 'Mantén el cuerpo alineado apoyándote sobre antebrazos y pies.',
+      muscles: ['Core'], equipment: [] },
+    { id: 'front_plank_leg_raise', name: 'Plancha con elevación de pierna', db: null,
+      description: 'Desde una plancha frontal eleva alternativamente una pierna.',
+      muscles: ['Core', 'Glúteos'], equipment: [] },
+    { id: 'side_plank', name: 'Plancha lateral', db: '3544',
+      description: 'Mantén el cuerpo recto apoyándote sobre un antebrazo.',
+      muscles: ['Oblicuos', 'Core'], equipment: [] },
+    { id: 'side_plank_leg_raise', name: 'Plancha lateral con elevación', db: '1774',
+      description: 'Desde la plancha lateral eleva la pierna superior.',
+      muscles: ['Glúteo medio', 'Oblicuos'], equipment: [] },
+    { id: 'side_plank_dips', name: 'Plancha lateral con descenso de cadera', db: '3544',
+      description: 'Baja y eleva la cadera de forma controlada.',
+      muscles: ['Oblicuos', 'Core'], equipment: [] },
+    { id: 'hip_raise', name: 'Elevación lateral de cadera', db: '0710',
+      description: 'Eleva la cadera desde una posición lateral para fortalecer abductores.',
+      muscles: ['Abductores', 'Glúteos'], equipment: [] },
+    { id: 'kettlebell_core', name: 'Core con kettlebell', db: '0554',
+      description: 'Mantén la espalda neutra mientras mueves una kettlebell.',
+      muscles: ['Core'], equipment: ['Kettlebell'] },
+    { id: 'rowing', name: 'Remo', db: '0861',
+      description: 'Ejercicio de remo utilizado como parte del trabajo de core.',
+      muscles: ['Espalda', 'Core'], equipment: ['Polea o máquina de remo'] },
+    { id: 'swiss_ball_plank', name: 'Plancha sobre fitball', db: null,
+      description: 'Empuja el balón con los antebrazos manteniendo la plancha.',
+      muscles: ['Core'], equipment: ['Fitball'] },
+    { id: 'swiss_ball_crunch', name: 'Crunch con fitball', db: '2297',
+      description: 'Sujeta el balón con los pies y realiza pequeños crunches.',
+      muscles: ['Abdominales'], equipment: ['Fitball'] },
+    { id: 'copenhagen_plank', name: 'Plancha Copenhagen', db: '1775',
+      description: 'Plancha lateral apoyando la pierna sobre un banco para trabajar aductores.',
+      muscles: ['Aductores', 'Core'], equipment: ['Banco'] },
+    { id: 'single_leg_hamstring_hold', name: 'Puente isométrico de isquiotibiales', db: '3645',
+      description: 'Mantén la cadera elevada con una sola pierna durante varios segundos.',
+      muscles: ['Isquiotibiales', 'Glúteos'], equipment: [] }
+  ];
+
+  // Búsqueda dentro de la colección de recuperación (nombre, descripción,
+  // músculos y material), ignorando acentos y mayúsculas.
+  function searchRunningRecovery(query) {
+    var q = EXERCISE_DB.norm(query).split(/\s+/).filter(Boolean);
+    if (!q.length) return RUNNING_RECOVERY.slice();
+    return RUNNING_RECOVERY.filter(function (it) {
+      var hay = EXERCISE_DB.norm([
+        it.name, it.description, it.muscles.join(' '), it.equipment.join(' ')
+      ].join(' '));
+      for (var i = 0; i < q.length; i++) if (hay.indexOf(q[i]) === -1) return false;
+      return true;
+    });
+  }
 
   // Ejercicio de la rutina -> id en el dataset. null = no hay equivalente.
   var EXERCISE_DB_MAP = {
@@ -1623,6 +1736,7 @@
   var dbQuery = '';
   var dbFilterBodyPart = '';
   var dbOpenId = null;
+  var dbCollection = 'all';   // 'all' = dataset completo · 'running' = recuperación running
 
   function renderExerciseBrowser() {
     var el = document.getElementById('dbContent');
@@ -1636,10 +1750,26 @@
       return;
     }
 
+    var isRunning = dbCollection === 'running';
+
     var html = '';
-    html += '<div class="db-searchbar">';
-    html += '  <input type="search" id="dbSearchInput" class="db-search-input" placeholder="Buscar: sentadilla, mancuerna, glúteos…" value="' + escapeHtml(dbQuery) + '">';
+
+    // Selector de colección
+    html += '<div class="db-collections">';
+    html += '  <button class="db-collection' + (isRunning ? '' : ' active') + '" data-collection="all">🏋️ Catálogo</button>';
+    html += '  <button class="db-collection' + (isRunning ? ' active' : '') + '" data-collection="running">🏃 ' + RUNNING_RECOVERY_LABEL + '</button>';
     html += '</div>';
+
+    html += '<div class="db-searchbar">';
+    html += '  <input type="search" id="dbSearchInput" class="db-search-input" placeholder="' + (isRunning ? 'Buscar: glúteos, banda, plancha…' : 'Buscar: sentadilla, mancuerna, glúteos…') + '" value="' + escapeHtml(dbQuery) + '">';
+    html += '</div>';
+
+    if (isRunning) {
+      html += renderRunningRecovery();
+      el.innerHTML = html;
+      bindExerciseBrowserListeners(el);
+      return;
+    }
 
     html += '<div class="db-chips">';
     html += '  <button class="db-chip' + (dbFilterBodyPart === '' ? ' active' : '') + '" data-bp="">Todos</button>';
@@ -1652,11 +1782,14 @@
     html += '<div class="db-count">' + results.length + ' de ' + EXERCISE_DB.count() + ' ejercicios</div>';
 
     html += '<div class="db-grid">';
-    results.forEach(function (rec) {
+    results.forEach(function (rec, idx) {
       var open = dbOpenId === rec.id;
       html += '<div class="db-card' + (open ? ' open' : '') + '" data-id="' + rec.id + '">';
       html += '  <div class="db-card-head">';
-      html += '    <img class="db-thumb" loading="lazy" alt="" src="' + (open ? EXERCISE_DB.gifUrl(rec) : EXERCISE_DB.imageUrl(rec)) + '">';
+      // La tarjeta abierta y las primeras de la lista cargan ya; el resto
+      // espera al observer (ver observeThumbs)
+      html += '    <img class="db-thumb" alt="" ' + (open ? 'src="' + EXERCISE_DB.gifUrl(rec) + '"'
+        : (idx < EAGER_THUMBS ? 'src="' : 'data-src="') + EXERCISE_DB.imageUrl(rec) + '"') + '>';
       html += '    <div class="db-card-info">';
       html += '      <div class="db-card-name">' + escapeHtml(rec.n) + '</div>';
       html += '      <div class="db-card-meta">' + escapeHtml(EXERCISE_DB.labelTarget(rec.tg)) + ' · ' + escapeHtml(EXERCISE_DB.labelEquipment(rec.eq)) + '</div>';
@@ -1678,6 +1811,81 @@
     html += '<div class="db-credit">Datos e imágenes: <a href="https://github.com/smoralb/exercises-dataset" target="_blank" rel="noopener">exercises-dataset</a> · © Gym visual</div>';
 
     el.innerHTML = html;
+    bindExerciseBrowserListeners(el);
+  }
+
+  // Colección "Recuperación running": catálogo propio, con la animación
+  // del dataset cuando existe un equivalente.
+  function renderRunningRecovery() {
+    var results = searchRunningRecovery(dbQuery);
+    var html = '';
+
+    html += '<div class="db-count">' + results.length + ' de ' + RUNNING_RECOVERY.length + ' ejercicios · trabajo preventivo y de recuperación para corredores</div>';
+
+    html += '<div class="db-grid">';
+    results.forEach(function (it, idx) {
+      var open = dbOpenId === it.id;
+      var rec = it.db ? EXERCISE_DB.get(it.db) : null;
+      html += '<div class="db-card' + (open ? ' open' : '') + '" data-id="' + it.id + '">';
+      html += '  <div class="db-card-head">';
+      if (rec) {
+        html += '    <img class="db-thumb" alt="" ' + (open ? 'src="' + EXERCISE_DB.gifUrl(rec) + '"'
+          : (idx < EAGER_THUMBS ? 'src="' : 'data-src="') + EXERCISE_DB.imageUrl(rec) + '"') + '>';
+      } else {
+        html += '    <div class="db-thumb db-thumb-empty">🏃</div>';
+      }
+      html += '    <div class="db-card-info">';
+      html += '      <div class="db-card-name">' + escapeHtml(it.name) + '</div>';
+      html += '      <div class="db-card-meta">' + escapeHtml(it.muscles.join(' · '))
+           + (it.equipment.length ? ' · ' + escapeHtml(it.equipment.join(', ')) : ' · sin material') + '</div>';
+      html += '    </div>';
+      html += '  </div>';
+      if (open) {
+        html += '  <div class="db-card-desc">' + escapeHtml(it.description) + '</div>';
+        if (rec && rec.es && rec.es.length) {
+          html += '  <ol class="db-steps">';
+          rec.es.forEach(function (s) { html += '<li>' + escapeHtml(s) + '</li>'; });
+          html += '  </ol>';
+        }
+      }
+      html += '</div>';
+    });
+    html += '</div>';
+
+    if (results.length === 0) {
+      html += '<div class="db-loading">Sin resultados para «' + escapeHtml(dbQuery) + '».</div>';
+    }
+
+    html += '<div class="db-credit">Animaciones: <a href="https://github.com/smoralb/exercises-dataset" target="_blank" rel="noopener">exercises-dataset</a> · © Gym visual</div>';
+    return html;
+  }
+
+  // Carga diferida de las miniaturas de la lista.
+  // No se usa loading="lazy": al repintar la lista entera Chrome no llega a
+  // disparar la carga aunque las imágenes estén dentro del viewport.
+  var dbThumbObserver = null;
+  var EAGER_THUMBS = 12;   // las primeras de la lista se piden sin esperar
+
+  function observeThumbs(el) {
+    var imgs = el.querySelectorAll('.db-thumb[data-src]');
+    if (!window.IntersectionObserver) {
+      imgs.forEach(function (img) { img.src = img.dataset.src; img.removeAttribute('data-src'); });
+      return;
+    }
+    if (dbThumbObserver) dbThumbObserver.disconnect();
+    dbThumbObserver = new IntersectionObserver(function (entries, obs) {
+      entries.forEach(function (entry) {
+        if (!entry.isIntersecting) return;
+        var img = entry.target;
+        if (img.dataset.src) { img.src = img.dataset.src; img.removeAttribute('data-src'); }
+        obs.unobserve(img);
+      });
+    }, { rootMargin: '300px' });
+    imgs.forEach(function (img) { dbThumbObserver.observe(img); });
+  }
+
+  function bindExerciseBrowserListeners(el) {
+    observeThumbs(el);
 
     var input = document.getElementById('dbSearchInput');
     if (input) {
@@ -1693,6 +1901,17 @@
         }, 220);
       });
     }
+
+    el.querySelectorAll('.db-collection').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        if (dbCollection === btn.dataset.collection) return;
+        dbCollection = btn.dataset.collection;
+        dbQuery = '';
+        dbFilterBodyPart = '';
+        dbOpenId = null;
+        renderExerciseBrowser();
+      });
+    });
 
     el.querySelectorAll('.db-chip').forEach(function (chip) {
       chip.addEventListener('click', function () {
