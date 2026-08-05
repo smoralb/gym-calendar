@@ -1,12 +1,12 @@
 /* =============================================
    Gym Calendar - App de Rutina de Ejercicios
-   Versión: 4.5.0 — Dataset de ejercicios + recuperación running
+   Versión: 4.6.0 — Asistente multi-selección + nombres en español
    ============================================= */
 
 (function () {
   'use strict';
 
-  var APP_VERSION = '4.5.0';
+  var APP_VERSION = '4.6.0';
 
   // =============================================
   // SERGIO_PHASES: plan Push/Pull/Pierna 3 días/semana
