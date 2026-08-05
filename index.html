@@ -63,6 +63,13 @@
               <span class="profile-option-name">Gely</span>
             </button>
           </div>
+          <button id="redoWizardBtn" class="profile-modal-action">
+            <span class="profile-modal-action-icon">🎯</span>
+            <span class="profile-modal-action-text">
+              <span class="profile-modal-action-title">Cambiar mi objetivo</span>
+              <span class="profile-modal-action-desc">Vuelve a responder las preguntas y genera otra rutina</span>
+            </span>
+          </button>
         </div>
       </div>
       <!-- TAB BAR -->
@@ -127,6 +134,17 @@
     <!-- STATS VIEW -->
     <div class="stats-view" id="statsView" style="display:none;">
       <div id="statsContent">
+        <!-- Rendered by JS -->
+      </div>
+    </div>
+  </div>
+
+  <!-- TUTORIAL: RUTINA A MEDIDA -->
+  <div id="wizardModal" class="wizard-modal hidden">
+    <div class="wizard-modal-overlay" id="wizardModalOverlay"></div>
+    <div class="wizard-modal-sheet">
+      <button class="wizard-close" id="wizardClose" aria-label="Cerrar">✕</button>
+      <div id="wizardBody">
         <!-- Rendered by JS -->
       </div>
     </div>

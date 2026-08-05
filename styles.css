@@ -1711,7 +1711,51 @@ body {
 
 .profile-modal-options {
   display: flex;
+  flex-wrap: wrap;
   gap: 12px;
+}
+
+/* Acción secundaria del menú: rehacer el tutorial. En fila y con menos peso
+   visual que los perfiles, que son la acción principal de este panel. */
+.profile-modal-action {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  margin-top: 14px;
+  padding: 14px 16px;
+  text-align: left;
+  font-family: var(--font);
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  transition: border-color var(--transition), background var(--transition);
+}
+
+.profile-modal-action:active {
+  background: var(--bg-card-hover);
+  border-color: var(--accent-primary);
+}
+
+.profile-modal-action-icon { font-size: 1.25rem; }
+
+.profile-modal-action-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.profile-modal-action-title {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.profile-modal-action-desc {
+  font-size: 0.74rem;
+  line-height: 1.4;
+  color: var(--text-muted);
 }
 
 .profile-option {
@@ -2299,4 +2343,481 @@ body {
   font-size: 0.85rem;
   line-height: 1.5;
   color: var(--text-primary);
+}
+
+/* =============================================
+   TAGS DEL CATÁLOGO
+   ============================================= */
+.db-chips-tags {
+  margin-bottom: 12px;
+}
+
+.db-chip-tag {
+  text-transform: none;
+}
+
+.db-card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 5px;
+}
+
+.db-tag {
+  padding: 2px 8px;
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text-muted);
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+}
+
+.db-tag-sin_material,
+.db-tag-casa { color: var(--accent-green); border-color: rgba(46, 204, 113, 0.35); }
+.db-tag-gimnasio { color: var(--accent-blue); border-color: rgba(52, 152, 219, 0.35); }
+.db-tag-principiante { color: var(--accent-green); border-color: rgba(46, 204, 113, 0.35); }
+.db-tag-avanzado { color: var(--accent-primary); border-color: rgba(233, 69, 96, 0.4); }
+.db-tag-movilidad { color: var(--accent-yellow); border-color: rgba(243, 156, 18, 0.35); }
+
+/* =============================================
+   TUTORIAL: RUTINA A MEDIDA
+   ============================================= */
+.db-wizard-cta {
+  width: 100%;
+  padding: 14px 16px;
+  margin-bottom: 14px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  font-family: var(--font);
+  text-align: left;
+  color: #fff;
+  background: linear-gradient(120deg, var(--accent-secondary), var(--accent-primary));
+  border: none;
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  transition: opacity var(--transition);
+}
+
+.db-wizard-cta:active { opacity: 0.8; }
+
+.wizard-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 600;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.wizard-modal.hidden { display: none; }
+
+.wizard-modal-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+}
+
+.wizard-modal-sheet {
+  position: relative;
+  width: 100%;
+  max-width: 480px;
+  max-height: 88vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  background: var(--bg-secondary);
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  border-top: 1px solid var(--border-color);
+  padding: 20px 20px 32px;
+}
+
+/* ---- Modo onboarding: pantalla completa, sin escapatoria ---- */
+
+/* Oculta la app por debajo mientras dura el onboarding */
+body.onboarding-lock {
+  overflow: hidden;
+}
+
+body.onboarding-lock > *:not(.wizard-modal):not(.toast) {
+  visibility: hidden;
+}
+
+/* Mientras carga el catálogo el asistente aún no está: fondo limpio + aviso */
+body.onboarding-lock::before {
+  content: '🏋️';
+  position: fixed;
+  inset: 0;
+  z-index: 890;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2.5rem;
+  background: var(--bg-primary);
+  animation: onboarding-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes onboarding-pulse {
+  0%, 100% { opacity: 0.45; }
+  50% { opacity: 1; }
+}
+
+.wizard-modal.onboarding {
+  align-items: stretch;
+  justify-content: stretch;
+  z-index: 900;
+  background: var(--bg-primary);
+}
+
+.wizard-modal.onboarding .wizard-modal-overlay {
+  display: none;
+}
+
+.wizard-modal.onboarding .wizard-modal-sheet {
+  max-width: none;
+  max-height: none;
+  height: 100%;
+  border: 0;
+  border-radius: 0;
+  background: var(--bg-primary);
+  padding: calc(env(safe-area-inset-top, 0px) + 32px) 20px
+           calc(env(safe-area-inset-bottom, 0px) + 32px);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.wizard-modal.onboarding .wizard-close {
+  display: none;
+}
+
+/* ---- Animaciones del onboarding ---- */
+
+.wizard-modal.onboarding {
+  animation: onboarding-fade-in 420ms ease-out both;
+}
+
+.wizard-modal.onboarding.closing {
+  animation: onboarding-fade-out 320ms ease-in both;
+}
+
+@keyframes onboarding-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes onboarding-fade-out {
+  from { opacity: 1; transform: scale(1); }
+  to   { opacity: 0; transform: scale(1.02); }
+}
+
+/* Entrada escalonada del contenido en cada paso */
+.wizard-modal.onboarding .wizard-enter > * {
+  animation: wizard-rise 460ms cubic-bezier(0.22, 0.9, 0.28, 1) both;
+}
+
+.wizard-modal.onboarding .wizard-enter > *:nth-child(1) { animation-delay: 0ms; }
+.wizard-modal.onboarding .wizard-enter > *:nth-child(2) { animation-delay: 55ms; }
+.wizard-modal.onboarding .wizard-enter > *:nth-child(3) { animation-delay: 100ms; }
+.wizard-modal.onboarding .wizard-enter > *:nth-child(4) { animation-delay: 140ms; }
+.wizard-modal.onboarding .wizard-enter > *:nth-child(n + 5) { animation-delay: 175ms; }
+
+/* Las opciones entran una detrás de otra, después del enunciado */
+.wizard-modal.onboarding .wizard-enter .wizard-option {
+  animation: wizard-rise 460ms cubic-bezier(0.22, 0.9, 0.28, 1) both;
+}
+
+.wizard-modal.onboarding .wizard-enter .wizard-option:nth-child(1) { animation-delay: 190ms; }
+.wizard-modal.onboarding .wizard-enter .wizard-option:nth-child(2) { animation-delay: 250ms; }
+.wizard-modal.onboarding .wizard-enter .wizard-option:nth-child(3) { animation-delay: 310ms; }
+.wizard-modal.onboarding .wizard-enter .wizard-option:nth-child(4) { animation-delay: 370ms; }
+.wizard-modal.onboarding .wizard-enter .wizard-option:nth-child(n + 5) { animation-delay: 430ms; }
+
+@keyframes wizard-rise {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* El icono de bienvenida respira suavemente */
+.wizard-modal.onboarding .wizard-welcome-icon {
+  animation: wizard-rise 520ms cubic-bezier(0.22, 0.9, 0.28, 1) both,
+             wizard-breathe 4s ease-in-out 600ms infinite;
+}
+
+@keyframes wizard-breathe {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50%      { transform: translateY(-3px) scale(1.05); }
+}
+
+/* La barra de progreso se rellena con transición en vez de saltar */
+.wizard-modal.onboarding .wizard-dot {
+  transition: background-color 380ms ease, opacity 380ms ease;
+}
+
+/* Respuesta táctil suave al elegir una opción */
+.wizard-modal.onboarding .wizard-option {
+  transition: transform 180ms ease, border-color 180ms ease, background-color 180ms ease;
+}
+
+.wizard-modal.onboarding .wizard-option:active {
+  transform: scale(0.975);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wizard-modal.onboarding,
+  .wizard-modal.onboarding.closing,
+  .wizard-modal.onboarding .wizard-enter > *,
+  .wizard-modal.onboarding .wizard-enter .wizard-option,
+  .wizard-modal.onboarding .wizard-welcome-icon,
+  body.onboarding-lock::before {
+    animation: none;
+  }
+}
+
+.wizard-welcome {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.wizard-welcome-icon {
+  font-size: 2.5rem;
+  line-height: 1;
+  margin-bottom: 10px;
+}
+
+.wizard-welcome-title {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+}
+
+.wizard-welcome-text {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+@media (min-width: 520px) {
+  .wizard-modal.onboarding .wizard-modal-sheet {
+    padding-left: max(20px, calc((100vw - 480px) / 2));
+    padding-right: max(20px, calc((100vw - 480px) / 2));
+  }
+}
+
+.wizard-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 32px;
+  height: 32px;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.wizard-progress {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.wizard-dot {
+  flex: 1;
+  height: 4px;
+  background: var(--border-color);
+  border-radius: 999px;
+  transition: background var(--transition);
+}
+
+.wizard-dot.done { background: var(--accent-primary); }
+
+.wizard-step-count {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.wizard-title {
+  margin: 4px 0 6px;
+  font-size: 1.15rem;
+  color: var(--text-primary);
+}
+
+.wizard-hint {
+  margin: 0 0 16px;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+.wizard-options {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.wizard-option {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 14px 16px;
+  text-align: left;
+  font-family: var(--font);
+  background: var(--bg-card);
+  border: 2px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.wizard-option:active { background: var(--bg-card-hover); }
+
+.wizard-option.selected {
+  border-color: var(--accent-primary);
+  background: var(--bg-card-hover);
+}
+
+/* Pasos de selección múltiple: casilla a la derecha para que se vea que se
+   pueden marcar varias opciones y que el paso no avanza solo. */
+.wizard-option.multi {
+  position: relative;
+  padding-right: 46px;
+}
+
+.wizard-option.multi::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  right: 16px;
+  width: 18px;
+  height: 18px;
+  margin-top: -9px;
+  border: 2px solid var(--border-color);
+  border-radius: 5px;
+  transition: all var(--transition);
+}
+
+.wizard-option.multi.selected::after {
+  content: '✓';
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #fff;
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+}
+
+.wizard-option-label {
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.wizard-option-desc {
+  font-size: 0.75rem;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+
+.wizard-nav {
+  display: flex;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.wizard-nav-final { flex-wrap: wrap; }
+
+.wizard-back,
+.wizard-regen,
+.wizard-save,
+.wizard-next {
+  padding: 12px 16px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  font-family: var(--font);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.wizard-back,
+.wizard-regen {
+  color: var(--text-secondary);
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+}
+
+.wizard-save {
+  flex: 1;
+  color: #fff;
+  background: var(--accent-green);
+  border: none;
+}
+
+.wizard-next {
+  flex: 1;
+  color: #fff;
+  background: var(--accent-primary);
+  border: none;
+}
+
+.wizard-next:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.wizard-day {
+  margin-top: 14px;
+  padding: 12px 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+}
+
+.wizard-day-head {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+
+.wizard-day-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.wizard-day-list li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 7px 0;
+  border-top: 1px solid var(--border-color);
+}
+
+.wizard-day-list li:first-child { border-top: none; }
+
+.wizard-ex-name {
+  font-size: 0.83rem;
+  color: var(--text-primary);
+  text-transform: capitalize;
+}
+
+.wizard-ex-meta {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  text-transform: capitalize;
+}
+
+.wizard-empty {
+  padding: 20px 0;
+  font-size: 0.85rem;
+  line-height: 1.6;
+  color: var(--text-secondary);
 }

@@ -811,6 +811,200 @@
       'cardiovascular system': 'cardio'
     };
 
+    // -----------------------------------------------------------------
+    // Nombres de ejercicio en español
+    // -----------------------------------------------------------------
+    // El dataset sólo trae el nombre en inglés y en minúsculas ("dumbbell
+    // incline row"). Traducirlo palabra por palabra daría "mancuerna
+    // inclinado remo", así que se clasifica cada término y se recompone en
+    // el orden español: movimiento + zona + matices + postura + material.
+    //
+    // No es una traducción completa: cubre el vocabulario habitual del
+    // dataset. Lo que no reconoce se deja tal cual, que es preferible a
+    // inventar. Los nombres propios ("london bridge") se quedan en inglés.
+
+    // Ruido del dataset que no aporta nada al nombre.
+    var NAME_NOISE = /\b(male|female|v\.?\s*\d+|version\s*\d+)\b/g;
+
+    // Expresiones de varias palabras. Se sustituyen antes de tokenizar,
+    // porque su traducción no es la suma de sus partes.
+    var NAME_PHRASES = [
+      ['lat pulldown', 'jalón al pecho'],
+      ['bench press', 'press banca'],
+      ['push up', 'flexiones'], ['push-up', 'flexiones'], ['pushup', 'flexiones'],
+      ['pull up', 'dominadas'], ['pull-up', 'dominadas'], ['pullup', 'dominadas'],
+      ['chin up', 'dominadas supinas'], ['chin-up', 'dominadas supinas'],
+      ['sit up', 'abdominales'], ['sit-up', 'abdominales'], ['situp', 'abdominales'],
+      ['step up', 'subida al cajón'], ['step-up', 'subida al cajón'],
+      ['calf raise', 'elevación de talones'],
+      ['leg raise', 'elevación de piernas'],
+      ['lateral raise', 'elevación lateral'],
+      ['front raise', 'elevación frontal'],
+      ['upright row', 'remo al mentón'],
+      ['face pull', 'face pull'],
+      ['hip thrust', 'empuje de cadera'],
+      ['glute bridge', 'puente de glúteos'],
+      ['good morning', 'buenos días'],
+      ['romanian deadlift', 'peso muerto rumano'],
+      ['straight leg deadlift', 'peso muerto piernas rectas'],
+      ['stiff leg deadlift', 'peso muerto piernas rígidas'],
+      ['close grip', 'agarre cerrado'],
+      ['wide grip', 'agarre abierto'],
+      ['neutral grip', 'agarre neutro'],
+      ['reverse grip', 'agarre invertido'],
+      ['one arm', 'a una mano'], ['single arm', 'a una mano'],
+      ['one leg', 'a una pierna'], ['single leg', 'a una pierna'],
+      ['bent over', 'inclinado'], ['bent-over', 'inclinado'],
+      ['exercise ball', 'fitball'], ['stability ball', 'fitball'],
+      ['swiss ball', 'fitball'], ['bosu ball', 'bosu'],
+      ['medicine ball', 'balón medicinal'],
+      ['ez barbell', 'barra Z'], ['ez bar', 'barra Z'],
+      ['olympic barbell', 'barra olímpica'],
+      ['smith machine', 'multipower'],
+      ['leverage machine', 'máquina'], ['sled machine', 'máquina de trineo'],
+      ['resistance band', 'banda elástica'],
+      ['body weight', ''], ['bodyweight', ''],
+      ['jump rope', 'comba'],
+      ['mountain climber', 'escalador'],
+      ['jumping jack', 'jumping jacks'],
+      ['russian twist', 'giro ruso'],
+      ['skull crusher', 'press francés'],
+      ['preacher curl', 'curl predicador'],
+      ['hammer curl', 'curl martillo'],
+      ['concentration curl', 'curl concentrado'],
+      ['wrist curl', 'curl de muñeca'],
+      ['shoulder press', 'press militar'],
+      ['military press', 'press militar'],
+      ['chest fly', 'aperturas de pecho'],
+      ['pec deck', 'contractor de pecho'],
+      ['tricep', 'tríceps'], ['triceps', 'tríceps'], ['bicep', 'bíceps'], ['biceps', 'bíceps']
+    ];
+
+    // Categorías. El orden de montaje es el de esta lista.
+    var NAME_MOVE = {
+      'curl': 'curl', 'press': 'press', 'row': 'remo', 'squat': 'sentadilla',
+      'raise': 'elevación', 'extension': 'extensión', 'extensions': 'extensión',
+      'fly': 'aperturas', 'flye': 'aperturas', 'flyes': 'aperturas',
+      'crunch': 'crunch', 'crunches': 'crunch', 'lunge': 'zancada',
+      'deadlift': 'peso muerto', 'pulldown': 'jalón', 'pullover': 'pullover',
+      'dip': 'fondos', 'dips': 'fondos', 'stretch': 'estiramiento',
+      'twist': 'giro', 'shrug': 'encogimiento de hombros', 'plank': 'plancha',
+      'thrust': 'empuje', 'bridge': 'puente', 'pull': 'tirón', 'push': 'empuje',
+      'kickback': 'patada', 'pushdown': 'extensión en polea', 'run': 'carrera',
+      'walk': 'caminata', 'jump': 'salto', 'hold': 'isométrico', 'bend': 'flexión',
+      'clean': 'cargada', 'snatch': 'arrancada', 'swing': 'swing', 'burpee': 'burpee',
+      'rotation': 'rotación', 'abduction': 'abducción', 'adduction': 'aducción',
+      'curls': 'curl', 'presses': 'press', 'rows': 'remo', 'squats': 'sentadilla'
+    };
+    var NAME_ZONE = {
+      'chest': 'de pecho', 'shoulder': 'de hombro', 'shoulders': 'de hombro',
+      'tríceps': 'de tríceps', 'bíceps': 'de bíceps', 'leg': 'de pierna',
+      'legs': 'de piernas', 'hip': 'de cadera', 'wrist': 'de muñeca',
+      'calf': 'de gemelo', 'glute': 'de glúteo', 'glutes': 'de glúteo',
+      'ab': 'abdominal', 'abs': 'abdominal', 'oblique': 'oblicuo',
+      'back': 'de espalda', 'neck': 'de cuello', 'thigh': 'de muslo',
+      'hamstring': 'femoral', 'quad': 'de cuádriceps', 'lat': 'de dorsal',
+      'trap': 'de trapecio', 'forearm': 'de antebrazo', 'ankle': 'de tobillo',
+      'knee': 'de rodilla', 'spine': 'de espalda baja', 'groin': 'de aductores'
+    };
+    var NAME_MOD = {
+      'reverse': 'inverso', 'lateral': 'lateral', 'front': 'frontal',
+      'rear': 'posterior', 'side': 'lateral', 'alternate': 'alterno',
+      'alternating': 'alterno', 'overhead': 'sobre la cabeza',
+      'close': 'cerrado', 'wide': 'abierto', 'narrow': 'estrecho',
+      'straight': 'recto', 'bent': 'flexionado', 'cross': 'cruzado',
+      'high': 'alto', 'low': 'bajo', 'jumping': 'con salto', 'weighted': 'con lastre',
+      'assisted': 'asistido', 'isometric': 'isométrico', 'static': 'estático',
+      'dynamic': 'dinámico', 'bulgarian': 'búlgara', 'sumo': 'sumo',
+      'hack': 'hack', 'zercher': 'zercher', 'arnold': 'arnold', 'spider': 'araña',
+      'twisting': 'con giro', 'walking': 'caminando', 'partial': 'parcial'
+    };
+    var NAME_POSTURE = {
+      'seated': 'sentado', 'standing': 'de pie', 'lying': 'tumbado',
+      'kneeling': 'de rodillas', 'incline': 'inclinado', 'decline': 'declinado',
+      'inclined': 'inclinado', 'prone': 'boca abajo', 'supine': 'boca arriba',
+      'hanging': 'colgado', 'floor': 'en el suelo', 'wall': 'en la pared',
+      'bench': 'en banco', 'inclinado': 'inclinado'
+    };
+    var NAME_EQUIP = {
+      'dumbbell': 'con mancuernas', 'dumbbells': 'con mancuernas',
+      'barbell': 'con barra', 'bar': 'con barra', 'cable': 'en polea',
+      'band': 'con banda', 'kettlebell': 'con kettlebell', 'lever': 'en máquina',
+      'machine': 'en máquina', 'multipower': 'en multipower', 'fitball': 'con fitball',
+      'bosu': 'en bosu', 'rope': 'con cuerda', 'roller': 'con rueda',
+      'sled': 'en trineo', 'weight': 'con peso'
+    };
+
+    // Palabras de relleno que no aportan al nombre en español.
+    var NAME_SKIP = { 'on': 1, 'with': 1, 'the': 1, 'a': 1, 'to': 1, 'and': 1, 'of': 1, 'in': 1, 'for': 1, 'up': 1, 'over': 1, 'exercise': 1 };
+
+    function translateExerciseName(raw) {
+      var s = String(raw || '').toLowerCase();
+      if (!s) return '';
+      s = s.replace(NAME_NOISE, ' ');
+
+      // Frases primero: se marcan con '~' para que no se vuelvan a partir.
+      NAME_PHRASES.forEach(function (p) {
+        var re = new RegExp('(^|[^a-záéíóúñ])' + p[0].replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&') + '(?![a-záéíóúñ])', 'g');
+        s = s.replace(re, function (m, pre) { return pre + (p[1] ? '~' + p[1].replace(/ /g, '~') : ''); });
+      });
+
+      // Las frases que son matices ("a una mano") van detrás del movimiento;
+      // las que son el movimiento en sí ("press banca") hacen de núcleo.
+      var PHRASE_MOD = {
+        'a una mano': 1, 'a una pierna': 1, 'agarre cerrado': 1, 'agarre abierto': 1,
+        'agarre neutro': 1, 'agarre invertido': 1, 'inclinado': 1, 'con lastre': 1,
+        'asistido': 1, 'barra Z': 1, 'barra olímpica': 1, 'fitball': 1, 'bosu': 1,
+        'multipower': 1, 'máquina': 1, 'banda elástica': 1, 'balón medicinal': 1
+      };
+      var move = [], zone = [], mod = [], posture = [], equip = [];
+      var phraseHead = [], phraseMod = [];
+      var unknown = false;
+      s.split(/[\s\-\/]+/).forEach(function (w) {
+        w = w.replace(/[(),.]/g, '').trim();
+        if (!w || NAME_SKIP[w]) return;
+        if (w.indexOf('~') !== -1) {
+          var txt = w.replace(/~/g, ' ').trim();
+          push(PHRASE_MOD[txt] ? phraseMod : phraseHead, txt);
+          return;
+        }
+        if (NAME_MOVE[w]) { push(move, NAME_MOVE[w]); return; }
+        if (NAME_ZONE[w]) { push(zone, NAME_ZONE[w]); return; }
+        if (NAME_MOD[w]) { push(mod, NAME_MOD[w]); return; }
+        if (NAME_POSTURE[w]) { push(posture, NAME_POSTURE[w]); return; }
+        if (NAME_EQUIP[w]) { push(equip, NAME_EQUIP[w]); return; }
+        unknown = true;   // palabra que no sabemos traducir
+      });
+      function push(arr, v) { if (v && arr.indexOf(v) === -1) arr.push(v); }
+
+      // Regla de oro: o se entiende el nombre entero, o no se traduce. Una
+      // traducción a medias sale como "Arm slingers de rodilla colgado", que
+      // es peor que dejar el original en inglés bien escrito.
+      if (unknown) return capitalize(String(raw || '').replace(NAME_NOISE, '').trim());
+
+      var head = move.length ? move.concat(phraseHead) : phraseHead;
+      var parts = head.concat(zone, phraseMod, mod, posture, equip);
+      var out = parts.join(' ').replace(/\s+/g, ' ').trim();
+      if (!out) return capitalize(String(raw || ''));
+      return capitalize(out);
+    }
+
+    function capitalize(s) {
+      return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+    }
+
+    // TARGET_ES son términos de búsqueda (sin acentos y con sinónimos), así
+    // que para mostrar el músculo en la rutina hace falta la forma bonita.
+    var TARGET_DISPLAY = {
+      'abs': 'Abdominales', 'biceps': 'Bíceps', 'triceps': 'Tríceps',
+      'pectorals': 'Pectoral', 'delts': 'Deltoides', 'lats': 'Dorsal',
+      'upper back': 'Espalda alta', 'traps': 'Trapecio', 'glutes': 'Glúteos',
+      'quads': 'Cuádriceps', 'hamstrings': 'Isquiotibiales', 'calves': 'Gemelos',
+      'adductors': 'Aductores', 'abductors': 'Abductores', 'forearms': 'Antebrazos',
+      'spine': 'Lumbar', 'serratus anterior': 'Serrato',
+      'levator scapulae': 'Cuello', 'cardiovascular system': 'Cardio'
+    };
+
     // Quita acentos y baja a minúsculas para comparar
     function norm(s) {
       var t = String(s || '').toLowerCase();
@@ -985,16 +1179,170 @@
     return {
       CDN: CDN,
       load: load, get: get, search: search,
+      all: function () { return items ? items.slice() : []; },
       imageUrl: imageUrl, gifUrl: gifUrl, repoUrl: repoUrl,
       bodyParts: bodyParts,
       labelBodyPart: function (bp) { return BODY_PART_ES[bp] ? BODY_PART_ES[bp].split(' ')[0] : bp; },
       labelEquipment: function (eq) { return EQUIPMENT_ES[eq] ? EQUIPMENT_ES[eq].split(' ')[0] : eq; },
       labelTarget: function (tg) { return TARGET_ES[tg] ? TARGET_ES[tg].split(' ')[0] : tg; },
+      labelName: translateExerciseName,
+      labelTargetDisplay: function (tg) { return TARGET_DISPLAY[tg] || capitalize(tg); },
       isLoaded: function () { return !!items; },
       count: function () { return items ? items.length : 0; },
       norm: norm
     };
   })();
+
+  // =============================================
+  // EXERCISE_TAGS: categorías derivadas del dataset
+  // ---------------------------------------------
+  // El dataset no trae tags, así que se calculan por reglas a partir de
+  // bp/eq/tg y del nombre. Es preferible a etiquetar 1.324 fichas a mano:
+  // al regenerar el índice los tags siguen siendo correctos sin tocar nada.
+  // Cada ejercicio recibe tags de cuatro familias:
+  //   place    casa | gimnasio | sin_material
+  //   pattern  empuje | tiron | pierna | core | cardio | brazos
+  //   goal     fuerza | hipertrofia | tono | perder_peso | movilidad
+  //   level    principiante | intermedio | avanzado
+  // =============================================
+  var EXERCISE_TAGS = (function () {
+
+    // Material que se puede tener en casa. El resto se considera de gimnasio.
+    var HOME_EQUIPMENT = {
+      'body weight': 1, 'dumbbell': 1, 'band': 1, 'resistance band': 1,
+      'kettlebell': 1, 'stability ball': 1, 'medicine ball': 1, 'roller': 1,
+      'wheel roller': 1, 'rope': 1, 'bosu ball': 1, 'weighted': 1
+    };
+
+    // Material que exige técnica o carga alta: sube el nivel del ejercicio.
+    var ADVANCED_EQUIPMENT = {
+      'barbell': 1, 'olympic barbell': 1, 'ez barbell': 1, 'trap bar': 1,
+      'sled machine': 1, 'tire': 1, 'kettlebell': 1
+    };
+
+    // Material guiado: seguro para quien empieza aunque mueva mucho peso.
+    var GUIDED_EQUIPMENT = {
+      'leverage machine': 1, 'smith machine': 1, 'cable': 1, 'assisted': 1,
+      'band': 1, 'resistance band': 1
+    };
+
+    // tg -> patrón de movimiento
+    var TARGET_PATTERN = {
+      'pectorals': 'empuje', 'triceps': 'empuje', 'delts': 'empuje',
+      'serratus anterior': 'empuje',
+      'lats': 'tiron', 'upper back': 'tiron', 'traps': 'tiron',
+      'biceps': 'tiron', 'forearms': 'tiron', 'levator scapulae': 'tiron',
+      'glutes': 'pierna', 'quads': 'pierna', 'hamstrings': 'pierna',
+      'calves': 'pierna', 'adductors': 'pierna', 'abductors': 'pierna',
+      'abs': 'core', 'spine': 'core',
+      'cardiovascular system': 'cardio'
+    };
+
+    // Ejercicios de brazo aislado: útiles como accesorio, nunca como básico.
+    var ARM_TARGETS = { 'biceps': 1, 'triceps': 1, 'forearms': 1 };
+
+    // Palabras del nombre que marcan trabajo de movilidad o estiramiento.
+    var MOBILITY_RE = /\b(stretch|mobility|rotation|dynamic|warm[- ]?up|foam roll|roll)\b/;
+
+    // Palabras del nombre que marcan trabajo explosivo o metabólico.
+    var CONDITIONING_RE = /\b(jump|jumping|burpee|hop|sprint|skip|mountain climber|clean|snatch|swing|thruster|jack)\b/;
+
+    // Nombres que indican una variante exigente (unilateral, inestable, lastrada).
+    var HARD_RE = /\b(one arm|single leg|one leg|pistol|handstand|muscle up|planche|lever|weighted|deficit|archer|clap|explosive|bosu|balance)\b/;
+
+    // Nombres que indican una regresión o versión asistida.
+    var EASY_RE = /\b(kneeling|knee|assisted|incline push|wall|seated|machine|supported|partial|quarter|half|isometric|band)\b/;
+
+    // Movimientos básicos multiarticulares: son los que abren cada sesión.
+    var COMPOUND_RE = /\b(squat|deadlift|press|row|pull-up|pullup|chin-up|dip|lunge|push-up|pushup|thrust|bridge|clean|snatch|pulldown|step-up)\b/;
+
+    // Movimientos de aislamiento: fly, curl, extensión, elevación…
+    var ISOLATION_RE = /\b(fly|flye|curl|extension|raise|kickback|pullover|shrug|crunch|lateral raise)\b/;
+
+    function tagsFor(rec) {
+      if (!rec) return null;
+      if (rec._t) return rec._t;
+
+      var name = String(rec.n || '').toLowerCase();
+      var eq = rec.eq || '';
+      var tg = rec.tg || '';
+      var bp = rec.bp || '';
+      var t = {};
+
+      // --- place ---
+      if (eq === 'body weight') { t.sin_material = 1; t.casa = 1; }
+      else if (HOME_EQUIPMENT[eq]) t.casa = 1;
+      else t.gimnasio = 1;
+
+      // --- pattern ---
+      var pattern = TARGET_PATTERN[tg] || (bp === 'cardio' ? 'cardio' : 'core');
+      t[pattern] = 1;
+      if (ARM_TARGETS[tg]) t.brazos = 1;
+
+      // --- goal ---
+      var isCompound = COMPOUND_RE.test(name);
+      var isIsolation = !isCompound && ISOLATION_RE.test(name);
+      if (MOBILITY_RE.test(name)) {
+        t.movilidad = 1;
+      } else if (pattern === 'cardio' || CONDITIONING_RE.test(name)) {
+        t.perder_peso = 1;
+        t.tono = 1;
+      } else {
+        // Los básicos con carga sirven para fuerza; todo lo demás construye
+        // volumen o tono según se use, así que ambos objetivos los admiten.
+        if (isCompound && eq !== 'body weight') t.fuerza = 1;
+        t.hipertrofia = 1;
+        if (isIsolation || eq === 'body weight' || HOME_EQUIPMENT[eq]) t.tono = 1;
+      }
+
+      // --- level ---
+      var level = 'intermedio';
+      if (HARD_RE.test(name) || (ADVANCED_EQUIPMENT[eq] && isCompound)) level = 'avanzado';
+      else if (EASY_RE.test(name) || GUIDED_EQUIPMENT[eq] || (eq === 'body weight' && !isCompound)) level = 'principiante';
+      t[level] = 1;
+      t._level = level;
+      t._pattern = pattern;
+      t._compound = isCompound;
+
+      rec._t = t;
+      return t;
+    }
+
+    function has(rec, tag) {
+      var t = tagsFor(rec);
+      return !!(t && t[tag]);
+    }
+
+    // Un ejercicio vale para un nivel si es de ese nivel o más fácil:
+    // a un avanzado no se le esconde la sentadilla básica.
+    var LEVEL_ORDER = { principiante: 0, intermedio: 1, avanzado: 2 };
+    function fitsLevel(rec, level) {
+      var t = tagsFor(rec);
+      if (!t) return false;
+      return LEVEL_ORDER[t._level] <= LEVEL_ORDER[level];
+    }
+
+    return { tagsFor: tagsFor, has: has, fitsLevel: fitsLevel, levelOrder: LEVEL_ORDER };
+  })();
+
+  // Etiquetas visibles de los tags con los que se puede filtrar el catálogo.
+  var TAG_FILTERS = [
+    { tag: 'sin_material', label: '🤸 Sin material' },
+    { tag: 'casa', label: '🏠 En casa' },
+    { tag: 'gimnasio', label: '🏢 Gimnasio' },
+    { tag: 'empuje', label: '🔥 Empuje' },
+    { tag: 'tiron', label: '💪 Tirón' },
+    { tag: 'pierna', label: '🦵 Pierna' },
+    { tag: 'core', label: '🧘 Core' },
+    { tag: 'cardio', label: '❤️ Cardio' },
+    { tag: 'fuerza', label: '🏋️ Fuerza' },
+    { tag: 'hipertrofia', label: '📈 Volumen' },
+    { tag: 'tono', label: '✨ Tono' },
+    { tag: 'perder_peso', label: '🔥 Quemar' },
+    { tag: 'movilidad', label: '🌀 Movilidad' },
+    { tag: 'principiante', label: '🌱 Principiante' },
+    { tag: 'avanzado', label: '⚡ Avanzado' }
+  ];
 
   // =============================================
   // RUNNING_RECOVERY: colección "Recuperación running"
@@ -1263,6 +1611,12 @@
   // =============================================
   // PROFILES
   // =============================================
+  // El perfil del tutorial se registra durante el arranque, antes que el resto
+  // del bloque del tutorial, así que sus constantes viven aquí: declaradas más
+  // abajo llegarían sin valor a installCustomPlan().
+  var CUSTOM_PROFILE_ID = 'mia';
+  var CUSTOM_PLAN_KEY = 'gym_custom_plan';
+
   var PROFILES = {
     sergio: { name: 'Sergio', initial: 'S', phases: SERGIO_PHASES, warmup: WARMUP, defaultDays: [1, 3, 5], daysLabel: '3 días por semana' },
     eva:    { name: 'Eva',    initial: 'E', phases: EVA_PHASES,    warmup: WARMUP_EVA, defaultDays: [1, 4], daysLabel: '2 días por semana' },
@@ -1281,7 +1635,13 @@
 
   migrateOldData();
 
+  // El plan generado por el tutorial es un perfil más, así que se registra
+  // antes de resolver el perfil activo (si no, «Mi plan» no existiría todavía).
+  var savedCustomPlan = loadCustomPlan();
+  if (savedCustomPlan) installCustomPlan(savedCustomPlan);
+
   var activeProfile = localStorage.getItem('gym_active_profile') || 'sergio';
+  if (!PROFILES[activeProfile]) activeProfile = 'sergio';
 
   // These are updated by switchProfile()
   var PHASES = PROFILES[activeProfile].phases;
@@ -1735,6 +2095,7 @@
   // =============================================
   var dbQuery = '';
   var dbFilterBodyPart = '';
+  var dbFilterTags = [];      // tags activos (se acumulan: todos deben cumplirse)
   var dbOpenId = null;
   var dbCollection = 'all';   // 'all' = dataset completo · 'running' = recuperación running
 
@@ -1771,6 +2132,9 @@
       return;
     }
 
+    // Acceso al tutorial que genera una rutina a medida
+    html += '<button class="db-wizard-cta" id="dbWizardBtn">🎯 ¿No sabes por dónde empezar? Crea tu rutina a medida</button>';
+
     html += '<div class="db-chips">';
     html += '  <button class="db-chip' + (dbFilterBodyPart === '' ? ' active' : '') + '" data-bp="">Todos</button>';
     EXERCISE_DB.bodyParts().forEach(function (bp) {
@@ -1778,8 +2142,28 @@
     });
     html += '</div>';
 
-    var results = EXERCISE_DB.search(dbQuery, { limit: 60, bodyPart: dbFilterBodyPart || null });
-    html += '<div class="db-count">' + results.length + ' de ' + EXERCISE_DB.count() + ' ejercicios</div>';
+    html += '<div class="db-chips db-chips-tags">';
+    TAG_FILTERS.forEach(function (f) {
+      var on = dbFilterTags.indexOf(f.tag) !== -1;
+      html += '  <button class="db-chip db-chip-tag' + (on ? ' active' : '') + '" data-tag="' + f.tag + '">' + f.label + '</button>';
+    });
+    html += '</div>';
+
+    // Se pide el catálogo entero porque el filtro por tags se aplica después:
+    // recortar antes dejaría fuera coincidencias válidas.
+    var results = EXERCISE_DB.search(dbQuery, { limit: 2000, bodyPart: dbFilterBodyPart || null });
+    if (dbFilterTags.length) {
+      results = results.filter(function (rec) {
+        for (var i = 0; i < dbFilterTags.length; i++) {
+          if (!EXERCISE_TAGS.has(rec, dbFilterTags[i])) return false;
+        }
+        return true;
+      });
+    }
+    var totalMatches = results.length;
+    results = results.slice(0, 60);
+    html += '<div class="db-count">' + results.length
+      + (totalMatches > results.length ? ' de ' + totalMatches + ' coincidencias' : ' de ' + EXERCISE_DB.count() + ' ejercicios') + '</div>';
 
     html += '<div class="db-grid">';
     results.forEach(function (rec, idx) {
@@ -1793,6 +2177,7 @@
       html += '    <div class="db-card-info">';
       html += '      <div class="db-card-name">' + escapeHtml(rec.n) + '</div>';
       html += '      <div class="db-card-meta">' + escapeHtml(EXERCISE_DB.labelTarget(rec.tg)) + ' · ' + escapeHtml(EXERCISE_DB.labelEquipment(rec.eq)) + '</div>';
+      html += '      <div class="db-card-tags">' + renderTagBadges(rec) + '</div>';
       html += '    </div>';
       html += '  </div>';
       if (open && rec.es && rec.es.length) {
@@ -1812,6 +2197,31 @@
 
     el.innerHTML = html;
     bindExerciseBrowserListeners(el);
+  }
+
+  // Insignias de los tags más informativos de una ficha (material, patrón y
+  // nivel). No se pintan todos: la tarjeta quedaría ilegible.
+  var TAG_BADGE_LABEL = {
+    sin_material: 'sin material', casa: 'casa', gimnasio: 'gimnasio',
+    empuje: 'empuje', tiron: 'tirón', pierna: 'pierna', core: 'core',
+    cardio: 'cardio', movilidad: 'movilidad',
+    principiante: 'principiante', intermedio: 'intermedio', avanzado: 'avanzado'
+  };
+  var TAG_BADGE_ORDER = ['sin_material', 'casa', 'gimnasio', 'empuje', 'tiron', 'pierna', 'core', 'cardio', 'movilidad', 'principiante', 'intermedio', 'avanzado'];
+
+  function renderTagBadges(rec) {
+    var t = EXERCISE_TAGS.tagsFor(rec);
+    if (!t) return '';
+    var out = '', shown = 0;
+    for (var i = 0; i < TAG_BADGE_ORDER.length && shown < 3; i++) {
+      var tag = TAG_BADGE_ORDER[i];
+      // "casa" es redundante si ya se muestra "sin material"
+      if (tag === 'casa' && t.sin_material) continue;
+      if (!t[tag]) continue;
+      out += '<span class="db-tag db-tag-' + tag + '">' + TAG_BADGE_LABEL[tag] + '</span>';
+      shown++;
+    }
+    return out;
   }
 
   // Colección "Recuperación running": catálogo propio, con la animación
@@ -1908,14 +2318,28 @@
         dbCollection = btn.dataset.collection;
         dbQuery = '';
         dbFilterBodyPart = '';
+        dbFilterTags = [];
         dbOpenId = null;
         renderExerciseBrowser();
       });
     });
 
-    el.querySelectorAll('.db-chip').forEach(function (chip) {
+    var wizardBtn = document.getElementById('dbWizardBtn');
+    if (wizardBtn) wizardBtn.addEventListener('click', function () { openRoutineWizard(false); });
+
+    el.querySelectorAll('.db-chip[data-bp]').forEach(function (chip) {
       chip.addEventListener('click', function () {
         dbFilterBodyPart = chip.dataset.bp;
+        dbOpenId = null;
+        renderExerciseBrowser();
+      });
+    });
+
+    el.querySelectorAll('.db-chip-tag').forEach(function (chip) {
+      chip.addEventListener('click', function () {
+        var tag = chip.dataset.tag;
+        var i = dbFilterTags.indexOf(tag);
+        if (i === -1) dbFilterTags.push(tag); else dbFilterTags.splice(i, 1);
         dbOpenId = null;
         renderExerciseBrowser();
       });
@@ -3203,6 +3627,635 @@
   function formatDateShort(d) { return String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0'); }
 
   // =============================================
+  // TUTORIAL: rutina a medida
+  // ---------------------------------------------
+  // Pregunta objetivo, material, días y nivel, y con eso arma una rutina
+  // completa (3 fases de 4 semanas) eligiendo ejercicios del dataset por sus
+  // tags. La rutina se guarda como un perfil más ('mia'), así que hereda todo
+  // lo que ya funciona: calendario, pesos, progreso y estadísticas.
+  // =============================================
+  var WIZARD_STEPS = [
+    {
+      key: 'goal', title: '¿Qué quieres conseguir?', multi: true,
+      hint: 'Puedes marcar varios objetivos. Ajustan los ejercicios, las series y las repeticiones.',
+      options: [
+        { value: 'fuerza', label: '🏋️ Ganar fuerza', desc: 'Pocas repeticiones, más peso, movimientos básicos' },
+        { value: 'hipertrofia', label: '📈 Ganar músculo', desc: 'Volumen medio-alto, 8-12 repeticiones' },
+        { value: 'tono', label: '✨ Tonificar', desc: 'Repeticiones altas, descansos cortos, cuerpo completo' },
+        { value: 'perder_peso', label: '🔥 Perder peso', desc: 'Circuitos, poco descanso y trabajo metabólico' },
+        { value: 'movilidad', label: '🌀 Movilidad y salud', desc: 'Trabajo suave de core, movilidad y estabilidad' }
+      ]
+    },
+    {
+      key: 'place', title: '¿Dónde vas a entrenar?', multi: true,
+      hint: 'Puedes marcar varios sitios. Sólo se elegirán ejercicios que puedas hacer con lo que tengas.',
+      options: [
+        { value: 'gimnasio', label: '🏢 En el gimnasio', desc: 'Máquinas, barras, poleas y mancuernas' },
+        { value: 'casa', label: '🏠 En casa con material', desc: 'Mancuernas, bandas, kettlebell o fitball' },
+        { value: 'sin_material', label: '🤸 Sin material', desc: 'Sólo peso corporal' }
+      ]
+    },
+    {
+      key: 'days', title: '¿Cuántos días por semana?',
+      hint: 'Con más días la rutina se reparte en más grupos musculares.',
+      options: [
+        { value: '2', label: '2 días', desc: 'Dos sesiones de cuerpo completo' },
+        { value: '3', label: '3 días', desc: 'Empuje · Tirón · Pierna' },
+        { value: '4', label: '4 días', desc: 'Torso · Pierna, dos veces' },
+        { value: '5', label: '5 días', desc: 'Un grupo muscular por sesión' }
+      ]
+    },
+    {
+      key: 'level', title: '¿Cuál es tu experiencia?',
+      hint: 'Marca el nivel de dificultad técnica de los ejercicios propuestos.',
+      options: [
+        { value: 'principiante', label: '🌱 Empiezo ahora', desc: 'Menos de 6 meses entrenando' },
+        { value: 'intermedio', label: '💪 Tengo experiencia', desc: 'Entreno con regularidad desde hace tiempo' },
+        { value: 'avanzado', label: '⚡ Avanzado', desc: 'Domino la técnica de los básicos' }
+      ]
+    },
+    {
+      key: 'focus', title: '¿Alguna zona prioritaria?',
+      hint: 'Se añade un ejercicio extra de esa zona en cada sesión que la trabaje.',
+      options: [
+        { value: '', label: '⚖️ Equilibrado', desc: 'Sin prioridad, todo por igual' },
+        { value: 'pierna', label: '🦵 Pierna y glúteo', desc: 'Más volumen en tren inferior' },
+        { value: 'empuje', label: '🔥 Pecho y hombro', desc: 'Más volumen en empuje' },
+        { value: 'tiron', label: '💪 Espalda y brazos', desc: 'Más volumen en tirón' },
+        { value: 'core', label: '🧘 Abdomen y core', desc: 'Más trabajo de zona media' }
+      ]
+    }
+  ];
+
+  // Reparto de patrones por sesión según los días disponibles.
+  var SPLITS = {
+    2: [
+      { day: 'Cuerpo completo A', emoji: '🔥', title: 'Empuje, pierna y core', patterns: ['pierna', 'empuje', 'tiron', 'core'] },
+      { day: 'Cuerpo completo B', emoji: '💪', title: 'Tirón, pierna y core', patterns: ['tiron', 'pierna', 'empuje', 'core'] }
+    ],
+    3: [
+      { day: 'Empuje', emoji: '🔥', title: 'Pecho, hombro y tríceps', patterns: ['empuje', 'empuje', 'brazos'] },
+      { day: 'Tirón', emoji: '💪', title: 'Espalda, hombro posterior y bíceps', patterns: ['tiron', 'tiron', 'brazos'] },
+      { day: 'Pierna', emoji: '🦵', title: 'Pierna y core', patterns: ['pierna', 'pierna', 'core'] }
+    ],
+    4: [
+      { day: 'Torso A', emoji: '🔥', title: 'Pecho, hombro y tríceps', patterns: ['empuje', 'empuje', 'brazos'] },
+      { day: 'Pierna A', emoji: '🦵', title: 'Cuádriceps, glúteo y core', patterns: ['pierna', 'pierna', 'core'] },
+      { day: 'Torso B', emoji: '💪', title: 'Espalda, hombro posterior y bíceps', patterns: ['tiron', 'tiron', 'brazos'] },
+      { day: 'Pierna B', emoji: '🦵', title: 'Isquios, glúteo y core', patterns: ['pierna', 'pierna', 'core'] }
+    ],
+    5: [
+      { day: 'Pecho', emoji: '🔥', title: 'Pecho y tríceps', patterns: ['empuje', 'empuje', 'brazos'] },
+      { day: 'Espalda', emoji: '💪', title: 'Espalda y bíceps', patterns: ['tiron', 'tiron', 'brazos'] },
+      { day: 'Pierna', emoji: '🦵', title: 'Pierna completa', patterns: ['pierna', 'pierna', 'pierna'] },
+      { day: 'Hombro', emoji: '🎯', title: 'Hombro y brazos', patterns: ['empuje', 'brazos', 'brazos'] },
+      { day: 'Core', emoji: '🧘', title: 'Zona media y estabilidad', patterns: ['core', 'core', 'core'] }
+    ]
+  };
+
+  // Días de la semana por defecto según cuántas sesiones tenga la rutina.
+  var DEFAULT_DAYS_BY_COUNT = { 2: [1, 4], 3: [1, 3, 5], 4: [1, 2, 4, 5], 5: [1, 2, 3, 4, 5] };
+
+  // Series, repeticiones y descanso por objetivo y fase.
+  // Las tres fases repiten los mismos ejercicios subiendo la exigencia.
+  var GOAL_SCHEME = {
+    fuerza: [
+      { series: 3, reps: '8', repsMin: 8, repsMax: 8, rest: '120 seg' },
+      { series: 4, reps: '6', repsMin: 6, repsMax: 6, rest: '150 seg' },
+      { series: 5, reps: '5', repsMin: 5, repsMax: 5, rest: '180 seg' }
+    ],
+    hipertrofia: [
+      { series: 3, reps: '12', repsMin: 12, repsMax: 12, rest: '90 seg' },
+      { series: 4, reps: '10', repsMin: 10, repsMax: 10, rest: '90 seg' },
+      { series: 4, reps: '8', repsMin: 8, repsMax: 8, rest: '75 seg' }
+    ],
+    tono: [
+      { series: 3, reps: '15', repsMin: 15, repsMax: 15, rest: '60 seg' },
+      { series: 3, reps: '15', repsMin: 15, repsMax: 15, rest: '45 seg' },
+      { series: 4, reps: '15', repsMin: 15, repsMax: 15, rest: '45 seg' }
+    ],
+    perder_peso: [
+      { series: 3, reps: '15', repsMin: 15, repsMax: 15, rest: '45 seg' },
+      { series: 4, reps: '15', repsMin: 15, repsMax: 15, rest: '30 seg' },
+      { series: 4, reps: '20', repsMin: 20, repsMax: 20, rest: '30 seg' }
+    ],
+    movilidad: [
+      { series: 2, reps: '12', repsMin: 12, repsMax: 12, rest: '45 seg' },
+      { series: 3, reps: '12', repsMin: 12, repsMax: 12, rest: '45 seg' },
+      { series: 3, reps: '15', repsMin: 15, repsMax: 15, rest: '45 seg' }
+    ]
+  };
+
+  var GOAL_LABEL = {
+    fuerza: 'Fuerza', hipertrofia: 'Músculo', tono: 'Tono',
+    perder_peso: 'Quemar grasa', movilidad: 'Movilidad'
+  };
+  var PLACE_LABEL = { gimnasio: 'en el gimnasio', casa: 'en casa', sin_material: 'sin material' };
+
+  // Los pasos 'goal' y 'place' admiten varias opciones. Las respuestas se
+  // guardan siempre como array, pero los planes creados antes de este cambio
+  // (y los que sólo tienen una opción) traen un string: se normaliza aquí.
+  function answerList(answers, key) {
+    var v = answers[key];
+    if (Array.isArray(v)) return v.filter(function (x) { return x !== undefined && x !== null; });
+    return (v === undefined || v === null) ? [] : [v];
+  }
+
+  // Con varios sitios marcados manda el más permisivo: quien va al gimnasio
+  // puede hacer también lo de casa, y 'sin material' es un subconjunto de 'casa'.
+  var PLACE_RANK = { sin_material: 0, casa: 1, gimnasio: 2 };
+  function effectivePlace(answers) {
+    var best = null;
+    answerList(answers, 'place').forEach(function (p) {
+      if (best === null || (PLACE_RANK[p] || 0) > (PLACE_RANK[best] || 0)) best = p;
+    });
+    return best === null ? 'gimnasio' : best;
+  }
+
+  var PHASE_NAMES = [
+    { name: 'Mes 1 · Adaptación', subtitle: 'Semanas 1 a 4 — Aprende la técnica', weeks: [1, 2, 3, 4] },
+    { name: 'Mes 2 · Progresión', subtitle: 'Semanas 5 a 8 — Sube la carga', weeks: [5, 6, 7, 8] },
+    { name: 'Mes 3 · Intensidad', subtitle: 'Semanas 9 a 12 — Máxima exigencia', weeks: [9, 10, 11, 12] }
+  ];
+
+  // Cuántos ejercicios pide cada sesión. Con poco tiempo o poco nivel, menos.
+  function exerciseCountFor(answers) {
+    if (answers.days === '5') return 4;
+    if (answers.days === '2') return 6;
+    return 5;
+  }
+
+  // Candidatos del dataset para un patrón concreto, ya filtrados por material
+  // y nivel y ordenados de básico a accesorio.
+  function candidatesFor(pattern, answers) {
+    var items = [];
+    var goals = answerList(answers, 'goal');
+    if (!goals.length) goals = ['hipertrofia'];
+    var place = effectivePlace(answers);
+    EXERCISE_DB.all().forEach(function (rec) {
+      var t = EXERCISE_TAGS.tagsFor(rec);
+      if (!t) return;
+      // 'brazos' no es un patrón sino una marca sobre tirón/empuje, por eso
+      // se comprueba como tag y no contra t._pattern.
+      if (pattern === 'brazos' ? !t.brazos : t._pattern !== pattern) return;
+      // Material: 'sin_material' es un subconjunto de 'casa', y quien va al
+      // gimnasio puede hacer también lo de casa.
+      if (place === 'sin_material' && !t.sin_material) return;
+      if (place === 'casa' && !t.casa) return;
+      if (!EXERCISE_TAGS.fitsLevel(rec, answers.level)) return;
+      // El objetivo filtra sólo cuando tiene sentido: en movilidad se buscan
+      // estiramientos, y en el resto se descartan. Con varios objetivos basta
+      // con encajar en uno (unión), si no la intersección dejaría el catálogo
+      // casi vacío al mezclar, por ejemplo, fuerza y movilidad.
+      var fitsGoal = goals.some(function (g) {
+        if (g === 'movilidad') return !!(t.movilidad || t.core || t.principiante);
+        if (t.movilidad) return false;
+        if (g === 'fuerza') return !!(t.fuerza || t._compound);
+        if (g === 'perder_peso') return !(t.gimnasio && !t._compound);
+        return true;
+      });
+      if (!fitsGoal) return;
+
+      var score = 0;
+      if (t._compound) score += 10;                                  // básicos primero
+      var goalHits = 0;
+      goals.forEach(function (g) { if (t[g]) goalHits++; });
+      // Encajar con un objetivo puntúa; encajar con varios a la vez, algo más.
+      if (goalHits) score += 5 + (goalHits - 1);
+      if (place === 'gimnasio' && t.gimnasio) score += 2;             // aprovecha el material
+      if (t._level === answers.level) score += 2;                    // nivel exacto
+      items.push({ rec: rec, score: score });
+    });
+
+    items.sort(function (a, b) {
+      return b.score - a.score || a.rec.n.length - b.rec.n.length || a.rec.n.localeCompare(b.rec.n);
+    });
+    return items.map(function (i) { return i.rec; });
+  }
+
+  // Construye la rutina completa a partir de las respuestas del tutorial.
+  // Devuelve null si el catálogo no da para llenar ni una sesión.
+  function generateRoutine(answers) {
+    var split = SPLITS[answers.days] || SPLITS['3'];
+    var perSession = exerciseCountFor(answers);
+    // Con varios objetivos manda el primero que se marcó para las series y
+    // repeticiones: mezclar esquemas daría un progreso incoherente.
+    var scheme = GOAL_SCHEME[answerList(answers, 'goal')[0]] || GOAL_SCHEME.hipertrofia;
+
+    // Cache de candidatos por patrón: se reutiliza en cada sesión.
+    // El seed rota la lista sin perder el orden por puntuación, así cada
+    // "Otros ejercicios" entra por un punto distinto de los mejor valorados.
+    var pool = {};
+    function poolFor(p) {
+      if (!pool[p]) {
+        var list = candidatesFor(p, answers);
+        if (wizardShuffleSeed && list.length > 1) {
+          var offset = wizardShuffleSeed % list.length;
+          list = list.slice(offset).concat(list.slice(0, offset));
+        }
+        pool[p] = list;
+      }
+      return pool[p];
+    }
+
+    var usedGlobal = {};   // evita repetir el mismo ejercicio en toda la rutina
+    var picks = [];        // ejercicios elegidos por sesión
+
+    split.forEach(function (session) {
+      var patterns = session.patterns.slice();
+      // La zona prioritaria añade un hueco extra en las sesiones que la trabajan
+      if (answers.focus && patterns.indexOf(answers.focus) !== -1) patterns.push(answers.focus);
+      // Todas las sesiones cierran con core salvo las que ya son de core
+      if (patterns.indexOf('core') === -1) patterns.push('core');
+      while (patterns.length < perSession) patterns.push(patterns[patterns.length % session.patterns.length]);
+      patterns = patterns.slice(0, perSession);
+
+      var chosen = [];
+      var usedEquipment = {};   // para no montar la sesión entera con lo mismo
+      patterns.forEach(function (p) {
+        var list = poolFor(p);
+        var fallback = null;
+        for (var i = 0; i < list.length; i++) {
+          if (usedGlobal[list[i].id]) continue;
+          // Se prefiere material que no se haya usado aún en esta sesión; si
+          // todo lo disponible repite, vale el primero libre.
+          if (usedEquipment[list[i].eq] && !fallback) { fallback = list[i]; continue; }
+          if (usedEquipment[list[i].eq]) continue;
+          fallback = list[i];
+          break;
+        }
+        if (!fallback) fallback = list.length ? list[0] : null;
+        if (!fallback) return;
+        usedGlobal[fallback.id] = 1;
+        usedEquipment[fallback.eq] = 1;
+        chosen.push(fallback);
+      });
+      picks.push(chosen);
+    });
+
+    if (!picks.length || !picks[0].length) return null;
+
+    // Una fase por bloque de 4 semanas, con los mismos ejercicios y más carga
+    var phases = PHASE_NAMES.map(function (ph, phaseIdx) {
+      var sc = scheme[phaseIdx];
+      return {
+        id: 'fase' + (phaseIdx + 1),
+        name: ph.name,
+        subtitle: ph.subtitle,
+        weeks: ph.weeks.slice(),
+        days: split.map(function (session, sIdx) {
+          return {
+            id: 'dia' + (sIdx + 1),
+            day: session.day,
+            emoji: session.emoji,
+            title: session.title,
+            exercises: picks[sIdx].map(function (rec) {
+              var t = EXERCISE_TAGS.tagsFor(rec);
+              var timed = /\b(plank|hold|isometric)\b/.test(String(rec.n).toLowerCase());
+              return {
+                id: 'gen_' + rec.id,
+                dbId: rec.id,
+                name: EXERCISE_DB.labelName(rec.n),
+                muscle: EXERCISE_DB.labelTargetDisplay(rec.tg),
+                series: sc.series,
+                reps: timed ? (20 + phaseIdx * 10) + ' seg' : sc.reps,
+                repsMin: timed ? 20 + phaseIdx * 10 : sc.repsMin,
+                repsMax: timed ? 20 + phaseIdx * 10 : sc.repsMax,
+                rest: sc.rest,
+                isTimed: timed,
+                focus: (rec.es && rec.es.length ? rec.es[0] : 'Movimiento controlado en todo el recorrido.'),
+                weightHint: t.sin_material ? 'Peso corporal' : 'Ajusta el peso a tu nivel'
+              };
+            })
+          };
+        })
+      };
+    });
+
+    return {
+      version: 1,
+      createdAt: getTodayKey(),
+      answers: answers,
+      phases: phases,
+      trainingDays: (DEFAULT_DAYS_BY_COUNT[answers.days] || [1, 3, 5]).slice(),
+      daysLabel: answers.days + ' días · '
+        + answerList(answers, 'goal').map(function (g) { return GOAL_LABEL[g] || ''; }).filter(Boolean).join(' + ')
+        + ' ' + (PLACE_LABEL[effectivePlace(answers)] || '')
+    };
+  }
+
+  // Registra el plan como perfil: rellena PROFILES, el mapa al dataset (para
+  // las animaciones) y EXERCISE_META (para la descripción paso a paso).
+  function installCustomPlan(plan) {
+    if (!plan || !plan.phases) return;
+
+    PROFILES[CUSTOM_PROFILE_ID] = {
+      name: 'Mi plan',
+      initial: 'M',
+      phases: plan.phases,
+      warmup: {
+        general: '🔥 5 min de movilidad articular (cuello, hombros, muñecas, cadera, tobillos)',
+        approach: '➕ 1-2 series de aproximación con peso ligero en el primer ejercicio'
+      },
+      defaultDays: plan.trainingDays.slice(),
+      daysLabel: plan.daysLabel,
+      generated: true
+    };
+
+    plan.phases.forEach(function (phase) {
+      phase.days.forEach(function (day) {
+        day.exercises.forEach(function (ex) {
+          if (!ex.dbId) return;
+          EXERCISE_DB_MAP[ex.id] = ex.dbId;
+          // La descripción sale del dataset, que puede no haber cargado aún:
+          // por eso se vuelve a instalar el plan cuando termine la carga.
+          if (!EXERCISE_META[ex.id] || !EXERCISE_META[ex.id].description) {
+            var rec = EXERCISE_DB.get(ex.dbId);
+            EXERCISE_META[ex.id] = {
+              description: rec && rec.es && rec.es.length ? rec.es.join(' ') : '',
+              videoUrl: '',
+              alternatives: []
+            };
+          }
+        });
+      });
+    });
+  }
+
+  function loadCustomPlan() {
+    try {
+      var raw = localStorage.getItem(CUSTOM_PLAN_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) { return null; }
+  }
+
+  function saveCustomPlan(plan) {
+    try { localStorage.setItem(CUSTOM_PLAN_KEY, JSON.stringify(plan)); } catch (e) {}
+  }
+
+  // ---- Onboarding de primer arranque ----
+  var ONBOARDING_KEY = 'gym_onboarding_done';
+
+  function markOnboardingDone() {
+    try { localStorage.setItem(ONBOARDING_KEY, '1'); } catch (e) { /* modo privado */ }
+  }
+
+  // Sólo se muestra a quien abre la app por primera vez: si ya hay plan
+  // propio o perfil elegido, es un usuario existente y se da por hecho.
+  function needsOnboarding() {
+    try {
+      if (localStorage.getItem(ONBOARDING_KEY)) return false;
+      if (loadCustomPlan() || localStorage.getItem('gym_active_profile')) {
+        markOnboardingDone();
+        return false;
+      }
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // ---- UI del tutorial ----
+  var wizardStep = 0;
+  var wizardAnswers = {};
+
+  // En modo onboarding el asistente ocupa toda la pantalla y no se puede cerrar.
+  var wizardOnboarding = false;
+
+  function openRoutineWizard(onboarding) {
+    if (!EXERCISE_DB.isLoaded()) {
+      showToast('Cargando catálogo…');
+      EXERCISE_DB.load().then(function () { openRoutineWizard(onboarding); }).catch(function () {
+        showToast('No se pudo cargar el catálogo');
+      });
+      return;
+    }
+    wizardOnboarding = onboarding === true;
+    wizardStep = 0;
+    wizardAnswers = {};
+    var existing = loadCustomPlan();
+    if (existing && existing.answers) wizardAnswers = existing.answers;
+    renderWizard();
+    var modal = document.getElementById('wizardModal');
+    modal.classList.toggle('onboarding', wizardOnboarding);
+    modal.classList.remove('hidden');
+    document.body.classList.toggle('onboarding-lock', wizardOnboarding);
+  }
+
+  function closeRoutineWizard() {
+    // Durante el onboarding sólo se sale completando el asistente.
+    if (wizardOnboarding) return;
+    var modal = document.getElementById('wizardModal');
+    if (modal) modal.classList.add('hidden');
+  }
+
+  // Cierre forzado: lo usa el paso final del onboarding. Se desvanece antes
+  // de destaparse la app para que la transición no sea un corte seco.
+  function finishRoutineWizard() {
+    var wasOnboarding = wizardOnboarding;
+    wizardOnboarding = false;
+    var modal = document.getElementById('wizardModal');
+    if (!modal) return;
+
+    if (!wasOnboarding) {
+      modal.classList.add('hidden');
+      document.body.classList.remove('onboarding-lock');
+      return;
+    }
+
+    modal.classList.add('closing');
+    setTimeout(function () {
+      modal.classList.add('hidden');
+      modal.classList.remove('onboarding', 'closing');
+      document.body.classList.remove('onboarding-lock');
+    }, 320);
+  }
+
+  // Reinicia la animación de entrada: quitar la clase y forzar un reflow
+  // hace que el navegador vuelva a lanzar los keyframes en cada paso.
+  function playWizardEnter(el) {
+    el.classList.remove('wizard-enter');
+    void el.offsetWidth;
+    el.classList.add('wizard-enter');
+  }
+
+  function renderWizard() {
+    var el = document.getElementById('wizardBody');
+    if (!el) return;
+
+    // Última pantalla: resumen de la rutina generada
+    if (wizardStep >= WIZARD_STEPS.length) { renderWizardSummary(el); return; }
+
+    var step = WIZARD_STEPS[wizardStep];
+    var intro = '';
+    if (wizardOnboarding && wizardStep === 0) {
+      intro = '<div class="wizard-welcome">'
+        + '  <div class="wizard-welcome-icon">🏋️</div>'
+        + '  <h2 class="wizard-welcome-title">Bienvenido a Gym Calendar</h2>'
+        + '  <p class="wizard-welcome-text">Responde unas preguntas rápidas y creamos tu rutina a medida.</p>'
+        + '</div>';
+    }
+    var html = intro;
+
+    html += '<div class="wizard-progress">';
+    for (var i = 0; i < WIZARD_STEPS.length; i++) {
+      html += '<span class="wizard-dot' + (i <= wizardStep ? ' done' : '') + '"></span>';
+    }
+    html += '</div>';
+
+    html += '<div class="wizard-step-count">Paso ' + (wizardStep + 1) + ' de ' + WIZARD_STEPS.length + '</div>';
+    html += '<h3 class="wizard-title">' + escapeHtml(step.title) + '</h3>';
+    html += '<p class="wizard-hint">' + escapeHtml(step.hint) + '</p>';
+
+    // En los pasos múltiples el clic marca y desmarca, y se avanza con el
+    // botón "Continuar"; en los simples el clic sigue avanzando directamente.
+    var selected = answerList(wizardAnswers, step.key);
+
+    html += '<div class="wizard-options">';
+    step.options.forEach(function (opt) {
+      var sel = selected.indexOf(opt.value) !== -1;
+      html += '<button class="wizard-option' + (sel ? ' selected' : '') + (step.multi ? ' multi' : '') + '"'
+        + ' data-value="' + escapeHtml(opt.value) + '"'
+        + ' aria-pressed="' + (sel ? 'true' : 'false') + '">';
+      html += '  <span class="wizard-option-label">' + escapeHtml(opt.label) + '</span>';
+      html += '  <span class="wizard-option-desc">' + escapeHtml(opt.desc) + '</span>';
+      html += '</button>';
+    });
+    html += '</div>';
+
+    html += '<div class="wizard-nav">';
+    if (wizardStep > 0) html += '<button class="wizard-back" id="wizardBack">← Atrás</button>';
+    if (step.multi) {
+      html += '<button class="wizard-next" id="wizardNext"' + (selected.length ? '' : ' disabled') + '>'
+        + (selected.length > 1 ? 'Continuar (' + selected.length + ') →' : 'Continuar →') + '</button>';
+    }
+    html += '</div>';
+
+    el.innerHTML = html;
+    playWizardEnter(el);
+
+    el.querySelectorAll('.wizard-option').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var value = btn.dataset.value;
+        if (!step.multi) {
+          wizardAnswers[step.key] = value;
+          wizardStep++;
+          renderWizard();
+          return;
+        }
+        var list = answerList(wizardAnswers, step.key);
+        var at = list.indexOf(value);
+        if (at === -1) list.push(value); else list.splice(at, 1);
+        wizardAnswers[step.key] = list;
+        // Sin repintar el paso: volver a renderizar reinicia la animación de
+        // entrada y da sensación de recarga. Sólo cambia el botón pulsado.
+        var on = at === -1;
+        btn.classList.toggle('selected', on);
+        btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+        updateWizardNext(step, list);
+      });
+    });
+    var next = document.getElementById('wizardNext');
+    if (next) next.addEventListener('click', function () {
+      if (!answerList(wizardAnswers, step.key).length) return;
+      wizardStep++;
+      renderWizard();
+    });
+    var back = document.getElementById('wizardBack');
+    if (back) back.addEventListener('click', function () { wizardStep--; renderWizard(); });
+  }
+
+  // Etiqueta y estado del botón "Continuar" de los pasos múltiples. Se llama
+  // al marcar y desmarcar, así el paso no necesita repintarse entero.
+  function updateWizardNext(step, selected) {
+    var next = document.getElementById('wizardNext');
+    if (!next || !step.multi) return;
+    next.disabled = selected.length === 0;
+    next.textContent = selected.length > 1
+      ? 'Continuar (' + selected.length + ') →'
+      : 'Continuar →';
+  }
+
+  function renderWizardSummary(el) {
+    var plan = generateRoutine(wizardAnswers);
+    if (!plan) {
+      el.innerHTML = '<div class="wizard-empty">No hemos encontrado suficientes ejercicios con esos criterios. '
+        + '<button class="wizard-back" id="wizardBack">← Cambiar respuestas</button></div>';
+      var b = document.getElementById('wizardBack');
+      if (b) b.addEventListener('click', function () { wizardStep--; renderWizard(); });
+      return;
+    }
+
+    var html = '';
+    html += '<div class="wizard-progress">';
+    for (var i = 0; i < WIZARD_STEPS.length; i++) html += '<span class="wizard-dot done"></span>';
+    html += '</div>';
+
+    html += '<h3 class="wizard-title">Tu rutina está lista 🎉</h3>';
+    html += '<p class="wizard-hint">' + escapeHtml(plan.daysLabel)
+      + ' · 12 semanas en 3 fases. Se guardará como el perfil «Mi plan».</p>';
+
+    // Se muestran los días de la primera fase: las otras dos repiten
+    // ejercicios cambiando series y repeticiones.
+    plan.phases[0].days.forEach(function (day) {
+      html += '<div class="wizard-day">';
+      html += '  <div class="wizard-day-head">' + day.emoji + ' <strong>' + escapeHtml(day.day) + '</strong> · ' + escapeHtml(day.title) + '</div>';
+      html += '  <ul class="wizard-day-list">';
+      day.exercises.forEach(function (ex) {
+        html += '<li><span class="wizard-ex-name">' + escapeHtml(ex.name) + '</span>'
+          + '<span class="wizard-ex-meta">' + ex.series + '×' + escapeHtml(ex.reps) + ' · ' + escapeHtml(ex.muscle) + '</span></li>';
+      });
+      html += '  </ul>';
+      html += '</div>';
+    });
+
+    html += '<div class="wizard-nav wizard-nav-final">';
+    html += '  <button class="wizard-back" id="wizardBack">← Atrás</button>';
+    html += '  <button class="wizard-regen" id="wizardRegen">🔀 Otros ejercicios</button>';
+    html += '  <button class="wizard-save" id="wizardSave">✅ Usar esta rutina</button>';
+    html += '</div>';
+
+    el.innerHTML = html;
+    playWizardEnter(el);
+
+    document.getElementById('wizardBack').addEventListener('click', function () { wizardStep--; renderWizard(); });
+
+    // "Otros ejercicios" baraja el orden de los candidatos para proponer
+    // alternativas distintas con las mismas respuestas.
+    document.getElementById('wizardRegen').addEventListener('click', function () {
+      wizardShuffleSeed++;
+      renderWizard();
+    });
+
+    document.getElementById('wizardSave').addEventListener('click', function () {
+      saveCustomPlan(plan);
+      installCustomPlan(plan);
+      addCustomProfileOption();
+      markOnboardingDone();
+      finishRoutineWizard();
+      switchProfile(CUSTOM_PROFILE_ID);
+      switchTab('rutina');
+      showToast('Rutina creada 🎉');
+    });
+  }
+
+  // Cada regeneración rota los candidatos para que salgan ejercicios distintos.
+  var wizardShuffleSeed = 0;
+
+  // Añade (o refresca) la opción «Mi plan» en el selector de perfiles.
+  function addCustomProfileOption() {
+    if (!PROFILES[CUSTOM_PROFILE_ID]) return;
+    var wrap = document.querySelector('.profile-modal-options');
+    if (!wrap || wrap.querySelector('[data-profile="' + CUSTOM_PROFILE_ID + '"]')) return;
+    var btn = document.createElement('button');
+    btn.className = 'profile-option';
+    btn.dataset.profile = CUSTOM_PROFILE_ID;
+    btn.innerHTML = '<span class="profile-option-initial">M</span><span class="profile-option-name">Mi plan</span>';
+    btn.addEventListener('click', function () { switchProfile(CUSTOM_PROFILE_ID); });
+    wrap.appendChild(btn);
+  }
+
+  // =============================================
   // PROFILE SWITCHER
   // =============================================
   function updateProfileUI() {
@@ -3274,15 +4327,42 @@
       btn.addEventListener('click', function () { switchProfile(btn.dataset.profile); });
     });
 
+    // Rehacer el tutorial desde el menú. No va en modo onboarding: aquí sí se
+    // puede cerrar sin completarlo, y el plan actual se mantiene hasta que se
+    // confirme el nuevo en el resumen.
+    var redoBtn = document.getElementById('redoWizardBtn');
+    if (redoBtn) redoBtn.addEventListener('click', function () {
+      closeProfileSelector();
+      openRoutineWizard(false);
+    });
+
+    addCustomProfileOption();
+    updateProfileUI();
+
+    var wizardOverlay = document.getElementById('wizardModalOverlay');
+    if (wizardOverlay) wizardOverlay.addEventListener('click', closeRoutineWizard);
+    var wizardClose = document.getElementById('wizardClose');
+    if (wizardClose) wizardClose.addEventListener('click', closeRoutineWizard);
+
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js').catch(function () {}); });
     }
 
+    var pendingOnboarding = needsOnboarding();
+    // Bloquea la app desde el primer frame para que no se vea el fondo
+    if (pendingOnboarding) document.body.classList.add('onboarding-lock');
+
     // Carga el catálogo en segundo plano y repinta cuando esté listo
     EXERCISE_DB.load().then(function () {
+      // Ahora sí hay dataset: el plan generado recupera sus descripciones
+      if (savedCustomPlan) installCustomPlan(savedCustomPlan);
       if (currentTab === 'rutina') renderCurrentDay();
       if (currentTab === 'db') renderExerciseBrowser();
-    }).catch(function () { /* sin catálogo la app funciona igual */ });
+      if (pendingOnboarding) openRoutineWizard(true);
+    }).catch(function () {
+      // Sin catálogo no se puede generar rutina: no bloqueamos la app
+      document.body.classList.remove('onboarding-lock');
+    });
 
     var vEl = document.getElementById('appVersion');
     if (vEl) vEl.textContent = 'v' + APP_VERSION;

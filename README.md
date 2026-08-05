@@ -13,6 +13,8 @@ Aplicación web progresiva (PWA) para seguir una rutina de ejercicios 3 días/se
 - 📊 Historial de progreso por ejercicio
 - 🎯 Sugerencias automáticas para subir de peso
 - 🔍 Catálogo de 1.324 ejercicios con animaciones e instrucciones en español
+- 🏷️ Ejercicios categorizados por tags (material, patrón, objetivo y nivel) con filtros combinables
+- 🎯 Tutorial que pregunta objetivo, material, días y nivel, y genera una rutina de 12 semanas a medida
 - 🏃 Colección "Recuperación running": 29 ejercicios preventivos para corredores
 - 📱 PWA instalable en móvil (funciona offline)
 - 🌙 Modo oscuro
@@ -20,6 +22,35 @@ Aplicación web progresiva (PWA) para seguir una rutina de ejercicios 3 días/se
 ### 🚀 Uso
 
 Abre [https://smoralb.github.io/gym-calendar](https://smoralb.github.io/gym-calendar) en tu navegador móvil y añádelo a la pantalla de inicio para usarlo como app.
+
+### 💻 Desarrollo local
+
+No hay build: son ficheros planos (`index.html`, `app.js`, `styles.css`). Para
+probarlos basta con levantar un servidor estático:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools\serve.ps1
+```
+
+Y abrir [http://localhost:8000](http://localhost:8000). Con `-Port 8080` se
+cambia el puerto. El script usa `HttpListener` (viene con Windows), así que no
+hace falta tener Python ni Node instalados.
+
+Dos avisos:
+
+- **Ábrela por `http://`, no con doble clic en `index.html`.** Con `file://`
+  fallan el `fetch` del dataset y el service worker.
+- **El service worker cachea.** Si no ves un cambio, recarga con
+  `Ctrl+Shift+R`, o desregístralo en DevTools → Application → Service Workers.
+
+Para volver a ver el onboarding de primer arranque hay que borrar las claves
+que lo dan por hecho (DevTools → Console):
+
+```js
+localStorage.removeItem('gym_onboarding_done');
+localStorage.removeItem('gym_active_profile');
+localStorage.removeItem('gym_custom_plan');
+```
 
 ### 📚 Dataset de ejercicios
 
@@ -48,6 +79,36 @@ Cómo está integrado:
   descripción, músculos y material. Es un catálogo consultable, no una rutina
   (no lleva series ni repeticiones). Cada entrada apunta con `db` al id del
   dataset del que saca la animación, o `null` si no hay equivalente.
+
+### 🏷️ Tags y rutina a medida
+
+El dataset no trae tags, así que **`EXERCISE_TAGS`** (en `app.js`) los deriva por
+reglas a partir de `bp`/`eq`/`tg` y del nombre del ejercicio. Se calculan en
+tiempo de ejecución (cacheados en el propio registro): al regenerar el índice
+siguen siendo correctos sin tocar nada. Cada ejercicio recibe tags de cuatro
+familias:
+
+| Familia | Valores |
+| --- | --- |
+| Material | `sin_material` · `casa` · `gimnasio` |
+| Patrón | `empuje` · `tiron` · `pierna` · `core` · `cardio` (+ marca `brazos`) |
+| Objetivo | `fuerza` · `hipertrofia` · `tono` · `perder_peso` · `movilidad` |
+| Nivel | `principiante` · `intermedio` · `avanzado` |
+
+Sobre esos tags se apoyan dos cosas:
+
+- **Filtros del catálogo** — chips acumulables en la pestaña Ejercicios; los tres
+  tags más informativos se pintan en cada tarjeta.
+- **Tutorial «Crea tu rutina a medida»** — 5 preguntas (objetivo, dónde entrenas,
+  días por semana, experiencia y zona prioritaria) y con las respuestas
+  `generateRoutine()` arma una rutina de 12 semanas: elige los ejercicios por
+  tags, reparte las sesiones según el split de los días disponibles (2 a 5),
+  evita repetir material dentro de una sesión y aplica series/repeticiones/descanso
+  según el objetivo, subiendo la carga en cada una de las 3 fases.
+
+La rutina generada se guarda en `localStorage` (`gym_custom_plan`) y se registra
+como un perfil más (**«Mi plan»**), así que hereda el calendario, el registro de
+pesos, el progreso y las estadísticas que ya existían.
 
 Para regenerar el índice cuando el dataset se actualice:
 
