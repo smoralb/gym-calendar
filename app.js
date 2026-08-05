@@ -921,8 +921,11 @@
     };
     var NAME_POSTURE = {
       'seated': 'sentado', 'standing': 'de pie', 'lying': 'tumbado',
-      'kneeling': 'de rodillas', 'incline': 'inclinado', 'decline': 'declinado',
-      'inclined': 'inclinado', 'prone': 'boca abajo', 'supine': 'boca arriba',
+      // "incline" (banco inclinado) e "inclinado" de bent-over son cosas
+      // distintas: si ambos dan "inclinado", dos ejercicios acaban con el
+      // mismo nombre en la rutina.
+      'kneeling': 'de rodillas', 'incline': 'en banco inclinado', 'decline': 'declinado',
+      'inclined': 'en banco inclinado', 'prone': 'boca abajo', 'supine': 'boca arriba',
       'hanging': 'colgado', 'floor': 'en el suelo', 'wall': 'en la pared',
       'bench': 'en banco', 'inclinado': 'inclinado'
     };
@@ -1107,6 +1110,7 @@
           items = data;
           byId = {};
           for (var i = 0; i < data.length; i++) byId[data[i].id] = data[i];
+          mergeExtra();
           return items;
         })
         .catch(function (err) {
@@ -1114,6 +1118,25 @@
           throw err;
         });
       return loading;
+    }
+
+    // Registros que no vienen del dataset descargado (por ejemplo los de
+    // "Recuperación running" que no tienen equivalente). Se guardan aparte
+    // porque load() reemplaza `items` y habría que volver a meterlos.
+    var extra = [];
+
+    function mergeExtra() {
+      if (!items) return;
+      extra.forEach(function (r) {
+        if (byId[r.id]) return;
+        items.push(r);
+        byId[r.id] = r;
+      });
+    }
+
+    function addExtra(recs) {
+      extra = extra.concat(recs);
+      mergeExtra();
     }
 
     function get(id) { return byId ? (byId[id] || null) : null; }
@@ -1163,10 +1186,12 @@
       return results.slice(0, limit).map(function (r) { return r.rec; });
     }
 
-    function imageUrl(rec) { return rec ? CDN + 'images/' + rec.id + '-' + rec.mid + '.jpg' : ''; }
-    function gifUrl(rec) { return rec ? CDN + 'videos/' + rec.id + '-' + rec.mid + '.gif' : ''; }
+    // Sin `mid` no hay media en el dataset (registros propios): mejor cadena
+    // vacía que una URL rota que dejaría el hueco de la animación cargando.
+    function imageUrl(rec) { return rec && rec.mid ? CDN + 'images/' + rec.id + '-' + rec.mid + '.jpg' : ''; }
+    function gifUrl(rec) { return rec && rec.mid ? CDN + 'videos/' + rec.id + '-' + rec.mid + '.gif' : ''; }
     function repoUrl(rec) {
-      return rec ? 'https://github.com/smoralb/exercises-dataset/blob/' + DATASET_REF + '/videos/' + rec.id + '-' + rec.mid + '.gif' : '';
+      return rec && rec.mid ? 'https://github.com/smoralb/exercises-dataset/blob/' + DATASET_REF + '/videos/' + rec.id + '-' + rec.mid + '.gif' : '';
     }
 
     function bodyParts() {
@@ -1178,7 +1203,7 @@
 
     return {
       CDN: CDN,
-      load: load, get: get, search: search,
+      load: load, get: get, search: search, addExtra: addExtra,
       all: function () { return items ? items.slice() : []; },
       imageUrl: imageUrl, gifUrl: gifUrl, repoUrl: repoUrl,
       bodyParts: bodyParts,
@@ -1441,6 +1466,46 @@
       description: 'Mantén la cadera elevada con una sola pierna durante varios segundos.',
       muscles: ['Isquiotibiales', 'Glúteos'], equipment: [] }
   ];
+
+  // Los 9 ejercicios de la colección que no existen en el dataset (db: null)
+  // se registran como fichas propias para que el generador de rutinas también
+  // pueda elegirlos. Se les da el vocabulario del dataset (bp/eq/tg) porque de
+  // ahí salen los tags. No tienen `mid`: se quedan sin animación, que es
+  // justo el motivo por el que no tenían equivalente.
+  var RUNNING_RECOVERY_RECORDS = [
+    { id: 'rr_foam_roller', bp: 'upper legs', eq: 'roller', tg: 'hamstrings' },
+    { id: 'rr_hamstring_walkouts', bp: 'upper legs', eq: 'body weight', tg: 'hamstrings' },
+    { id: 'rr_hip_flexor_march', bp: 'upper legs', eq: 'band', tg: 'quads' },
+    { id: 'rr_banded_knee_raise', bp: 'upper legs', eq: 'band', tg: 'glutes' },
+    { id: 'rr_hip_hike', bp: 'upper legs', eq: 'body weight', tg: 'abductors' },
+    { id: 'rr_toe_walk', bp: 'lower legs', eq: 'body weight', tg: 'calves' },
+    { id: 'rr_toe_walk_pause', bp: 'lower legs', eq: 'body weight', tg: 'calves' },
+    { id: 'rr_front_plank_leg_raise', bp: 'waist', eq: 'body weight', tg: 'abs' },
+    { id: 'rr_swiss_ball_plank', bp: 'waist', eq: 'stability ball', tg: 'abs' }
+  ];
+
+  // Enlaza cada ficha propia con su entrada de la colección para heredar
+  // nombre y descripción, y las da de alta en el catálogo.
+  (function registerRunningRecoveryRecords() {
+    var byId = {};
+    RUNNING_RECOVERY.forEach(function (it) { byId[it.id] = it; });
+    var recs = [];
+    RUNNING_RECOVERY_RECORDS.forEach(function (r) {
+      var src = byId[r.id.replace(/^rr_/, '')];
+      if (!src) return;
+      recs.push({
+        id: r.id, mid: null, n: src.name, bp: r.bp, eq: r.eq, tg: r.tg,
+        mg: (src.muscles[0] || '').toLowerCase(),
+        sm: [],
+        es: [src.description],
+        // El nombre ya está en español: que no pase por el traductor.
+        esName: true
+      });
+      // Para que la tarjeta de la rutina sepa de qué entrada saca la ficha.
+      src.recordId = r.id;
+    });
+    EXERCISE_DB.addExtra(recs);
+  })();
 
   // Búsqueda dentro de la colección de recuperación (nombre, descripción,
   // músculos y material), ignorando acentos y mayúsculas.
@@ -2172,8 +2237,12 @@
       html += '  <div class="db-card-head">';
       // La tarjeta abierta y las primeras de la lista cargan ya; el resto
       // espera al observer (ver observeThumbs)
-      html += '    <img class="db-thumb" alt="" ' + (open ? 'src="' + EXERCISE_DB.gifUrl(rec) + '"'
-        : (idx < EAGER_THUMBS ? 'src="' : 'data-src="') + EXERCISE_DB.imageUrl(rec) + '"') + '>';
+      // Las fichas propias no tienen miniatura: se deja el hueco vacío en vez
+      // de un <img src=""> que el navegador pinta como imagen rota.
+      var thumb = open ? EXERCISE_DB.gifUrl(rec) : EXERCISE_DB.imageUrl(rec);
+      html += thumb
+        ? '    <img class="db-thumb" alt="" ' + (open || idx < EAGER_THUMBS ? 'src="' : 'data-src="') + thumb + '">'
+        : '    <div class="db-thumb db-thumb-empty" aria-hidden="true">🏃</div>';
       html += '    <div class="db-card-info">';
       html += '      <div class="db-card-name">' + escapeHtml(rec.n) + '</div>';
       html += '      <div class="db-card-meta">' + escapeHtml(EXERCISE_DB.labelTarget(rec.tg)) + ' · ' + escapeHtml(EXERCISE_DB.labelEquipment(rec.eq)) + '</div>';
@@ -2668,15 +2737,20 @@
       // Animación + instrucciones del dataset público (si hay equivalente)
       var dbRec = getDbRecord(ex.id);
       if (dbRec) {
+        // Las fichas propias (Recuperación running) no tienen animación: se
+        // muestran los pasos sin el <img>, que si no saldría roto.
+        var dbGif = EXERCISE_DB.gifUrl(dbRec);
         html += '  <div class="exercise-db-block">';
-        html += '    <img class="exercise-db-gif" loading="lazy" alt="Animación: ' + escapeHtml(dbRec.n) + '" src="' + EXERCISE_DB.gifUrl(dbRec) + '">';
+        if (dbGif) {
+          html += '    <img class="exercise-db-gif" loading="lazy" alt="Animación: ' + escapeHtml(dbRec.n) + '" src="' + dbGif + '">';
+        }
         html += '    <div class="exercise-db-caption">' + escapeHtml(dbRec.n) + ' · ' + escapeHtml(EXERCISE_DB.labelEquipment(dbRec.eq)) + '</div>';
         if (dbRec.es && dbRec.es.length) {
           html += '    <ol class="exercise-db-steps">';
           dbRec.es.forEach(function (s) { html += '<li>' + escapeHtml(s) + '</li>'; });
           html += '    </ol>';
         }
-        html += '    <div class="exercise-db-credit">© Gym visual · dataset de ejercicios</div>';
+        if (dbGif) html += '    <div class="exercise-db-credit">© Gym visual · dataset de ejercicios</div>';
         html += '  </div>';
       }
 
@@ -3156,15 +3230,18 @@
     // Animación + instrucciones del dataset público
     var dbRec = getDbRecord(ex.id);
     if (dbRec) {
+      var gifSrc = EXERCISE_DB.gifUrl(dbRec);
       html += '  <div class="exercise-db-block">';
-      html += '    <img class="exercise-db-gif" loading="lazy" alt="Animación: ' + escapeHtml(dbRec.n) + '" src="' + EXERCISE_DB.gifUrl(dbRec) + '">';
+      if (gifSrc) {
+        html += '    <img class="exercise-db-gif" loading="lazy" alt="Animación: ' + escapeHtml(dbRec.n) + '" src="' + gifSrc + '">';
+      }
       html += '    <div class="exercise-db-caption">' + escapeHtml(dbRec.n) + ' · ' + escapeHtml(EXERCISE_DB.labelEquipment(dbRec.eq)) + '</div>';
       if (dbRec.es && dbRec.es.length) {
         html += '    <ol class="exercise-db-steps">';
         dbRec.es.forEach(function (s) { html += '<li>' + escapeHtml(s) + '</li>'; });
         html += '    </ol>';
       }
-      html += '    <div class="exercise-db-credit">© Gym visual · dataset de ejercicios</div>';
+      if (gifSrc) html += '    <div class="exercise-db-credit">© Gym visual · dataset de ejercicios</div>';
       html += '  </div>';
     }
 
@@ -3675,6 +3752,14 @@
       ]
     },
     {
+      key: 'running', title: '¿Corres o haces deporte de impacto?',
+      hint: 'Se añade un bloque corto de trabajo preventivo al final de las sesiones de pierna.',
+      options: [
+        { value: '', label: '🚫 No, o casi nunca', desc: 'Sin trabajo preventivo extra' },
+        { value: 'si', label: '🏃 Sí, corro', desc: 'Añade 2 ejercicios de la colección "Recuperación running"' }
+      ]
+    },
+    {
       key: 'focus', title: '¿Alguna zona prioritaria?',
       hint: 'Se añade un ejercicio extra de esa zona en cada sesión que la trabaje.',
       options: [
@@ -3859,7 +3944,19 @@
     }
 
     var usedGlobal = {};   // evita repetir el mismo ejercicio en toda la rutina
+    var usedName = {};     // ...y que dos fichas distintas se vean igual
     var picks = [];        // ejercicios elegidos por sesión
+
+    // El dataset trae variantes ("barbell upright row v. 2") que al traducir
+    // colapsan en el mismo nombre. Como el usuario no puede distinguirlas,
+    // se descartan por nombre visible además de por id.
+    var nameCache = {};
+    function displayName(rec) {
+      if (nameCache[rec.id] === undefined) {
+        nameCache[rec.id] = rec.esName ? rec.n : EXERCISE_DB.labelName(rec.n);
+      }
+      return nameCache[rec.id];
+    }
 
     split.forEach(function (session) {
       var patterns = session.patterns.slice();
@@ -3876,7 +3973,7 @@
         var list = poolFor(p);
         var fallback = null;
         for (var i = 0; i < list.length; i++) {
-          if (usedGlobal[list[i].id]) continue;
+          if (usedGlobal[list[i].id] || usedName[displayName(list[i])]) continue;
           // Se prefiere material que no se haya usado aún en esta sesión; si
           // todo lo disponible repite, vale el primero libre.
           if (usedEquipment[list[i].eq] && !fallback) { fallback = list[i]; continue; }
@@ -3884,9 +3981,18 @@
           fallback = list[i];
           break;
         }
-        if (!fallback) fallback = list.length ? list[0] : null;
+        // Pool agotado: se tolera repetir un ejercicio de otra sesión, pero
+        // nunca dos veces en la misma (antes caía en list[0] a ciegas y salían
+        // sesiones con el mismo ejercicio dos veces).
+        if (!fallback) {
+          for (var j = 0; j < list.length; j++) {
+            var dn = displayName(list[j]);
+            if (chosen.every(function (c) { return displayName(c) !== dn; })) { fallback = list[j]; break; }
+          }
+        }
         if (!fallback) return;
         usedGlobal[fallback.id] = 1;
+        usedName[displayName(fallback)] = 1;
         usedEquipment[fallback.eq] = 1;
         chosen.push(fallback);
       });
@@ -3894,6 +4000,46 @@
     });
 
     if (!picks.length || !picks[0].length) return null;
+
+    // Bloque preventivo para corredores (paso "¿Corres?"). Se añade al final
+    // de las sesiones que tocan pierna, sumando: no quita nada de la sesión,
+    // porque este trabajo es de prevención y no sustituye a la carga.
+    var preventive = [];
+    if (answers.running === 'si') {
+      var rrPool = RUNNING_RECOVERY.filter(function (it) { return it.db || it.recordId; });
+      var cursor = wizardShuffleSeed % (rrPool.length || 1);
+      split.forEach(function (session, sIdx) {
+        if (session.patterns.indexOf('pierna') === -1) { preventive[sIdx] = []; return; }
+        var take = [];
+        for (var k = 0; k < 2 && rrPool.length; k++) {
+          take.push(rrPool[cursor % rrPool.length]);
+          cursor++;
+        }
+        preventive[sIdx] = take;
+      });
+    }
+
+    // Prescripción fija: series bajas y descanso corto. No progresa por fases
+    // porque el objetivo es la calidad del movimiento, no la carga.
+    function preventiveExercise(it) {
+      var rec = EXERCISE_DB.get(it.recordId || it.db);
+      var timed = /plancha|isom|hold|caminata|walk|foam|roller/i.test(it.name);
+      return {
+        id: 'gen_rr_' + it.id,
+        dbId: rec ? rec.id : null,
+        name: it.name,
+        muscle: it.muscles[0] || 'Prevención',
+        series: 2,
+        reps: timed ? '30 seg' : '12',
+        repsMin: timed ? 30 : 12,
+        repsMax: timed ? 30 : 12,
+        rest: '45 seg',
+        isTimed: timed,
+        preventive: true,
+        focus: it.description,
+        weightHint: it.equipment && it.equipment.length ? it.equipment.join(', ') : 'Peso corporal'
+      };
+    }
 
     // Una fase por bloque de 4 semanas, con los mismos ejercicios y más carga
     var phases = PHASE_NAMES.map(function (ph, phaseIdx) {
@@ -3915,7 +4061,7 @@
               return {
                 id: 'gen_' + rec.id,
                 dbId: rec.id,
-                name: EXERCISE_DB.labelName(rec.n),
+                name: displayName(rec),
                 muscle: EXERCISE_DB.labelTargetDisplay(rec.tg),
                 series: sc.series,
                 reps: timed ? (20 + phaseIdx * 10) + ' seg' : sc.reps,
@@ -3926,7 +4072,7 @@
                 focus: (rec.es && rec.es.length ? rec.es[0] : 'Movimiento controlado en todo el recorrido.'),
                 weightHint: t.sin_material ? 'Peso corporal' : 'Ajusta el peso a tu nivel'
               };
-            })
+            }).concat((preventive[sIdx] || []).map(preventiveExercise))
           };
         })
       };

@@ -2761,6 +2761,15 @@ body.onboarding-lock::before {
   border: none;
 }
 
+/* Hueco de miniatura para las fichas propias, que no tienen imagen. */
+.db-thumb-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  background: var(--bg-card-hover);
+}
+
 .wizard-next {
   flex: 1;
   color: #fff;
