@@ -1,12 +1,12 @@
 /* =============================================
    Gym Calendar - App de Rutina de Ejercicios
-   Versión: 4.7.0 — Botón "Modificar entrenamiento" en Inicio
+   Versión: 4.8.0 — Pregunta de material en casa
    ============================================= */
 
 (function () {
   'use strict';
 
-  var APP_VERSION = '4.7.0';
+  var APP_VERSION = '4.8.0';
 
   // =============================================
   // SERGIO_PHASES: plan Push/Pull/Pierna 3 días/semana
@@ -3721,6 +3721,29 @@
   // tags. La rutina se guarda como un perfil más ('mia'), así que hereda todo
   // lo que ya funciona: calendario, pesos, progreso y estadísticas.
   // =============================================
+  // Material de casa que aparece en el dataset, agrupado en pastillas. Cada
+  // opción lista los valores `eq` del catálogo que desbloquea. El peso
+  // corporal no está: siempre se puede hacer, se marque lo que se marque.
+  var GEAR_OPTIONS = [
+    { value: 'dumbbell', label: '🏋️ Mancuernas', desc: 'Un par de mancuernas o pesas', eq: ['dumbbell'] },
+    { value: 'band', label: '🎗️ Bandas elásticas', desc: 'Gomas o bandas de resistencia', eq: ['band', 'resistance band'] },
+    { value: 'kettlebell', label: '🔔 Kettlebell', desc: 'Pesa rusa', eq: ['kettlebell'] },
+    { value: 'stability_ball', label: '🟣 Fitball', desc: 'Pelota grande de estabilidad', eq: ['stability ball'] },
+    { value: 'medicine_ball', label: '⚽ Balón medicinal', desc: 'Balón con peso', eq: ['medicine ball'] },
+    { value: 'wheel_roller', label: '🎡 Rueda abdominal', desc: 'Rueda de core (ab wheel)', eq: ['wheel roller'] },
+    { value: 'roller', label: '🧻 Foam roller', desc: 'Rodillo de espuma para masaje y movilidad', eq: ['roller'] },
+    { value: 'rope', label: '➰ Comba o cuerda', desc: 'Cuerda de saltar', eq: ['rope'] },
+    { value: 'bosu', label: '🌗 Bosu', desc: 'Media pelota de equilibrio', eq: ['bosu ball'] },
+    { value: 'weighted', label: '🎒 Lastre o chaleco', desc: 'Chaleco, tobilleras o mochila con peso', eq: ['weighted'] }
+  ];
+
+  // value de GEAR_OPTIONS -> valores `eq` del dataset
+  var GEAR_EQUIPMENT = (function () {
+    var map = {};
+    GEAR_OPTIONS.forEach(function (o) { map[o.value] = o.eq; });
+    return map;
+  })();
+
   var WIZARD_STEPS = [
     {
       key: 'goal', title: '¿Qué quieres conseguir?', multi: true,
@@ -3741,6 +3764,17 @@
         { value: 'casa', label: '🏠 En casa con material', desc: 'Mancuernas, bandas, kettlebell o fitball' },
         { value: 'sin_material', label: '🤸 Sin material', desc: 'Sólo peso corporal' }
       ]
+    },
+    {
+      // Sólo tiene sentido si entrena en casa con material: quien va al
+      // gimnasio lo tiene todo, y 'sin material' ya dice que no hay nada.
+      key: 'gear', title: '¿Qué material tienes en casa?', multi: true, pills: true,
+      hint: 'Marca todo lo que tengas. Sólo se elegirán ejercicios que puedas hacer con ello (el peso corporal siempre entra).',
+      when: function (answers) {
+        var places = answerList(answers, 'place');
+        return places.indexOf('casa') !== -1 && places.indexOf('gimnasio') === -1;
+      },
+      options: GEAR_OPTIONS
     },
     {
       key: 'days', title: '¿Cuántos días por semana?',
@@ -3867,6 +3901,18 @@
     return best === null ? 'gimnasio' : best;
   }
 
+  // Set de valores `eq` permitidos por el material marcado en casa, o null si
+  // no se ha contestado (entonces vale cualquier material casero, como antes).
+  function allowedEquipment(answers) {
+    var gear = answerList(answers, 'gear');
+    if (!gear.length) return null;
+    var set = { 'body weight': 1 };
+    gear.forEach(function (g) {
+      (GEAR_EQUIPMENT[g] || []).forEach(function (eq) { set[eq] = 1; });
+    });
+    return set;
+  }
+
   var PHASE_NAMES = [
     { name: 'Mes 1 · Adaptación', subtitle: 'Semanas 1 a 4 — Aprende la técnica', weeks: [1, 2, 3, 4] },
     { name: 'Mes 2 · Progresión', subtitle: 'Semanas 5 a 8 — Sube la carga', weeks: [5, 6, 7, 8] },
@@ -3887,6 +3933,9 @@
     var goals = answerList(answers, 'goal');
     if (!goals.length) goals = ['hipertrofia'];
     var place = effectivePlace(answers);
+    // El material declarado sólo acota cuando se entrena en casa: en el
+    // gimnasio se da por hecho que está todo disponible.
+    var gearSet = place === 'casa' ? allowedEquipment(answers) : null;
     EXERCISE_DB.all().forEach(function (rec) {
       var t = EXERCISE_TAGS.tagsFor(rec);
       if (!t) return;
@@ -3897,6 +3946,7 @@
       // gimnasio puede hacer también lo de casa.
       if (place === 'sin_material' && !t.sin_material) return;
       if (place === 'casa' && !t.casa) return;
+      if (gearSet && !gearSet[rec.eq || '']) return;
       if (!EXERCISE_TAGS.fitsLevel(rec, answers.level)) return;
       // El objetivo filtra sólo cuando tiene sentido: en movilidad se buscan
       // estiramientos, y en el resto se descartan. Con varios objetivos basta
@@ -4175,6 +4225,15 @@
   var wizardStep = 0;
   var wizardAnswers = {};
 
+  // Pasos visibles con las respuestas actuales: algunos sólo aplican según lo
+  // contestado antes (el material de casa, por ejemplo). Se recalcula en cada
+  // pintado, así que wizardStep siempre indexa esta lista.
+  function activeWizardSteps() {
+    return WIZARD_STEPS.filter(function (s) {
+      return typeof s.when !== 'function' || s.when(wizardAnswers);
+    });
+  }
+
   // En modo onboarding el asistente ocupa toda la pantalla y no se puede cerrar.
   var wizardOnboarding = false;
 
@@ -4239,10 +4298,12 @@
     var el = document.getElementById('wizardBody');
     if (!el) return;
 
-    // Última pantalla: resumen de la rutina generada
-    if (wizardStep >= WIZARD_STEPS.length) { renderWizardSummary(el); return; }
+    var steps = activeWizardSteps();
 
-    var step = WIZARD_STEPS[wizardStep];
+    // Última pantalla: resumen de la rutina generada
+    if (wizardStep >= steps.length) { renderWizardSummary(el); return; }
+
+    var step = steps[wizardStep];
     var intro = '';
     if (wizardOnboarding && wizardStep === 0) {
       intro = '<div class="wizard-welcome">'
@@ -4254,12 +4315,12 @@
     var html = intro;
 
     html += '<div class="wizard-progress">';
-    for (var i = 0; i < WIZARD_STEPS.length; i++) {
+    for (var i = 0; i < steps.length; i++) {
       html += '<span class="wizard-dot' + (i <= wizardStep ? ' done' : '') + '"></span>';
     }
     html += '</div>';
 
-    html += '<div class="wizard-step-count">Paso ' + (wizardStep + 1) + ' de ' + WIZARD_STEPS.length + '</div>';
+    html += '<div class="wizard-step-count">Paso ' + (wizardStep + 1) + ' de ' + steps.length + '</div>';
     html += '<h3 class="wizard-title">' + escapeHtml(step.title) + '</h3>';
     html += '<p class="wizard-hint">' + escapeHtml(step.hint) + '</p>';
 
@@ -4267,14 +4328,17 @@
     // botón "Continuar"; en los simples el clic sigue avanzando directamente.
     var selected = answerList(wizardAnswers, step.key);
 
-    html += '<div class="wizard-options">';
+    // Los pasos con muchas opciones cortas se pintan como pastillas: la
+    // descripción pasa al title para no hacer una lista interminable.
+    html += '<div class="wizard-options' + (step.pills ? ' pills' : '') + '">';
     step.options.forEach(function (opt) {
       var sel = selected.indexOf(opt.value) !== -1;
       html += '<button class="wizard-option' + (sel ? ' selected' : '') + (step.multi ? ' multi' : '') + '"'
         + ' data-value="' + escapeHtml(opt.value) + '"'
+        + (step.pills ? ' title="' + escapeHtml(opt.desc) + '"' : '')
         + ' aria-pressed="' + (sel ? 'true' : 'false') + '">';
       html += '  <span class="wizard-option-label">' + escapeHtml(opt.label) + '</span>';
-      html += '  <span class="wizard-option-desc">' + escapeHtml(opt.desc) + '</span>';
+      if (!step.pills) html += '  <span class="wizard-option-desc">' + escapeHtml(opt.desc) + '</span>';
       html += '</button>';
     });
     html += '</div>';
@@ -4344,7 +4408,7 @@
 
     var html = '';
     html += '<div class="wizard-progress">';
-    for (var i = 0; i < WIZARD_STEPS.length; i++) html += '<span class="wizard-dot done"></span>';
+    for (var i = 0; i < activeWizardSteps().length; i++) html += '<span class="wizard-dot done"></span>';
     html += '</div>';
 
     html += '<h3 class="wizard-title">Tu rutina está lista 🎉</h3>';
