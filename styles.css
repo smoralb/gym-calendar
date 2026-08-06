@@ -1410,6 +1410,45 @@ body {
   margin-top: 10px;
 }
 
+.home-wizard-cta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  margin-top: 14px;
+  padding: 12px 14px;
+  text-align: left;
+  color: #fff;
+  background: linear-gradient(120deg, var(--accent-secondary), var(--accent-primary));
+  border: none;
+  border-radius: var(--radius-md);
+  font-family: var(--font);
+  cursor: pointer;
+  transition: opacity var(--transition);
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.home-wizard-cta:active { opacity: 0.8; }
+
+.home-wizard-cta-icon { font-size: 1.1rem; }
+
+.home-wizard-cta-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.home-wizard-cta-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.home-wizard-cta-desc {
+  font-size: 0.65rem;
+  opacity: 0.85;
+}
+
 /* ===== WARMUP CARD ===== */
 .warmup-card {
   display: flex;

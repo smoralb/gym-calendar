@@ -50,14 +50,19 @@ The old string to match is always the current `"X.Y.Z"` you read in Step 2.
 4. Write a commit message:
    - Title: `deploy vNEW_VERSION: <one-line summary of the main changes>`
    - Body: bullet points of the main changes if there are more than 2 files changed beyond the version files
-   - Trailer: `Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>`
-5. Commit using PowerShell (required on this machine — Bash multiline commits fail):
-```powershell
-cd "I:\Workspace\gym-calendar"; git commit -m @'
-deploy vNEW_VERSION: <summary>
+   - Trailer: `Co-Authored-By: <your model name> <noreply@anthropic.com>` — use the model you actually are, not a hardcoded one
+5. Commit by writing the message to a file and passing it with `-F`.
 
-Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>
-'@
+   **Do not use `git commit -m` with a PowerShell here-string.** PowerShell
+   expands double quotes inside `@'...'@` when the argument is passed to a
+   native executable, so a message containing `"` gets split into words and
+   git fails with `error: pathspec '...' did not match any file(s)`.
+
+   Write the message with the **Write tool** to a scratch file (use the
+   session scratchpad directory, not the repo), then:
+
+```powershell
+cd "I:\Workspace\gym-calendar"; git commit -F "<path-to-message-file>"; if ($?) { git log --oneline -1 }
 ```
 
 ## Step 6 — Push

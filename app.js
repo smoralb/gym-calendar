@@ -1,12 +1,12 @@
 /* =============================================
    Gym Calendar - App de Rutina de Ejercicios
-   Versión: 4.6.0 — Asistente multi-selección + nombres en español
+   Versión: 4.7.0 — Botón "Modificar entrenamiento" en Inicio
    ============================================= */
 
 (function () {
   'use strict';
 
-  var APP_VERSION = '4.6.0';
+  var APP_VERSION = '4.7.0';
 
   // =============================================
   // SERGIO_PHASES: plan Push/Pull/Pierna 3 días/semana
@@ -2958,6 +2958,13 @@
     }
     html += '  </div>';
     html += '  <div class="schedule-settings-hint">Recomendado: ' + PROFILES[activeProfile].daysLabel + '</div>';
+    html += '  <button class="home-wizard-cta" id="homeWizardBtn">'
+      + '    <span class="home-wizard-cta-icon">🎯</span>'
+      + '    <span class="home-wizard-cta-text">'
+      + '      <span class="home-wizard-cta-title">Modificar entrenamiento</span>'
+      + '      <span class="home-wizard-cta-desc">Responde otra vez el cuestionario y ajusta tu rutina</span>'
+      + '    </span>'
+      + '  </button>';
     html += '</div>';
 
     // ---- Calendar ----
@@ -3062,6 +3069,9 @@
         if (newContainer && selDate) newContainer.dataset.selectedDate = selDate;
       });
     });
+
+    var homeWizardBtn = document.getElementById('homeWizardBtn');
+    if (homeWizardBtn) homeWizardBtn.addEventListener('click', function () { openRoutineWizard(false); });
 
     var prevBtn = document.getElementById('calPrev');
     var nextBtn = document.getElementById('calNext');
