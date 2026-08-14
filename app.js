@@ -1,12 +1,12 @@
 /* =============================================
    Gym Calendar - App de Rutina de Ejercicios
-   Versión: 4.8.0 — Pregunta de material en casa
+   Versión: 4.9.0 — Finalizar entrenamiento y detalle simplificado
    ============================================= */
 
 (function () {
   'use strict';
 
-  var APP_VERSION = '4.8.0';
+  var APP_VERSION = '4.9.0';
 
   // =============================================
   // SERGIO_PHASES: plan Push/Pull/Pierna 3 días/semana
@@ -1718,7 +1718,7 @@
   function getStorageKey() { return 'gym_calendar_data_' + activeProfile; }
 
   function getDefaultState() {
-    return { progress: {}, completions: {}, swaps: {}, customDays: {}, settings: { trainingDays: PROFILES[activeProfile].defaultDays.slice() } };
+    return { progress: {}, completions: {}, swaps: {}, customDays: {}, finished: {}, settings: { trainingDays: PROFILES[activeProfile].defaultDays.slice() } };
   }
 
   function loadState() {
@@ -1726,7 +1726,7 @@
       var raw = localStorage.getItem(getStorageKey());
       if (raw) {
         var data = JSON.parse(raw);
-        var st = { progress: data.progress || {}, completions: data.completions || {}, swaps: data.swaps || {}, customDays: data.customDays || {} };
+        var st = { progress: data.progress || {}, completions: data.completions || {}, swaps: data.swaps || {}, customDays: data.customDays || {}, finished: data.finished || {} };
         st.settings = data.settings || {};
         if (!Array.isArray(st.settings.trainingDays) || st.settings.trainingDays.length === 0) {
           st.settings.trainingDays = PROFILES[activeProfile].defaultDays.slice();
@@ -1753,6 +1753,32 @@
   }
 
   function getTodayCompletions() { return state.completions[getTodayKey()] || {}; }
+
+  // Marca de "entrenamiento finalizado": el progreso ya se guarda ejercicio a
+  // ejercicio, pero sin un cierre explícito no se percibe como guardado.
+  function isWorkoutFinished(dateKey) { return !!(state.finished && state.finished[dateKey]); }
+  function getFinishedAt(dateKey) { return (state.finished && state.finished[dateKey]) || null; }
+  function finishWorkout() {
+    var key = getTodayKey();
+    if (!state.finished) state.finished = {};
+    state.finished[key] = new Date().toISOString();
+    saveState();
+    renderCurrentDay();
+    showToast('✓ Entrenamiento guardado');
+  }
+  function reopenWorkout() {
+    var key = getTodayKey();
+    if (state.finished) delete state.finished[key];
+    saveState();
+    renderCurrentDay();
+    showToast('Entrenamiento reabierto');
+  }
+  function formatFinishedTime(iso) {
+    try {
+      var d = new Date(iso);
+      return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+    } catch (e) { return ''; }
+  }
   function getCompletionsForDate(dateKey) { return state.completions[dateKey] || {}; }
 
   // =============================================
@@ -2726,7 +2752,13 @@
 
       html += '  <div class="exercise-focus"><div class="focus-label">💡 Enfoque clave</div>' + ex.focus + '</div>';
 
-      if (meta.description) {
+      // Animación + instrucciones del dataset público (si hay equivalente)
+      var dbRec = getDbRecord(ex.id);
+      var dbHasSteps = !!(dbRec && dbRec.es && dbRec.es.length);
+
+      // La descripción es el mismo contenido en un párrafo corrido: solo se
+      // muestra si no hay pasos numerados del dataset más abajo.
+      if (meta.description && !dbHasSteps) {
         html += '  <div class="exercise-description">' + meta.description + '</div>';
       }
 
@@ -2734,8 +2766,6 @@
         html += '  <div class="exercise-video-wrapper"><iframe src="' + meta.videoUrl + '?rel=0&modestbranding=1" allowfullscreen loading="lazy" title="' + ex.name + '"></iframe></div>';
       }
 
-      // Animación + instrucciones del dataset público (si hay equivalente)
-      var dbRec = getDbRecord(ex.id);
       if (dbRec) {
         // Las fichas propias (Recuperación running) no tienen animación: se
         // muestran los pasos sin el <img>, que si no saldría roto.
@@ -2784,7 +2814,27 @@
       html += '</div>'; // end exercise-card
     });
 
+    // Cierre del entrenamiento
+    var doneCount = 0;
+    effectiveExercises.forEach(function (item) { if (completions[item.ex.id]) doneCount++; });
+    html += '<div class="finish-workout-block">';
+    if (isWorkoutFinished(getTodayKey())) {
+      var at = formatFinishedTime(getFinishedAt(getTodayKey()));
+      html += '  <div class="finish-workout-saved">✓ Entrenamiento guardado' + (at ? ' a las ' + at : '')
+        + '<span class="finish-workout-detail">' + doneCount + ' de ' + effectiveExercises.length + ' ejercicios completados</span></div>';
+      html += '  <button class="finish-workout-reopen" id="reopenWorkoutBtn">Reabrir entrenamiento</button>';
+    } else {
+      html += '  <button class="finish-workout-btn" id="finishWorkoutBtn">🏁 Finalizar entrenamiento</button>';
+      html += '  <div class="finish-workout-hint">Tu progreso se guarda automáticamente, aunque no lo termines.</div>';
+    }
+    html += '</div>';
+
     container.innerHTML = html;
+
+    var finishBtn = container.querySelector('#finishWorkoutBtn');
+    if (finishBtn) finishBtn.addEventListener('click', finishWorkout);
+    var reopenBtn = container.querySelector('#reopenWorkoutBtn');
+    if (reopenBtn) reopenBtn.addEventListener('click', reopenWorkout);
 
     container.querySelectorAll('.exercise-header').forEach(function(header) {
       var origId = header.id.replace('header-', '');
@@ -3227,8 +3277,13 @@
       html += '  <div class="exercise-focus"><div class="focus-label">💡 Enfoque clave</div>' + ex.focus + '</div>';
     }
 
-    // Description
-    if (meta && meta.description) {
+    // Animación + instrucciones del dataset público
+    var dbRec = getDbRecord(ex.id);
+    var dbHasSteps = !!(dbRec && dbRec.es && dbRec.es.length);
+
+    // Description: mismo contenido que los pasos del dataset pero en un
+    // párrafo corrido; se omite cuando esos pasos están disponibles.
+    if (meta && meta.description && !dbHasSteps) {
       html += '  <div class="exercise-description">' + meta.description + '</div>';
     }
 
@@ -3237,8 +3292,6 @@
       html += '  <div class="exercise-video-wrapper"><iframe src="' + meta.videoUrl + '?rel=0&modestbranding=1" allowfullscreen loading="lazy" title="' + ex.name + '"></iframe></div>';
     }
 
-    // Animación + instrucciones del dataset público
-    var dbRec = getDbRecord(ex.id);
     if (dbRec) {
       var gifSrc = EXERCISE_DB.gifUrl(dbRec);
       html += '  <div class="exercise-db-block">';
