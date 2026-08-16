@@ -1,12 +1,12 @@
 /* =============================================
    Gym Calendar - App de Rutina de Ejercicios
-   Versión: 4.12.0 — Programa combinado Fuerza + Running
+   Versión: 4.13.0 — Sergio pasa a Fuerza + Running
    ============================================= */
 
 (function () {
   'use strict';
 
-  var APP_VERSION = '4.12.0';
+  var APP_VERSION = '4.13.0';
 
   // =============================================
   // SERGIO_PHASES: plan Push/Pull/Pierna 3 días/semana
@@ -1959,10 +1959,9 @@
   var CUSTOM_PLAN_KEY = 'gym_custom_plan';
 
   var PROFILES = {
-    sergio: { name: 'Sergio', initial: 'S', phases: SERGIO_PHASES, warmup: WARMUP, defaultDays: [1, 3, 5], daysLabel: '3 días por semana' },
+    sergio: { name: 'Sergio', initial: 'S', phases: RUNFUERZA_PHASES, warmup: WARMUP, defaultDays: [1, 2, 4, 5, 6], daysLabel: '5 días · fuerza + carrera' },
     eva:    { name: 'Eva',    initial: 'E', phases: EVA_PHASES,    warmup: WARMUP_EVA, defaultDays: [1, 4], daysLabel: '2 días por semana' },
-    gely:   { name: 'Gely',   initial: 'G', phases: GELY_PHASES,   warmup: WARMUP_GELY, defaultDays: [1, 3, 5], daysLabel: '3 días tono + remo' },
-    runfuerza: { name: 'Fuerza + Running', initial: 'R', phases: RUNFUERZA_PHASES, warmup: WARMUP, defaultDays: [1, 2, 4, 5, 6], daysLabel: '5 días · fuerza + carrera' }
+    gely:   { name: 'Gely',   initial: 'G', phases: GELY_PHASES,   warmup: WARMUP_GELY, defaultDays: [1, 3, 5], daysLabel: '3 días tono + remo' }
   };
 
   function migrateOldData() {
@@ -1976,6 +1975,20 @@
   }
 
   migrateOldData();
+
+  // Al pasar Sergio a fuerza + carrera, el «Mi plan» que hubiera guardado el
+  // tutorial se retira una sola vez: convivían como dos planes completos y
+  // sobraba uno. El tutorial sigue disponible y vuelve a crearlo si se usa.
+  (function dropLegacyCustomPlan() {
+    try {
+      if (localStorage.getItem('gym_custom_plan_removed')) return;
+      localStorage.setItem('gym_custom_plan_removed', '1');
+      localStorage.removeItem(CUSTOM_PLAN_KEY);
+      if (localStorage.getItem('gym_active_profile') === CUSTOM_PROFILE_ID) {
+        localStorage.setItem('gym_active_profile', 'sergio');
+      }
+    } catch (e) { /* modo privado */ }
+  })();
 
   // El plan generado por el tutorial es un perfil más, así que se registra
   // antes de resolver el perfil activo (si no, «Mi plan» no existiría todavía).
@@ -5645,32 +5658,25 @@
   // semana actual y arrastra los pesos ya registrados en Sergio, que comparte
   // los mismos ids de ejercicio. No se copian las sesiones completadas: son de
   // otro plan y falsearían el calendario.
+  // Sergio pasa a ser el programa combinado fuerza + carrera. Los pesos ya
+  // registrados se conservan solos (mismo perfil, mismos ids de ejercicio),
+  // pero hay dos cosas que sí hay que tocar una única vez:
+  //
+  //  - Los días guardados son [1,3,5] y el plan nuevo tiene 5 sesiones; sin
+  //    actualizarlos, tres días intentarían cubrir cinco entradas.
+  //  - La semana se deduce del registro más antiguo, así que con historial
+  //    previo se arrancaría muy por delante de la semana 12 y el plan de
+  //    carrera aparecería como terminado. Una readaptación tiene que empezar
+  //    por la semana 1, así que se fija el inicio a hoy.
   function initCombinedPlan() {
-    if (activeProfile !== 'runfuerza') return;
+    if (activeProfile !== 'sergio') return;
     if (!state.settings) state.settings = {};
-    if (state.settings.planStart) return;   // ya inicializado
+    if (state.settings.combinedPlan) return;   // ya migrado
 
+    state.settings.combinedPlan = true;
     state.settings.planStart = getTodayKey();
-
-    var imported = 0;
-    try {
-      var raw = localStorage.getItem('gym_calendar_data_sergio');
-      if (raw) {
-        var src = JSON.parse(raw);
-        if (src && src.progress) {
-          if (!state.progress) state.progress = {};
-          Object.keys(src.progress).forEach(function (exId) {
-            if (!state.progress[exId] && Array.isArray(src.progress[exId]) && src.progress[exId].length) {
-              state.progress[exId] = src.progress[exId].slice();
-              imported++;
-            }
-          });
-        }
-      }
-    } catch (e) { /* sin historial que importar */ }
-
+    state.settings.trainingDays = PROFILES.sergio.defaultDays.slice();
     saveState();
-    if (imported) showToast('Importados los pesos de ' + imported + ' ejercicios');
   }
 
   function switchProfile(profileId) {
