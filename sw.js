@@ -1,24 +1,40 @@
-const CACHE_NAME = 'gym-calendar-v4.13.1';
+const CACHE_NAME = 'gym-calendar-v4.13.2';
 // Media del dataset (jsDelivr). Cache aparte: sobrevive a los deploys de la app.
 const MEDIA_CACHE = 'gym-calendar-exercise-media-v1';
 const MEDIA_ORIGIN = 'https://cdn.jsdelivr.net';
 
-const ASSETS = [
-  '/gym-calendar/',
-  '/gym-calendar/index.html',
-  '/gym-calendar/styles.css',
-  '/gym-calendar/app.js',
-  '/gym-calendar/manifest.json',
-  '/gym-calendar/icons/icon-192.svg',
-  '/gym-calendar/icons/icon-512.svg',
-  '/gym-calendar/data/exercises-index.json'
+const BASE = '/gym-calendar/';
+
+// El "app shell": lo que cambia en cada despliegue.
+const SHELL = [
+  BASE,
+  BASE + 'index.html',
+  BASE + 'styles.css',
+  BASE + 'app.js',
+  BASE + 'manifest.json',
+  BASE + 'version.json'
 ];
+
+// Estáticos que casi nunca cambian y pesan (el catálogo son ~900 KB).
+const STATIC = [
+  BASE + 'icons/icon-192.svg',
+  BASE + 'icons/icon-512.svg',
+  BASE + 'data/exercises-index.json'
+];
+
+function isShell(url) {
+  if (url.origin !== self.location.origin) return false;
+  return SHELL.indexOf(url.pathname) !== -1;
+}
 
 self.addEventListener('install', (e) => {
   e.waitUntil(
-    caches.open(CACHE_NAME)
-      .then(cache => cache.addAll(ASSETS))
-      .then(() => self.skipWaiting())
+    caches.open(CACHE_NAME).then(cache =>
+      // `cache: 'reload'` es imprescindible: sin él addAll descarga a través de
+      // la caché HTTP del navegador y la caché nueva se rellena con los
+      // ficheros VIEJOS. Eso dejó la v4.13.1 sirviendo el app.js de la 4.13.0.
+      cache.addAll(SHELL.concat(STATIC).map(u => new Request(u, { cache: 'reload' })))
+    ).then(() => self.skipWaiting())
   );
 });
 
@@ -56,14 +72,36 @@ self.addEventListener('fetch', (e) => {
     return;
   }
 
-  e.respondWith(
-    caches.match(e.request)
-      .then(res => res || fetch(e.request).catch(() => {
-        // Return offline fallback for navigation requests
-        if (e.request.mode === 'navigate') {
-          return caches.match('/gym-calendar/index.html');
+  // El código de la app va a red primero: cache-first ya nos dejó dos veces
+  // con una versión antigua pegada, y un bug servido desde caché no se cura
+  // solo. Si no hay red, se responde con lo cacheado y sigue funcionando.
+  if (isShell(url) || e.request.mode === 'navigate') {
+    e.respondWith(
+      fetch(e.request).then(res => {
+        if (res && res.ok) {
+          const copy = res.clone();
+          caches.open(CACHE_NAME).then(c => c.put(e.request, copy)).catch(() => {});
         }
-        return new Response('Offline', { status: 503 });
-      }))
+        return res;
+      }).catch(() =>
+        caches.match(e.request).then(hit =>
+          hit || (e.request.mode === 'navigate' ? caches.match(BASE + 'index.html') : new Response('Offline', { status: 503 }))
+        )
+      )
+    );
+    return;
+  }
+
+  // El resto (catálogo, iconos): cache-first, que es grande y estable.
+  e.respondWith(
+    caches.match(e.request).then(hit =>
+      hit || fetch(e.request).then(res => {
+        if (res && res.ok) {
+          const copy = res.clone();
+          caches.open(CACHE_NAME).then(c => c.put(e.request, copy)).catch(() => {});
+        }
+        return res;
+      }).catch(() => new Response('Offline', { status: 503 }))
+    )
   );
 });

@@ -1,12 +1,12 @@
 /* =============================================
    Gym Calendar - App de Rutina de Ejercicios
-   Versión: 4.13.1 — Arreglo: Stats reventaba con los días de carrera
+   Versión: 4.13.2 — Arreglo del service worker: servía ficheros viejos
    ============================================= */
 
 (function () {
   'use strict';
 
-  var APP_VERSION = '4.13.1';
+  var APP_VERSION = '4.13.2';
 
   // =============================================
   // SERGIO_PHASES: plan Push/Pull/Pierna 3 días/semana
