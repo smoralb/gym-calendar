@@ -1,12 +1,12 @@
 /* =============================================
    Gym Calendar - App de Rutina de Ejercicios
-   Versión: 4.9.0 — Finalizar entrenamiento y detalle simplificado
+   Versión: 4.10.0 — Buscador de alternativas y aviso de versión nueva
    ============================================= */
 
 (function () {
   'use strict';
 
-  var APP_VERSION = '4.9.0';
+  var APP_VERSION = '4.10.0';
 
   // =============================================
   // SERGIO_PHASES: plan Push/Pull/Pierna 3 días/semana
@@ -1655,6 +1655,37 @@
     return mapped ? EXERCISE_DB.get(mapped) : null;
   }
 
+  // Los sustitutos elegidos en el buscador de alternativas vienen del catálogo
+  // y no están en EXERCISE_DB_MAP / EXERCISE_META, que viven sólo en memoria.
+  // Sin este registro su ficha saldría sin animación ni pasos.
+  function registerCatalogExercise(exercise) {
+    if (!exercise || !exercise.id) return;
+    if (exercise.dbId) EXERCISE_DB_MAP[exercise.id] = exercise.dbId;
+    if (!EXERCISE_META[exercise.id]) {
+      var rec = (exercise.dbId && EXERCISE_DB.isLoaded()) ? EXERCISE_DB.get(exercise.dbId) : null;
+      EXERCISE_META[exercise.id] = {
+        description: rec && rec.es && rec.es.length ? rec.es.join(' ') : '',
+        videoUrl: '',
+        alternatives: []
+      };
+    }
+  }
+
+  // Se llama al arrancar y otra vez cuando termina de cargar el catálogo:
+  // en la primera pasada puede que aún no hubiera dataset del que sacar pasos.
+  function reregisterSwappedExercises() {
+    var perm = state.permanentSwaps || {};
+    Object.keys(perm).forEach(function (k) {
+      if (perm[k] && perm[k].exercise) registerCatalogExercise(perm[k].exercise);
+    });
+    var byDate = state.swaps || {};
+    Object.keys(byDate).forEach(function (d) {
+      Object.keys(byDate[d] || {}).forEach(function (k) {
+        registerCatalogExercise(byDate[d][k]);
+      });
+    });
+  }
+
   // =============================================
   // WARMUP
   // =============================================
@@ -1718,7 +1749,7 @@
   function getStorageKey() { return 'gym_calendar_data_' + activeProfile; }
 
   function getDefaultState() {
-    return { progress: {}, completions: {}, swaps: {}, customDays: {}, finished: {}, settings: { trainingDays: PROFILES[activeProfile].defaultDays.slice() } };
+    return { progress: {}, completions: {}, swaps: {}, permanentSwaps: {}, customDays: {}, finished: {}, settings: { trainingDays: PROFILES[activeProfile].defaultDays.slice() } };
   }
 
   function loadState() {
@@ -1726,7 +1757,7 @@
       var raw = localStorage.getItem(getStorageKey());
       if (raw) {
         var data = JSON.parse(raw);
-        var st = { progress: data.progress || {}, completions: data.completions || {}, swaps: data.swaps || {}, customDays: data.customDays || {}, finished: data.finished || {} };
+        var st = { progress: data.progress || {}, completions: data.completions || {}, swaps: data.swaps || {}, permanentSwaps: data.permanentSwaps || {}, customDays: data.customDays || {}, finished: data.finished || {} };
         st.settings = data.settings || {};
         if (!Array.isArray(st.settings.trainingDays) || st.settings.trainingDays.length === 0) {
           st.settings.trainingDays = PROFILES[activeProfile].defaultDays.slice();
@@ -1978,6 +2009,16 @@
     var maxIdx = 0;
     for (var i = 1; i < numDays; i++) { if (counts[i] > counts[maxIdx]) maxIdx = i; }
     return counts[maxIdx] > 0 ? maxIdx : null;
+  }
+
+  // Sesión programada para una fecha, o null si ese día toca descanso.
+  // renderDayDetail hace este mismo cálculo; se extrae para poder reutilizarlo
+  // desde los listeners del detalle de día.
+  function getDayForDateKey(dateKey) {
+    if (!isTrainingDay(dateKey)) return null;
+    var idx = getRoutineSlotForDate(dateKey);
+    if (idx === -1 || idx === null || idx === undefined) return null;
+    return getPhase(dateKey).days[idx] || null;
   }
 
   function getWorkoutDates() { return Object.keys(state.completions || {}).sort(); }
@@ -2615,12 +2656,23 @@
     if (chevron) chevron.textContent = homeExpandedCards[exerciseId] ? '˅' : '›';
   }
 
+  // Precedencia: el cambio puntual de esa fecha manda sobre el permanente, y
+  // el permanente sólo se aplica desde el día en que se pidió hacia adelante
+  // (así el historial ya registrado sigue mostrando lo que de verdad se hizo).
   function getEffectiveExercises(day, dateKey) {
     var key = dateKey || getTodayKey();
     var todaySwaps = (state.swaps && state.swaps[key]) ? state.swaps[key] : {};
+    var perm = state.permanentSwaps || {};
     return day.exercises.map(function(origEx) {
       var swapped = todaySwaps[origEx.id];
-      return { ex: swapped || origEx, originalId: origEx.id, isSwapped: !!swapped };
+      if (swapped) return { ex: swapped, originalId: origEx.id, isSwapped: true, isPermanent: false };
+      var p = perm[origEx.id];
+      // Las claves son 'YYYY-MM-DD': comparar como texto es correcto y evita
+      // los líos de zona horaria de convertir a Date.
+      if (p && p.exercise && (!p.from || key >= p.from)) {
+        return { ex: p.exercise, originalId: origEx.id, isSwapped: true, isPermanent: true };
+      }
+      return { ex: origEx, originalId: origEx.id, isSwapped: false, isPermanent: false };
     });
   }
 
@@ -2651,7 +2703,410 @@
       saveState();
     }
     renderCurrentDay();
+    refreshHomeDayDetail();
     showToast('Ejercicio original restaurado');
+  }
+
+  // Cambio permanente: se aplica desde hoy en adelante, así los días ya
+  // registrados conservan en el historial el ejercicio que se hizo de verdad.
+  function swapExercisePermanent(originalId, altExercise, reasonKey) {
+    if (!state.permanentSwaps) state.permanentSwaps = {};
+    registerCatalogExercise(altExercise);
+    state.permanentSwaps[originalId] = {
+      from: getTodayKey(),
+      exercise: altExercise,
+      reason: reasonKey || null
+    };
+    // El cambio puntual de hoy sobra: el permanente ya cubre hoy en adelante.
+    if (state.swaps && state.swaps[getTodayKey()]) delete state.swaps[getTodayKey()][originalId];
+    saveState();
+    expandedCards[originalId] = true;
+    homeExpandedCards[originalId] = true;
+    renderCurrentDay();
+    refreshHomeDayDetail();
+    vibrate();
+    showToast('📌 ' + altExercise.name + ' · cambiado en tu rutina');
+  }
+
+  function revertPermanentSwap(originalId) {
+    if (state.permanentSwaps) delete state.permanentSwaps[originalId];
+    saveState();
+    renderCurrentDay();
+    refreshHomeDayDetail();
+    showToast('Ejercicio original restaurado en tu rutina');
+  }
+
+  // =============================================
+  // BUSCADOR DE ALTERNATIVAS
+  // =============================================
+
+  // Motivos por los que se pide un cambio. Cada uno tira de la búsqueda en una
+  // dirección distinta: no es lo mismo no tener mancuernas que no llegar al
+  // ejercicio o que te moleste el hombro.
+  var SWAP_REASONS = [
+    { key: 'material', emoji: '🧰', label: 'No tengo el material',
+      hint: 'Buscamos algo que puedas hacer con lo que tienes.' },
+    { key: 'dificil', emoji: '😥', label: 'No soy capaz / muy difícil',
+      hint: 'Buscamos una versión más sencilla del mismo movimiento.' },
+    { key: 'dolor', emoji: '🤕', label: 'Me duele / me molesta',
+      hint: 'Buscamos algo más suave que trabaje lo mismo.' },
+    { key: 'variar', emoji: '🔄', label: 'Quiero variar / me aburre',
+      hint: 'Buscamos otro ejercicio del mismo tipo.' },
+    { key: 'otra', emoji: '💬', label: 'Otra razón',
+      hint: 'Buscamos otra opción parecida.' }
+  ];
+
+  function reasonByKey(key) {
+    for (var i = 0; i < SWAP_REASONS.length; i++) {
+      if (SWAP_REASONS[i].key === key) return SWAP_REASONS[i];
+    }
+    return SWAP_REASONS[SWAP_REASONS.length - 1];
+  }
+
+  // Material considerado "guiado" o de bajo impacto para el motivo 'dolor'.
+  var GENTLE_EQUIPMENT = { 'body weight': 1, 'cable': 1, 'leverage machine': 1, 'band': 1, 'resistance band': 1, 'stability ball': 1, 'roller': 1 };
+
+  // Devuelve candidatos del catálogo para sustituir a `exercise` por el motivo
+  // `reasonKey`, ya ordenados. `excludeIds` son los que ya se han descartado.
+  // Nunca devuelve vacío si el catálogo tiene algo que ofrecer: si los filtros
+  // estrictos no dan nada, se van relajando por pasos.
+  function findAlternativeCandidates(exercise, reasonKey, excludeIds) {
+    if (!EXERCISE_DB.isLoaded()) return [];
+    excludeIds = excludeIds || [];
+
+    var excluded = {};
+    excludeIds.forEach(function (id) { excluded[id] = 1; });
+
+    var baseRec = getDbRecord(exercise.id);
+    if (baseRec) excluded[baseRec.id] = 1;
+
+    var baseTags = baseRec ? (EXERCISE_TAGS.tagsFor(baseRec) || {}) : {};
+    var basePattern = baseRec ? baseTags._pattern : null;
+    var baseLevel = baseRec ? baseTags._level : null;
+    var baseEq = baseRec ? baseRec.eq : null;
+    var baseTarget = baseRec ? baseRec.tg : null;
+    var basePart = baseRec ? baseRec.bp : null;
+
+    // Material declarado en el asistente, si el usuario hizo el tutorial.
+    var plan = loadCustomPlan();
+    var answers = (plan && plan.answers) ? plan.answers : null;
+    var gearSet = answers ? allowedEquipment(answers) : null;
+    var place = answers ? effectivePlace(answers) : null;
+
+    // Universo de partida. Sin mapeo al dataset no hay patrón ni nivel de
+    // referencia: se tira de búsqueda por texto y se relajan los filtros.
+    var universe = baseRec
+      ? EXERCISE_DB.all()
+      : EXERCISE_DB.search(exercise.muscle || exercise.name || '', { limit: 200 });
+
+    var levelOrder = EXERCISE_TAGS.levelOrder;
+
+    // `relax` 0 = filtros completos, 1 = sin material/nivel, 2 = sólo misma
+    // zona del cuerpo, 3 = lo que dé la búsqueda por texto.
+    function collect(relax) {
+      var items = [];
+      var names = {};
+      universe.forEach(function (rec) {
+        if (excluded[rec.id]) return;
+        var t = EXERCISE_TAGS.tagsFor(rec);
+        if (!t) return;
+
+        if (relax <= 1 && basePattern && t._pattern !== basePattern) return;
+        if (relax === 2 && basePart && rec.bp !== basePart) return;
+
+        var score = 0;
+
+        if (relax === 0) {
+          if (reasonKey === 'material') {
+            // Con el mismo material seguiría sin poder hacerlo.
+            if (baseEq && rec.eq === baseEq) return;
+            if (gearSet) {
+              if (!gearSet[rec.eq || '']) return;
+            } else if (place === 'gimnasio') {
+              if (!t.gimnasio && !t.casa && !t.sin_material) return;
+            } else if (!t.sin_material && !t.casa) {
+              return;
+            }
+            if (t.sin_material) score += 8;
+            else if (t.casa) score += 4;
+
+          } else if (reasonKey === 'dificil') {
+            if (baseLevel && levelOrder[t._level] > levelOrder[baseLevel]) return;
+            if (baseTags._compound && t._compound) return;
+            if (t._level === 'principiante') score += 10;
+            if (!t._compound) score += 4;
+            if (t.sin_material) score += 3;
+
+          } else if (reasonKey === 'dolor') {
+            if (t._level === 'avanzado') return;
+            if (t._level === 'principiante') score += 8;
+            if (t.movilidad) score += 6;
+            if (GENTLE_EQUIPMENT[rec.eq || '']) score += 4;
+
+          } else if (reasonKey === 'variar') {
+            if (baseLevel && levelOrder[t._level] > levelOrder[baseLevel]) return;
+            if (baseTarget && rec.tg === baseTarget) score += 8;
+            if (baseLevel && t._level === baseLevel) score += 4;
+
+          } else { // 'otra'
+            if (baseTarget && rec.tg === baseTarget) score += 6;
+            if (baseLevel && t._level === baseLevel) score += 3;
+          }
+        }
+
+        // Puntuación común a todos los motivos.
+        if (baseTarget && rec.tg === baseTarget) score += 6;
+        if (basePart && rec.bp === basePart) score += 3;
+        if (rec.mid) score += 2;   // con animación se entiende mejor
+
+        items.push({ rec: rec, score: score });
+      });
+
+      items.sort(function (a, b) {
+        return b.score - a.score || a.rec.n.length - b.rec.n.length || a.rec.n.localeCompare(b.rec.n);
+      });
+
+      // El dataset trae variantes ("... v. 2") que al traducir colapsan en el
+      // mismo nombre visible: proponerlas sería repetirse a ojos del usuario.
+      var out = [];
+      items.forEach(function (i) {
+        var visible = EXERCISE_DB.labelName(i.rec.n);
+        if (names[visible]) return;
+        names[visible] = 1;
+        out.push(i.rec);
+      });
+      return out;
+    }
+
+    for (var relax = 0; relax <= 3; relax++) {
+      var found = collect(relax);
+      if (found.length) return found;
+    }
+    return [];
+  }
+
+  // Convierte un registro del catálogo en un ejercicio de rutina, heredando el
+  // esquema de series/repeticiones/descanso del que sustituye. El id es
+  // estable, así que el peso registrado se asocia bien entre sesiones.
+  function catalogRecToExercise(rec, baseExercise, reasonKey) {
+    var t = EXERCISE_TAGS.tagsFor(rec) || {};
+    return {
+      id: 'alt_db_' + rec.id,
+      dbId: rec.id,
+      name: EXERCISE_DB.labelName(rec.n),
+      muscle: EXERCISE_DB.labelTarget(rec.tg),
+      series: baseExercise.series,
+      reps: baseExercise.reps,
+      repsMin: baseExercise.repsMin,
+      repsMax: baseExercise.repsMax,
+      rest: baseExercise.rest,
+      isTimed: baseExercise.isTimed,
+      focus: (rec.es && rec.es.length ? rec.es[0] : 'Movimiento controlado en todo el recorrido.'),
+      weightHint: t.sin_material ? 'Peso corporal' : 'Ajusta el peso a tu nivel',
+      reason: reasonByKey(reasonKey).label
+    };
+  }
+
+  // Modal en dos pantallas: primero el motivo, después las propuestas, que se
+  // pueden ir rechazando indefinidamente con "Buscar otra".
+  function showAlternativeFinderModal(originalId, exercise, dateKey, onDone) {
+    var existing = document.getElementById('altFinderOverlay');
+    if (existing) existing.remove();
+
+    var overlay = document.createElement('div');
+    overlay.id = 'altFinderOverlay';
+    overlay.className = 'alt-finder-overlay';
+
+    var modal = document.createElement('div');
+    modal.className = 'alt-finder-modal';
+    overlay.appendChild(modal);
+    overlay.addEventListener('click', function (e) { if (e.target === overlay) overlay.remove(); });
+    document.body.appendChild(overlay);
+
+    var rejected = [];
+    var candidates = [];
+    var idx = 0;
+    var reasonKey = null;
+
+    function close() { overlay.remove(); }
+
+    function addCancel(label) {
+      var btn = document.createElement('button');
+      btn.className = 'alt-finder-cancel';
+      btn.textContent = label || 'Cancelar';
+      btn.addEventListener('click', function (e) { e.stopPropagation(); close(); });
+      modal.appendChild(btn);
+    }
+
+    function renderReasons() {
+      modal.innerHTML = '';
+      var title = document.createElement('div');
+      title.className = 'alt-finder-title';
+      title.textContent = '¿Por qué quieres cambiarlo?';
+      modal.appendChild(title);
+
+      var sub = document.createElement('div');
+      sub.className = 'alt-finder-subtitle';
+      sub.textContent = exercise.name;
+      modal.appendChild(sub);
+
+      SWAP_REASONS.forEach(function (r) {
+        var btn = document.createElement('button');
+        btn.className = 'alt-finder-reason-btn';
+        btn.innerHTML = '<span class="afr-emoji">' + r.emoji + '</span><span class="afr-label">' + escapeHtml(r.label) + '</span>';
+        btn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          reasonKey = r.key;
+          rejected = [];
+          idx = 0;
+          startSearch();
+        });
+        modal.appendChild(btn);
+      });
+
+      addCancel();
+    }
+
+    function renderLoading(msg) {
+      modal.innerHTML = '';
+      var m = document.createElement('div');
+      m.className = 'alt-finder-subtitle';
+      m.textContent = msg;
+      modal.appendChild(m);
+    }
+
+    function startSearch() {
+      if (!EXERCISE_DB.isLoaded()) {
+        renderLoading('Cargando catálogo…');
+        EXERCISE_DB.load().then(function () {
+          runSearch();
+        }).catch(function () {
+          renderLoading('No se pudo cargar el catálogo.');
+          addCancel('Cerrar');
+        });
+        return;
+      }
+      runSearch();
+    }
+
+    function runSearch() {
+      candidates = findAlternativeCandidates(exercise, reasonKey, rejected);
+      idx = 0;
+      renderProposal();
+    }
+
+    function renderEmpty() {
+      modal.innerHTML = '';
+      var title = document.createElement('div');
+      title.className = 'alt-finder-title';
+      title.textContent = 'No hay más alternativas';
+      modal.appendChild(title);
+
+      var sub = document.createElement('div');
+      sub.className = 'alt-finder-subtitle';
+      sub.textContent = 'No hemos encontrado (más) alternativas para ese motivo.';
+      modal.appendChild(sub);
+
+      var again = document.createElement('button');
+      again.className = 'alt-finder-again';
+      again.textContent = '↩ Probar con otro motivo';
+      again.addEventListener('click', function (e) { e.stopPropagation(); renderReasons(); });
+      modal.appendChild(again);
+
+      addCancel();
+    }
+
+    function renderProposal() {
+      if (idx >= candidates.length) { renderEmpty(); return; }
+      var rec = candidates[idx];
+      var reason = reasonByKey(reasonKey);
+      var alt = catalogRecToExercise(rec, exercise, reasonKey);
+
+      modal.innerHTML = '';
+
+      var title = document.createElement('div');
+      title.className = 'alt-finder-title';
+      title.textContent = 'Prueba con esto';
+      modal.appendChild(title);
+
+      var hint = document.createElement('div');
+      hint.className = 'alt-finder-hint-reason';
+      hint.textContent = reason.emoji + ' ' + reason.hint;
+      modal.appendChild(hint);
+
+      var card = document.createElement('div');
+      card.className = 'alt-finder-card';
+      var html = '';
+      var gif = EXERCISE_DB.gifUrl(rec);
+      if (gif) {
+        html += '<img class="alt-finder-card-gif" loading="lazy" alt="Animación: ' + escapeHtml(alt.name) + '" src="' + gif + '">';
+      }
+      html += '<div class="alt-finder-card-name">' + escapeHtml(alt.name) + '</div>';
+      html += '<div class="alt-finder-card-meta">' + escapeHtml(alt.muscle) + ' · ' + escapeHtml(EXERCISE_DB.labelEquipment(rec.eq)) + '</div>';
+      html += '<div class="alt-finder-card-scheme">' + escapeHtml(String(alt.series)) + '×' + escapeHtml(String(alt.reps)) + ' · descanso ' + escapeHtml(String(alt.rest || '—')) + '</div>';
+      if (rec.es && rec.es.length) {
+        html += '<ol class="alt-finder-steps">';
+        rec.es.slice(0, 3).forEach(function (s) { html += '<li>' + escapeHtml(s) + '</li>'; });
+        html += '</ol>';
+      }
+      card.innerHTML = html;
+      modal.appendChild(card);
+
+      var actions = document.createElement('div');
+      actions.className = 'alt-finder-actions';
+
+      var again = document.createElement('button');
+      again.className = 'alt-finder-again';
+      again.textContent = '🔄 Buscar otra';
+      again.addEventListener('click', function (e) {
+        e.stopPropagation();
+        rejected.push(rec.id);
+        idx++;
+        // Agotada la tanda, se vuelve a buscar con los rechazados fuera: así
+        // entran en juego los filtros relajados y siempre hay salida.
+        if (idx >= candidates.length) {
+          candidates = findAlternativeCandidates(exercise, reasonKey, rejected);
+          idx = 0;
+        }
+        renderProposal();
+      });
+      actions.appendChild(again);
+
+      var today = document.createElement('button');
+      today.className = 'alt-finder-today';
+      today.textContent = '✓ Sólo por hoy';
+      today.addEventListener('click', function (e) {
+        e.stopPropagation();
+        registerCatalogExercise(alt);
+        close();
+        swapExercise(originalId, alt, dateKey);
+        if (onDone) onDone();
+      });
+      actions.appendChild(today);
+
+      var perm = document.createElement('button');
+      perm.className = 'alt-finder-perm';
+      perm.textContent = '📌 Cambiarlo en mi rutina';
+      perm.addEventListener('click', function (e) {
+        e.stopPropagation();
+        close();
+        swapExercisePermanent(originalId, alt, reasonKey);
+        if (onDone) onDone();
+      });
+      actions.appendChild(perm);
+
+      modal.appendChild(actions);
+
+      var other = document.createElement('button');
+      other.className = 'alt-finder-other-reason';
+      other.textContent = '↩ Cambiar el motivo';
+      other.addEventListener('click', function (e) { e.stopPropagation(); renderReasons(); });
+      modal.appendChild(other);
+
+      addCancel();
+    }
+
+    renderReasons();
   }
 
   // Repinta el detalle del día seleccionado en la pestaña Inicio
@@ -2806,8 +3261,17 @@
         html += '  </div>';
       }
 
+      html += '  <div class="alt-finder-block">';
+      html += '    <button class="alt-finder-btn" data-orig="' + originalId + '">🔍 Buscar alternativa</button>';
+      html += '    <div class="alt-finder-hint">Si no tienes el material o no puedes hacerlo, te proponemos otra opción.</div>';
+      html += '  </div>';
+
       if (isSwapped) {
-        html += '  <div class="swap-indicator">⇔ Usando alternativa · <button class="revert-btn" data-orig="' + originalId + '">Volver al original</button></div>';
+        if (item.isPermanent) {
+          html += '  <div class="swap-indicator swap-indicator-perm">📌 Cambiado en tu rutina · <button class="revert-perm-btn" data-orig="' + originalId + '">Volver al original</button></div>';
+        } else {
+          html += '  <div class="swap-indicator">⇔ Usando alternativa sólo hoy · <button class="revert-btn" data-orig="' + originalId + '">Volver al original</button></div>';
+        }
       }
 
       html += '</div>'; // end exercise-body
@@ -2879,6 +3343,25 @@
       btn.addEventListener('click', function(e) {
         e.stopPropagation();
         revertSwap(btn.dataset.orig);
+      });
+    });
+
+    container.querySelectorAll('.revert-perm-btn').forEach(function(btn) {
+      btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        revertPermanentSwap(btn.dataset.orig);
+      });
+    });
+
+    container.querySelectorAll('.alt-finder-btn').forEach(function(btn) {
+      btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        var origId = btn.dataset.orig;
+        var current = null;
+        getEffectiveExercises(day).forEach(function (it) {
+          if (it.originalId === origId) current = it.ex;
+        });
+        if (current) showAlternativeFinderModal(origId, current, null, null);
       });
     });
 
@@ -3187,6 +3670,33 @@
       });
     });
 
+    detailEl.querySelectorAll('.home-revert-perm-btn').forEach(function(btn) {
+      btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        revertPermanentSwap(btn.dataset.orig);
+        refreshHomeDayDetail();
+      });
+    });
+
+    detailEl.querySelectorAll('.home-alt-finder-btn').forEach(function(btn) {
+      btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        var origId = btn.dataset.orig;
+        var dk = btn.dataset.date || getTodayKey();
+        var day = getDayForDateKey(dk);
+        if (!day) return;
+        var current = null;
+        getEffectiveExercises(day, dk).forEach(function (it) {
+          if (it.originalId === origId) current = it.ex;
+        });
+        if (current) {
+          showAlternativeFinderModal(origId, current, btn.dataset.date || null, function () {
+            refreshHomeDayDetail();
+          });
+        }
+      });
+    });
+
     detailEl.querySelectorAll('.day-action-btn').forEach(function(btn) {
       btn.addEventListener('click', function() {
         var action = btn.dataset.action;
@@ -3328,8 +3838,19 @@
       html += '  </div>';
     }
 
+    if (!readOnly) {
+      html += '  <div class="alt-finder-block">';
+      html += '    <button class="alt-finder-btn home-alt-finder-btn" data-orig="' + originalId + '" data-date="' + (dateKey || '') + '">🔍 Buscar alternativa</button>';
+      html += '    <div class="alt-finder-hint">Si no tienes el material o no puedes hacerlo, te proponemos otra opción.</div>';
+      html += '  </div>';
+    }
+
     if (isSwapped && !readOnly) {
-      html += '  <div class="swap-indicator">⇔ Usando alternativa · <button class="home-revert-btn" data-orig="' + originalId + '" data-date="' + (dateKey || '') + '">Volver al original</button></div>';
+      if (opts.isPermanent) {
+        html += '  <div class="swap-indicator swap-indicator-perm">📌 Cambiado en tu rutina · <button class="home-revert-perm-btn" data-orig="' + originalId + '">Volver al original</button></div>';
+      } else {
+        html += '  <div class="swap-indicator">⇔ Usando alternativa sólo hoy · <button class="home-revert-btn" data-orig="' + originalId + '" data-date="' + (dateKey || '') + '">Volver al original</button></div>';
+      }
     }
 
     html += '</div>'; // end exercise-body
@@ -3426,7 +3947,7 @@
       getEffectiveExercises(day, dateKey).forEach(function (item) {
         var meta = EXERCISE_META[item.originalId] || {};
         html += renderExerciseDetailItemForHome(item.ex, meta, {
-          dateKey: dateKey, originalId: item.originalId, isSwapped: item.isSwapped
+          dateKey: dateKey, originalId: item.originalId, isSwapped: item.isSwapped, isPermanent: item.isPermanent
         });
       });
       html += '  </div>';
@@ -3444,7 +3965,7 @@
     getEffectiveExercises(day, dateKey).forEach(function (item) {
       var meta = EXERCISE_META[item.originalId] || {};
       html += renderExerciseDetailItemForHome(item.ex, meta, {
-        dateKey: dateKey, originalId: item.originalId, isSwapped: item.isSwapped
+        dateKey: dateKey, originalId: item.originalId, isSwapped: item.isSwapped, isPermanent: item.isPermanent
       });
     });
     html += '  </div>';
@@ -4563,6 +5084,8 @@
     PHASES = PROFILES[activeProfile].phases;
     ACTIVE_WARMUP = PROFILES[activeProfile].warmup;
     state = loadState();
+    // Cada perfil guarda sus propios cambios de ejercicio
+    reregisterSwappedExercises();
     updateProfileUI();
     renderRoutineStatus();
     renderCurrentDay();
@@ -4574,9 +5097,94 @@
   }
 
   // =============================================
+  // AVISO DE VERSIÓN NUEVA
+  // =============================================
+  // En iOS la PWA se queda suspendida en el selector de apps y puede pasar
+  // días sin volver a navegar, así que no se entera de que hay versión nueva.
+  // Aquí se fuerza la comprobación al abrir y al volver del segundo plano, y
+  // cuando el service worker nuevo toma el control se ofrece recargar.
+  var updateBannerShown = false;
+
+  function showUpdateBanner() {
+    if (updateBannerShown) return;
+    updateBannerShown = true;
+
+    var bar = document.createElement('div');
+    bar.className = 'update-banner';
+    bar.id = 'updateBanner';
+
+    var txt = document.createElement('span');
+    txt.className = 'update-banner-text';
+    txt.textContent = '✨ Nueva versión disponible';
+    bar.appendChild(txt);
+
+    var btn = document.createElement('button');
+    btn.className = 'update-banner-btn';
+    btn.textContent = 'Actualizar';
+    btn.addEventListener('click', function () {
+      btn.disabled = true;
+      btn.textContent = 'Actualizando…';
+      window.location.reload();
+    });
+    bar.appendChild(btn);
+
+    var close = document.createElement('button');
+    close.className = 'update-banner-close';
+    close.setAttribute('aria-label', 'Cerrar');
+    close.textContent = '✕';
+    close.addEventListener('click', function () { bar.remove(); });
+    bar.appendChild(close);
+
+    document.body.appendChild(bar);
+  }
+
+  function setupServiceWorker() {
+    if (!('serviceWorker' in navigator)) return;
+
+    // Si ya hay un worker controlando la página, cualquier worker nuevo que
+    // aparezca es una actualización. En la primera visita no lo hay, y ahí no
+    // se avisa de nada: no habría de qué.
+    var hadController = !!navigator.serviceWorker.controller;
+
+    navigator.serviceWorker.addEventListener('controllerchange', function () {
+      if (hadController) showUpdateBanner();
+    });
+
+    function register() {
+      navigator.serviceWorker.register('sw.js').then(function (reg) {
+        reg.addEventListener('updatefound', function () {
+          var nw = reg.installing;
+          if (!nw) return;
+          nw.addEventListener('statechange', function () {
+            if (nw.state === 'installed' && navigator.serviceWorker.controller) {
+              showUpdateBanner();
+            }
+          });
+        });
+
+        function checkForUpdate() { reg.update().catch(function () {}); }
+
+        // Al volver del segundo plano: es el momento en que el usuario abre la
+        // PWA desde el icono, que en iOS muchas veces no dispara navegación.
+        document.addEventListener('visibilitychange', function () {
+          if (document.visibilityState === 'visible') checkForUpdate();
+        });
+        window.addEventListener('focus', checkForUpdate);
+        checkForUpdate();
+      }).catch(function () {});
+    }
+
+    // Esperar a 'load' evita competir con la carga inicial, pero si ya ha
+    // pasado el evento no volverá a dispararse y el registro no ocurriría.
+    if (document.readyState === 'complete') register();
+    else window.addEventListener('load', register);
+  }
+
+  // =============================================
   // INIT
   // =============================================
   function init() {
+    reregisterSwappedExercises();
     renderRoutineStatus();
     renderCurrentDay();
     updateAll();
@@ -4617,9 +5225,7 @@
     var wizardClose = document.getElementById('wizardClose');
     if (wizardClose) wizardClose.addEventListener('click', closeRoutineWizard);
 
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js').catch(function () {}); });
-    }
+    setupServiceWorker();
 
     var pendingOnboarding = needsOnboarding();
     // Bloquea la app desde el primer frame para que no se vea el fondo
@@ -4629,6 +5235,8 @@
     EXERCISE_DB.load().then(function () {
       // Ahora sí hay dataset: el plan generado recupera sus descripciones
       if (savedCustomPlan) installCustomPlan(savedCustomPlan);
+      // Los sustitutos guardados necesitan el dataset para recuperar sus pasos
+      reregisterSwappedExercises();
       if (currentTab === 'rutina') renderCurrentDay();
       if (currentTab === 'db') renderExerciseBrowser();
       if (pendingOnboarding) openRoutineWizard(true);

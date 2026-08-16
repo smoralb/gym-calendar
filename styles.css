@@ -2964,3 +2964,317 @@ body.onboarding-lock::before {
   line-height: 1.6;
   color: var(--text-secondary);
 }
+
+/* =============================================
+   BUSCADOR DE ALTERNATIVAS
+   ============================================= */
+.alt-finder-block {
+  padding: 10px 16px 12px;
+  border-top: 1px dashed var(--border-color);
+}
+
+.alt-finder-btn {
+  display: block;
+  width: 100%;
+  padding: 10px 16px;
+  border-radius: 10px;
+  border: 1px solid var(--border-color);
+  background: var(--surface-2, #1e2235);
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: center;
+}
+
+.alt-finder-btn:active {
+  background: var(--accent-primary);
+  color: #fff;
+  border-color: var(--accent-primary);
+}
+
+.alt-finder-hint {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  margin-top: 6px;
+  text-align: center;
+  line-height: 1.4;
+}
+
+.swap-indicator-perm {
+  color: var(--accent-primary);
+}
+
+.revert-perm-btn,
+.home-revert-perm-btn {
+  font-size: 0.72rem;
+  font-weight: 600;
+  background: none;
+  border: none;
+  color: var(--accent-primary);
+  cursor: pointer;
+  text-decoration: underline;
+  padding: 0;
+}
+
+/* ---- Modal ---- */
+.alt-finder-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.alt-finder-modal {
+  background: var(--surface-1, #16192a);
+  border-radius: 20px 20px 0 0;
+  padding: 24px 20px 32px;
+  width: 100%;
+  max-width: 480px;
+  /* La ficha con animación y pasos es alta: el scroll va dentro del modal */
+  max-height: 85vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.alt-finder-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  text-align: center;
+}
+
+.alt-finder-subtitle {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  text-align: center;
+  margin-bottom: 8px;
+  line-height: 1.4;
+}
+
+.alt-finder-hint-reason {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-align: center;
+  margin-bottom: 4px;
+  line-height: 1.4;
+}
+
+.alt-finder-reason-btn {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 18px;
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
+  background: var(--surface-2, #1e2235);
+  color: var(--text-primary);
+  font-size: 0.92rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+}
+
+.alt-finder-reason-btn:active {
+  background: var(--accent-primary);
+  color: #fff;
+  border-color: var(--accent-primary);
+}
+
+.afr-emoji {
+  font-size: 1.35rem;
+  line-height: 1;
+}
+
+.afr-label {
+  flex: 1;
+}
+
+/* ---- Ficha de la propuesta ---- */
+.alt-finder-card {
+  background: var(--surface-2, #1e2235);
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  padding: 14px;
+  text-align: center;
+}
+
+.alt-finder-card-gif {
+  display: block;
+  width: 100%;
+  max-width: 260px;
+  margin: 0 auto 10px;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.alt-finder-card-name {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.3;
+}
+
+.alt-finder-card-meta {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin-top: 3px;
+}
+
+.alt-finder-card-scheme {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--accent-green);
+  margin-top: 8px;
+}
+
+.alt-finder-steps {
+  text-align: left;
+  margin: 12px 0 0;
+  padding-left: 20px;
+  font-size: 0.76rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.alt-finder-steps li {
+  margin-bottom: 5px;
+}
+
+/* ---- Botonera ---- */
+.alt-finder-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.alt-finder-again,
+.alt-finder-today,
+.alt-finder-perm {
+  padding: 13px 16px;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: center;
+  width: 100%;
+}
+
+.alt-finder-again {
+  background: var(--surface-2, #1e2235);
+  border-color: var(--border-color);
+  color: var(--text-primary);
+}
+
+.alt-finder-today {
+  background: var(--accent-secondary);
+  color: #fff;
+}
+
+.alt-finder-perm {
+  background: var(--accent-primary);
+  color: #fff;
+}
+
+.alt-finder-again:active,
+.alt-finder-today:active,
+.alt-finder-perm:active {
+  opacity: 0.75;
+}
+
+.alt-finder-other-reason {
+  margin-top: 2px;
+  padding: 8px;
+  border: none;
+  background: none;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  cursor: pointer;
+  text-align: center;
+  text-decoration: underline;
+}
+
+.alt-finder-cancel {
+  padding: 12px;
+  border: none;
+  background: none;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  cursor: pointer;
+  text-align: center;
+}
+
+/* =============================================
+   AVISO DE VERSIÓN NUEVA
+   ============================================= */
+.update-banner {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  /* Por encima de la barra de pestañas y del área segura del iPhone */
+  bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  z-index: 1100;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 12px 12px 16px;
+  border-radius: 14px;
+  background: var(--surface-2, #1e2235);
+  border: 1px solid var(--accent-primary);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+  max-width: 456px;
+  margin: 0 auto;
+  animation: update-banner-in 0.28s ease-out;
+}
+
+@keyframes update-banner-in {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.update-banner-text {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.update-banner-btn {
+  flex-shrink: 0;
+  padding: 8px 16px;
+  border-radius: 10px;
+  border: none;
+  background: var(--accent-primary);
+  color: #fff;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.update-banner-btn:active {
+  opacity: 0.75;
+}
+
+.update-banner-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.update-banner-close {
+  flex-shrink: 0;
+  padding: 4px 6px;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  cursor: pointer;
+  line-height: 1;
+}
