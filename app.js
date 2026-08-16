@@ -1,12 +1,12 @@
 /* =============================================
    Gym Calendar - App de Rutina de Ejercicios
-   Versión: 4.13.0 — Sergio pasa a Fuerza + Running
+   Versión: 4.13.1 — Arreglo: Stats reventaba con los días de carrera
    ============================================= */
 
 (function () {
   'use strict';
 
-  var APP_VERSION = '4.13.0';
+  var APP_VERSION = '4.13.1';
 
   // =============================================
   // SERGIO_PHASES: plan Push/Pull/Pierna 3 días/semana
@@ -1907,8 +1907,11 @@
       return { id: def.id, day: def.day, emoji: def.emoji, title: def.title, exercises: list };
     }
 
+    // `exercises: []` no es decorativo: hay bastante código que recorre
+    // day.exercises sin preguntar (las stats, findExercise, el resumen del
+    // día...). Dejarlo sin definir hacía que la pestaña Stats reventase.
     function runDay(idx, day, title, emoji) {
-      return { id: 'run' + idx, day: day, emoji: emoji || '🏃', title: title, type: 'running', runIdx: idx };
+      return { id: 'run' + idx, day: day, emoji: emoji || '🏃', title: title, type: 'running', runIdx: idx, exercises: [] };
     }
 
     // Fuerza A (lunes) — cuerpo completo con énfasis en empuje
@@ -3579,11 +3582,20 @@
     // Los días de carrera sustituyen a la sesión de fuerza
     if (isRunningDay(getTodayKey())) {
       var runHtml = renderRunningSessionCard(getTodayKey(), {});
+      var head = '<div class="day-view-header"><h2>🏃 Carrera</h2><p>Plan de vuelta a correr</p></div>';
       if (runHtml) {
-        container.innerHTML = '<div class="day-view-header"><h2>🏃 Carrera</h2><p>Plan de vuelta a correr</p></div>' + runHtml;
+        container.innerHTML = head + runHtml;
         bindRunningDoneButtons(container);
-        return;
+      } else {
+        // Sin sesión: pasadas las 12 semanas, o un día de más en la semana 12
+        var rw = getRunningWeek(getTodayKey());
+        container.innerHTML = head + '<div class="running-card"><div class="running-card-sub">'
+          + (rw > RUNNING_TOTAL_WEEKS
+              ? '¡Has terminado las 12 semanas del plan! 🎉'
+              : 'Esta semana el plan sólo tiene ' + ((RUNNING_PLAN[rw] || []).length) + ' sesiones. Hoy, descanso o fuerza.')
+          + '</div></div>';
       }
+      return;
     }
 
     var routineIdx = getTodayRoutine();
