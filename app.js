@@ -1,12 +1,12 @@
 /* =============================================
    Gym Calendar - App de Rutina de Ejercicios
-   Versión: 4.11.0 — Plan de vuelta a correr en 12 semanas
+   Versión: 4.12.0 — Programa combinado Fuerza + Running
    ============================================= */
 
 (function () {
   'use strict';
 
-  var APP_VERSION = '4.11.0';
+  var APP_VERSION = '4.12.0';
 
   // =============================================
   // SERGIO_PHASES: plan Push/Pull/Pierna 3 días/semana
@@ -1593,6 +1593,39 @@
 
   var RUNNING_TOTAL_WEEKS = 12;
 
+  // RUNNING_RECOVERY es un catálogo consultable: sus fichas no traen series ni
+  // repeticiones. Esto las envuelve como ejercicios de rutina para poder
+  // meterlas en el bloque de mejora al final de los días de fuerza.
+  function runningExtraExercise(recoveryId, opts) {
+    opts = opts || {};
+    var rec = null;
+    for (var i = 0; i < RUNNING_RECOVERY.length; i++) {
+      if (RUNNING_RECOVERY[i].id === recoveryId) { rec = RUNNING_RECOVERY[i]; break; }
+    }
+    if (!rec) return null;
+    var id = 'rr_' + recoveryId;
+    if (rec.db) EXERCISE_DB_MAP[id] = rec.db;
+    if (!EXERCISE_META[id]) {
+      EXERCISE_META[id] = { description: rec.description || '', videoUrl: '', alternatives: [] };
+    }
+    var timed = !!opts.isTimed;
+    var reps = opts.reps || (timed ? '30 seg' : '12');
+    return {
+      id: id,
+      name: rec.name,
+      muscle: (rec.muscles && rec.muscles.length) ? rec.muscles.join(' / ') : 'Core',
+      series: opts.series || 2,
+      reps: reps,
+      repsMin: parseInt(reps, 10) || 12,
+      repsMax: parseInt(reps, 10) || 12,
+      rest: opts.rest || '45 seg',
+      isTimed: timed,
+      focus: rec.description || 'Movimiento controlado en todo el recorrido.',
+      weightHint: 'Peso corporal',
+      group: 'running'
+    };
+  }
+
   function runningPhaseForWeek(week) {
     for (var i = 0; i < RUNNING_PHASES.length; i++) {
       if (RUNNING_PHASES[i].weeks.indexOf(week) !== -1) return RUNNING_PHASES[i];
@@ -1798,6 +1831,125 @@
   };
 
   // =============================================
+  // RUNFUERZA_PHASES: programa combinado fuerza + carrera
+  // =============================================
+  // 5 días por semana en orden L, M, J, V, S. getRoutineSlotForDate() indexa
+  // esta lista con la posición del día dentro de getTrainingDays(), así que el
+  // calendario programa carrera y fuerza sin distinguirlas.
+  //
+  // Los ejercicios de fuerza se copian de SERGIO_PHASES por id, para conservar
+  // animaciones, descripciones y el historial de pesos. Van en superseries
+  // (campo `ss`) para meter cuerpo completo en unos 30 minutos: sólo el último
+  // ejercicio de cada pareja lleva descanso, los demás encadenan.
+  var RUNFUERZA_PHASES = (function () {
+
+    function findIn(phaseIdx, id) {
+      var days = SERGIO_PHASES[phaseIdx].days;
+      for (var d = 0; d < days.length; d++) {
+        for (var e = 0; e < days[d].exercises.length; e++) {
+          if (days[d].exercises[e].id === id) return days[d].exercises[e];
+        }
+      }
+      return null;
+    }
+
+    // Busca un ejercicio por id y lo clona con los campos de superserie.
+    // Clonar evita que ajustar el descanso aquí modifique la rutina de Sergio,
+    // que comparte los mismos objetos.
+    //
+    // No todos los ejercicios existen en las tres fases (el peso muerto rumano
+    // y el crunch, por ejemplo, sólo están en el mes 2), así que si falta en la
+    // fase pedida se coge de donde esté y se le normalizan las series a las de
+    // esa fase — si no, una superserie mezclaría 3 y 4 vueltas.
+    function ex(phaseIdx, id, ss, isLast) {
+      var src = findIn(phaseIdx, id);
+      var borrowed = false;
+      if (!src) {
+        for (var p = 0; p < SERGIO_PHASES.length && !src; p++) src = findIn(p, id);
+        borrowed = true;
+      }
+      if (!src) return null;
+
+      var copy = {};
+      for (var k in src) if (Object.prototype.hasOwnProperty.call(src, k)) copy[k] = src[k];
+      if (borrowed) {
+        var ref = findIn(phaseIdx, 'press_plano');
+        if (ref) copy.series = ref.series;
+      }
+      copy.ss = ss;
+      // Sólo se descansa al cerrar la superserie
+      copy.rest = isLast ? '60 seg' : '0';
+      return copy;
+    }
+
+    function strengthDay(phaseIdx, def) {
+      var list = [];
+      def.pairs.forEach(function (pair, pi) {
+        var tag = String.fromCharCode(65 + pi);   // 'A', 'B', 'C'
+        var built = [];
+        pair.forEach(function (id, ei) {
+          var b = ex(phaseIdx, id, tag, ei === pair.length - 1);
+          if (b) built.push(b);
+        });
+        // Los dos ejercicios de una superserie se hacen el mismo número de
+        // vueltas: si vinieran con series distintas, la cabecera del grupo
+        // mentiría sobre uno de los dos.
+        if (built.length) {
+          var rounds = built[0].series;
+          built.forEach(function (b) { b.series = rounds; });
+        }
+        built.forEach(function (b) { list.push(b); });
+      });
+      def.extras.forEach(function (spec) {
+        var built = runningExtraExercise(spec.id, spec);
+        if (built) list.push(built);
+      });
+      return { id: def.id, day: def.day, emoji: def.emoji, title: def.title, exercises: list };
+    }
+
+    function runDay(idx, day, title, emoji) {
+      return { id: 'run' + idx, day: day, emoji: emoji || '🏃', title: title, type: 'running', runIdx: idx };
+    }
+
+    // Fuerza A (lunes) — cuerpo completo con énfasis en empuje
+    var A = [
+      { pairs: [['sentadilla_goblet', 'press_plano'], ['press_militar_sentado', 'remo_maquina'], ['elevaciones_laterales', 'extension_triceps']],
+        extras: [{ id: 'glute_bridge', reps: '15' }, { id: 'double_calf_raise', reps: '20' }] },
+      { pairs: [['sentadilla_goblet', 'press_plano'], ['press_militar_pie', 'remo_maquina'], ['elevaciones_laterales', 'fondos_triceps']],
+        extras: [{ id: 'single_leg_glute_bridge', reps: '12' }, { id: 'double_calf_raise', reps: '20' }] },
+      { pairs: [['sentadilla_goblet', 'press_inclinado'], ['press_militar_pie', 'remo_maquina'], ['elevaciones_laterales', 'combo_triceps']],
+        extras: [{ id: 'single_leg_squat', reps: '8' }, { id: 'single_calf_raise', reps: '15' }] }
+    ];
+
+    // Fuerza B (viernes) — cuerpo completo con énfasis en tirón
+    var B = [
+      { pairs: [['peso_muerto_rumano', 'remo_una_mano'], ['zancadas_estaticas', 'pajaro'], ['curl_biceps', 'crunch']],
+        extras: [{ id: 'single_calf_raise', reps: '15' }, { id: 'side_plank', reps: '30 seg', isTimed: true }, { id: 'dead_bug', reps: '12' }] },
+      { pairs: [['peso_muerto_rumano', 'remo_una_mano'], ['zancadas_estaticas', 'remo_menton'], ['curl_martillo', 'crunch']],
+        extras: [{ id: 'single_calf_raise', reps: '15' }, { id: 'side_plank_leg_raise', reps: '30 seg', isTimed: true }, { id: 'dead_bug_isometric', reps: '30 seg', isTimed: true }] },
+      { pairs: [['peso_muerto_rumano', 'remo_una_mano'], ['zancadas_caminando', 'combo_hombro'], ['curl_concentrado', 'crunch']],
+        extras: [{ id: 'single_calf_raise', reps: '20' }, { id: 'copenhagen_plank', reps: '20 seg', isTimed: true }, { id: 'hip_hike', reps: '15' }] }
+    ];
+
+    return SERGIO_PHASES.map(function (srcPhase, pi) {
+      A[pi].id = 'fuerzaA'; A[pi].day = 'Fuerza A'; A[pi].emoji = '💪'; A[pi].title = 'Cuerpo completo · énfasis empuje';
+      B[pi].id = 'fuerzaB'; B[pi].day = 'Fuerza B'; B[pi].emoji = '🏋️'; B[pi].title = 'Cuerpo completo · énfasis tirón';
+      return {
+        id: srcPhase.id,
+        name: srcPhase.name,
+        subtitle: srcPhase.subtitle,
+        days: [
+          strengthDay(pi, A[pi]),                                   // Lunes
+          runDay(0, 'Carrera', 'Sesión de carrera'),                // Martes
+          runDay(1, 'Carrera', 'Sesión de carrera'),                // Jueves
+          strengthDay(pi, B[pi]),                                   // Viernes
+          runDay(2, 'Carrera larga', 'Rodaje largo de la semana')   // Sábado
+        ]
+      };
+    });
+  })();
+
+  // =============================================
   // PROFILES
   // =============================================
   // El perfil del tutorial se registra durante el arranque, antes que el resto
@@ -1809,7 +1961,8 @@
   var PROFILES = {
     sergio: { name: 'Sergio', initial: 'S', phases: SERGIO_PHASES, warmup: WARMUP, defaultDays: [1, 3, 5], daysLabel: '3 días por semana' },
     eva:    { name: 'Eva',    initial: 'E', phases: EVA_PHASES,    warmup: WARMUP_EVA, defaultDays: [1, 4], daysLabel: '2 días por semana' },
-    gely:   { name: 'Gely',   initial: 'G', phases: GELY_PHASES,   warmup: WARMUP_GELY, defaultDays: [1, 3, 5], daysLabel: '3 días tono + remo' }
+    gely:   { name: 'Gely',   initial: 'G', phases: GELY_PHASES,   warmup: WARMUP_GELY, defaultDays: [1, 3, 5], daysLabel: '3 días tono + remo' },
+    runfuerza: { name: 'Fuerza + Running', initial: 'R', phases: RUNFUERZA_PHASES, warmup: WARMUP, defaultDays: [1, 2, 4, 5, 6], daysLabel: '5 días · fuerza + carrera' }
   };
 
   function migrateOldData() {
@@ -1909,6 +2062,10 @@
   // PHASE DETECTION
   // =============================================
   function getStartDate() {
+    // Los planes con fecha de inicio explícita mandan: si se dedujera del
+    // registro más antiguo, importar el historial de pesos de otro perfil
+    // arrancaría el plan en una semana avanzada.
+    if (state.settings && state.settings.planStart) return state.settings.planStart;
     // Derive start date from earliest record, or use today
     var dates = [];
     for (var date in state.completions) dates.push(date);
@@ -1982,58 +2139,46 @@
   // =============================================
   // PLAN DE CARRERA — PROGRAMACIÓN
   // =============================================
-  // Los días de carrera son un conjunto aparte de los de fuerza y se mantienen
-  // disjuntos desde la interfaz: si un día fuese de las dos cosas habría que
-  // decidir cuál gana, y además descuadraría la rotación Empuje/Tirón/Pierna,
-  // que se calcula con el índice del día dentro de getTrainingDays().
-  function isRunningEnabled() {
-    return !!(state.settings && state.settings.runningEnabled);
-  }
-
-  function getRunningDays() {
-    if (!isRunningEnabled()) return [];
-    var d = state.settings.runningDays;
-    if (!Array.isArray(d)) return [];
-    return d.slice().sort(function (a, b) { return ((a + 6) % 7) - ((b + 6) % 7); });
+  // Los días de carrera no son un ajuste aparte: son entradas del propio plan
+  // (phase.days) con type 'running'. Como getRoutineSlotForDate() indexa
+  // phase.days con la posición del día dentro de getTrainingDays(), el motor
+  // de calendario los programa sin saber que son distintos.
+  function getDayDef(dateKey) {
+    var slot = getRoutineSlotForDate(dateKey);
+    if (slot === -1 || slot === null || slot === undefined) return null;
+    return getPhase(dateKey).days[slot] || null;
   }
 
   function isRunningDay(dateKey) {
-    if (!isRunningEnabled()) return false;
-    var custom = state.customDays && state.customDays[dateKey];
-    if (custom === 'rest') return false;
-    var d = new Date(dateKey + 'T12:00:00');
-    return getRunningDays().indexOf(d.getDay()) !== -1;
+    var day = getDayDef(dateKey);
+    return !!(day && day.type === 'running');
   }
 
-  // El plan de carrera lleva su propia fecha de inicio, independiente del
-  // historial de fuerza: la semana 1 es la semana en que se activó.
-  function getRunningStart() {
-    return (state.settings && state.settings.runningStart) || getTodayKey();
+  // ¿El plan activo incluye días de carrera? Decide si se pinta la leyenda de
+  // carrera en el calendario y el recordatorio de semana en los ajustes.
+  function profileHasRunning() {
+    var days = PHASES[0] ? PHASES[0].days : [];
+    for (var i = 0; i < days.length; i++) if (days[i].type === 'running') return true;
+    return false;
   }
 
+  // La semana del plan de carrera es la misma que la de fuerza: los dos van
+  // sincronizados, así la semana 3 de gimnasio es la semana 3 de carrera.
   function getRunningWeek(dateKey) {
-    var start = getMonday(new Date(getRunningStart() + 'T12:00:00'));
-    var current = getMonday(new Date(dateKey + 'T12:00:00'));
-    if (current < start) return 0;
-    return Math.floor((current - start) / (7 * 86400000)) + 1;
+    return getWeekNumber(dateKey);
   }
 
-  // Índice de la sesión dentro de la semana: primer día de carrera = 0.
-  function getRunningSessionIndex(dateKey) {
-    var d = new Date(dateKey + 'T12:00:00');
-    return getRunningDays().indexOf(d.getDay());
-  }
-
-  // Sesión que toca ese día, o null si no hay (fuera del plan, o semana 12
-  // con más días marcados que sesiones tiene esa semana).
+  // Sesión que toca ese día, o null si no hay (fuera de las 12 semanas, o la
+  // semana 12, que sólo tiene 2 sesiones para 3 días de carrera).
   function getRunningSession(dateKey) {
-    if (!isRunningDay(dateKey)) return null;
+    var day = getDayDef(dateKey);
+    if (!day || day.type !== 'running') return null;
     var week = getRunningWeek(dateKey);
     if (week < 1 || week > RUNNING_TOTAL_WEEKS) return null;
     var sessions = RUNNING_PLAN[week];
     if (!sessions) return null;
-    var idx = getRunningSessionIndex(dateKey);
-    if (idx < 0 || idx >= sessions.length) return null;
+    var idx = day.runIdx;
+    if (idx === undefined || idx < 0 || idx >= sessions.length) return null;
     return { session: sessions[idx], week: week, index: idx, total: sessions.length };
   }
 
@@ -3462,6 +3607,13 @@
 
     var effectiveExercises = getEffectiveExercises(day);
 
+    // Agrupado de superseries y del bloque de mejora de running. Sólo se activa
+    // si los ejercicios traen los campos, así que los perfiles de sólo fuerza
+    // siguen pintándose como una lista plana.
+    var openSS = null;      // tag de la superserie abierta
+    var ssCount = 0;
+    var openRunBlock = false;
+
     effectiveExercises.forEach(function (item, idx) {
       var ex = item.ex;
       var originalId = item.originalId;
@@ -3471,6 +3623,22 @@
       var meta = EXERCISE_META[ex.id] || EXERCISE_META[originalId] || {};
       var isExpanded = !!expandedCards[originalId];
       var repsLabel = ex.series + '×' + ex.reps;
+
+      // Cierra la superserie anterior si esta ficha ya no pertenece a ella
+      if (openSS && ex.ss !== openSS) { html += '</div>'; openSS = null; }
+
+      if (ex.ss && ex.ss !== openSS) {
+        ssCount++;
+        html += '<div class="superset-group">';
+        html += '  <div class="superset-header">▶ Superserie ' + ssCount
+             + ' <span class="superset-rounds">' + ex.series + ' vueltas · sin descanso entre ejercicios</span></div>';
+        openSS = ex.ss;
+      }
+
+      if (ex.group === 'running' && !openRunBlock) {
+        html += '<div class="running-block-header">🏃 Mejora de running</div>';
+        openRunBlock = true;
+      }
 
       html += '<div class="exercise-card' + (isCompleted ? ' completed' : '') + '" id="card-' + originalId + '">';
 
@@ -3495,7 +3663,12 @@
       html += '    <div class="exercise-detail-item"><span class="icon">🔄</span><span><span class="label">Series: </span><span class="value">' + ex.series + '</span></span></div>';
       html += '    <div class="exercise-detail-item"><span class="icon">🔁</span><span><span class="label">Reps: </span><span class="value">' + ex.reps + '</span></span></div>';
       var restSecs = parseRestSeconds(ex.rest);
-      html += '    <div class="exercise-detail-item"><span class="icon" id="timer-icon-' + originalId + '">⏱️</span><span><span class="label">Descanso: </span><span class="value">' + ex.rest + '</span></span>' + (restSecs > 0 ? '<button class="timer-start-btn" data-ex="' + originalId + '" data-secs="' + restSecs + '">Iniciar</button>' : '') + '</div>';
+      // En mitad de una superserie no se descansa: se encadena con el siguiente
+      if (ex.ss && restSecs === 0) {
+        html += '    <div class="exercise-detail-item"><span class="icon">⛓️</span><span><span class="label">Después: </span><span class="value">encadena</span></span></div>';
+      } else {
+        html += '    <div class="exercise-detail-item"><span class="icon" id="timer-icon-' + originalId + '">⏱️</span><span><span class="label">Descanso: </span><span class="value">' + ex.rest + '</span></span>' + (restSecs > 0 ? '<button class="timer-start-btn" data-ex="' + originalId + '" data-secs="' + restSecs + '">Iniciar</button>' : '') + '</div>';
+      }
       html += '  </div>';
 
       if (restSecs > 0) {
@@ -3577,6 +3750,8 @@
       html += '</div>'; // end exercise-body
       html += '</div>'; // end exercise-card
     });
+
+    if (openSS) html += '</div>';   // cierra la última superserie
 
     // Cierre del entrenamiento
     var doneCount = 0;
@@ -3806,31 +3981,14 @@
     html += '  </div>';
     html += '  <div class="schedule-settings-hint">Recomendado: ' + PROFILES[activeProfile].daysLabel + '</div>';
 
-    // ---- Plan de carrera ----
-    var runOn = isRunningEnabled();
-    html += '  <div class="running-settings' + (runOn ? ' on' : '') + '">';
-    html += '    <button class="running-toggle" id="runningToggle">'
-         + '<span class="running-toggle-label">🏃 Plan de vuelta a correr</span>'
-         + '<span class="running-toggle-state">' + (runOn ? 'Activado' : 'Activar') + '</span>'
-         + '</button>';
-    if (runOn) {
-      var runDays = getRunningDays();
-      var curWeek = getRunningWeek(getTodayKey());
-      html += '    <div class="running-settings-sub">Marca tus días de carrera (3 días alternos)</div>';
-      html += '    <div class="schedule-settings-chips">';
-      for (var ri2 = 0; ri2 < 7; ri2++) {
-        var rVal = dayGetDayMap[ri2];
-        var rActive = runDays.indexOf(rVal) !== -1;
-        html += '      <button class="weekday-chip running-chip' + (rActive ? ' active' : '') + '" data-runday="' + rVal + '">' + dayLabelsShort[ri2] + '</button>';
-      }
-      html += '    </div>';
-      var weekTxt = curWeek < 1 ? 'empieza el ' + escapeHtml(getRunningStart())
+    // En los planes que incluyen carrera, recordar por qué semana se va
+    if (profileHasRunning()) {
+      var curWeek = getWeekNumber(getTodayKey());
+      var weekTxt = curWeek < 1 ? 'aún no has empezado'
         : curWeek > RUNNING_TOTAL_WEEKS ? 'plan completado 🎉'
         : 'semana ' + curWeek + ' de ' + RUNNING_TOTAL_WEEKS;
-      html += '    <div class="running-settings-week">📆 Vas por la <strong>' + weekTxt + '</strong>'
-           + '<button class="running-restart" id="runningRestart">Reiniciar en la semana 1</button></div>';
+      html += '  <div class="plan-week-note">🏃 Plan de vuelta a correr · <strong>' + weekTxt + '</strong></div>';
     }
-    html += '  </div>';
     html += '  <button class="home-wizard-cta" id="homeWizardBtn">'
       + '    <span class="home-wizard-cta-icon">🎯</span>'
       + '    <span class="home-wizard-cta-text">'
@@ -3921,10 +4079,15 @@
     html += '  </div>';
     html += '  <div class="calendar-legend">';
     var legendColors = ['#e94560', '#0f3460', '#2ecc71'];
+    // Los días de carrera tienen su propia entrada más abajo: aquí sólo fuerza.
+    // El color se deriva del índice igual que en la celda del calendario
+    // (0 = push, 1 = pull, resto = legs), o leyenda y calendario no cuadrarían.
     for (var li = 0; li < PHASES[0].days.length; li++) {
-      html += '    <span class="calendar-legend-item"><span class="legend-box" style="background:' + legendColors[li] + ';"></span> ' + PHASES[0].days[li].day + '</span>';
+      if (PHASES[0].days[li].type === 'running') continue;
+      var lc = li === 0 ? legendColors[0] : li === 1 ? legendColors[1] : legendColors[2];
+      html += '    <span class="calendar-legend-item"><span class="legend-box" style="background:' + lc + ';"></span> ' + PHASES[0].days[li].day + '</span>';
     }
-    if (isRunningEnabled()) {
+    if (profileHasRunning()) {
       html += '    <span class="calendar-legend-item"><span class="legend-box" style="background:#f39c12;"></span> Carrera</span>';
     }
     html += '    <span class="calendar-legend-item"><span class="legend-box rest-box"></span> Descanso</span>';
@@ -3948,11 +4111,6 @@
           days.splice(idx, 1);
         } else {
           days.push(dayVal);
-          // Un día no puede ser de fuerza y de carrera a la vez
-          if (Array.isArray(state.settings.runningDays)) {
-            var rIdx = state.settings.runningDays.indexOf(dayVal);
-            if (rIdx !== -1) state.settings.runningDays.splice(rIdx, 1);
-          }
         }
         state.settings.trainingDays = days;
         saveState();
@@ -3963,67 +4121,6 @@
         var newContainer = document.getElementById('homeContent');
         if (newContainer && selDate) newContainer.dataset.selectedDate = selDate;
       });
-    });
-
-    // ---- Plan de carrera ----
-    function rerenderHomeKeepingDate() {
-      var selDate = container.dataset.selectedDate;
-      renderHome();
-      var nc = document.getElementById('homeContent');
-      if (nc && selDate) nc.dataset.selectedDate = selDate;
-      renderRoutineStatus();
-      renderCurrentDay();
-    }
-
-    var runToggle = document.getElementById('runningToggle');
-    if (runToggle) runToggle.addEventListener('click', function () {
-      if (!state.settings) state.settings = {};
-      if (isRunningEnabled()) {
-        state.settings.runningEnabled = false;
-        showToast('Plan de carrera desactivado');
-      } else {
-        state.settings.runningEnabled = true;
-        // La semana 1 arranca en la semana en curso
-        if (!state.settings.runningStart) state.settings.runningStart = getTodayKey();
-        if (!Array.isArray(state.settings.runningDays) || !state.settings.runningDays.length) {
-          // Martes, jueves y sábado: los días alternos que sugiere el plan
-          var suggested = [2, 4, 6].filter(function (d) { return getTrainingDays().indexOf(d) === -1; });
-          state.settings.runningDays = suggested.length ? suggested : [2, 4, 6];
-        }
-        showToast('🏃 Plan de vuelta a correr activado');
-      }
-      saveState();
-      rerenderHomeKeepingDate();
-    });
-
-    container.querySelectorAll('.weekday-chip[data-runday]').forEach(function (chip) {
-      chip.addEventListener('click', function () {
-        var dayVal = parseInt(chip.dataset.runday, 10);
-        var days = Array.isArray(state.settings.runningDays) ? state.settings.runningDays.slice() : [];
-        var idx = days.indexOf(dayVal);
-        if (idx !== -1) {
-          days.splice(idx, 1);
-        } else {
-          days.push(dayVal);
-          // Un día no puede ser de carrera y de fuerza a la vez
-          var gym = state.settings.trainingDays || [];
-          var gIdx = gym.indexOf(dayVal);
-          if (gIdx !== -1 && gym.length > 1) gym.splice(gIdx, 1);
-          else if (gIdx !== -1) showToast('Debes dejar al menos un día de fuerza');
-        }
-        state.settings.runningDays = days;
-        saveState();
-        rerenderHomeKeepingDate();
-      });
-    });
-
-    var runRestart = document.getElementById('runningRestart');
-    if (runRestart) runRestart.addEventListener('click', function (e) {
-      e.stopPropagation();
-      state.settings.runningStart = getTodayKey();
-      saveState();
-      showToast('Plan reiniciado en la semana 1');
-      rerenderHomeKeepingDate();
     });
 
     var homeWizardBtn = document.getElementById('homeWizardBtn');
@@ -4284,6 +4381,35 @@
     return html;
   }
 
+  // Lista de ejercicios del detalle de día, con el mismo agrupado de
+  // superseries y bloque de mejora que la pestaña Rutina.
+  function renderHomeExerciseList(day, dateKey) {
+    var html = '';
+    var openSS = null, ssCount = 0, openRun = false;
+    getEffectiveExercises(day, dateKey).forEach(function (item) {
+      var ex = item.ex;
+      if (openSS && ex.ss !== openSS) { html += '</div>'; openSS = null; }
+      if (ex.ss && ex.ss !== openSS) {
+        ssCount++;
+        html += '<div class="superset-group">';
+        html += '  <div class="superset-header">▶ Superserie ' + ssCount
+             + ' <span class="superset-rounds">' + ex.series + ' vueltas</span></div>';
+        openSS = ex.ss;
+      }
+      if (ex.group === 'running' && !openRun) {
+        html += '<div class="running-block-header">🏃 Mejora de running</div>';
+        openRun = true;
+      }
+      var meta = EXERCISE_META[ex.id] || EXERCISE_META[item.originalId] || {};
+      html += renderExerciseDetailItemForHome(ex, meta, {
+        dateKey: dateKey, originalId: item.originalId,
+        isSwapped: item.isSwapped, isPermanent: item.isPermanent
+      });
+    });
+    if (openSS) html += '</div>';
+    return html;
+  }
+
   function renderDayDetail(dateKey) {
     var d = new Date(dateKey + 'T12:00:00');
     var dayNames = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
@@ -4309,7 +4435,7 @@
                 + (rw > RUNNING_TOTAL_WEEKS
                     ? '¡Has terminado las 12 semanas del plan! 🎉'
                     : (rw < 1
-                        ? 'El plan empieza el ' + escapeHtml(getRunningStart()) + '.'
+                        ? 'El plan empieza el ' + escapeHtml(getStartDate()) + '.'
                         : 'Esta semana el plan sólo tiene ' + (RUNNING_PLAN[rw] || []).length + ' sesiones. Hoy, descanso o fuerza.'))
                 + '</div>';
       }
@@ -4392,12 +4518,7 @@
       html += '  <div class="day-detail-date">' + formatted + ' (' + dayName + ')' + phaseInfo + '</div>';
       html += '  <div class="day-detail-routine">' + day.emoji + ' ' + day.day + ' · Semana ' + weekNum + '</div>';
       html += '  <div class="day-detail-exercises">';
-      getEffectiveExercises(day, dateKey).forEach(function (item) {
-        var meta = EXERCISE_META[item.originalId] || {};
-        html += renderExerciseDetailItemForHome(item.ex, meta, {
-          dateKey: dateKey, originalId: item.originalId, isSwapped: item.isSwapped, isPermanent: item.isPermanent
-        });
-      });
+      html += renderHomeExerciseList(day, dateKey);
       html += '  </div>';
       html += '  <div class="day-detail-summary">📋 ' + verb + ' ' + day.day + ' · ' + day.exercises.length + ' ejercicios</div>';
       html += buildActionBtn(dateKey);
@@ -4410,12 +4531,7 @@
     html += '  <div class="day-detail-date">' + formatted + ' (' + dayName + ')' + phaseInfo + '</div>';
     html += '  <div class="day-detail-routine">' + day.emoji + ' ' + day.day + ' · Semana ' + weekNum + '</div>';
     html += '  <div class="day-detail-exercises">';
-    getEffectiveExercises(day, dateKey).forEach(function (item) {
-      var meta = EXERCISE_META[item.originalId] || {};
-      html += renderExerciseDetailItemForHome(item.ex, meta, {
-        dateKey: dateKey, originalId: item.originalId, isSwapped: item.isSwapped, isPermanent: item.isPermanent
-      });
-    });
+    html += renderHomeExerciseList(day, dateKey);
     html += '  </div>';
     html += '  <div class="day-detail-summary">📋 Entrenamiento planificado (sin registrar) · ' + day.exercises.length + ' ejercicios</div>';
     html += buildActionBtn(dateKey);
@@ -5525,6 +5641,38 @@
     if (modal) modal.classList.add('hidden');
   }
 
+  // Primera vez que se entra en el plan combinado: fija la semana 1 en la
+  // semana actual y arrastra los pesos ya registrados en Sergio, que comparte
+  // los mismos ids de ejercicio. No se copian las sesiones completadas: son de
+  // otro plan y falsearían el calendario.
+  function initCombinedPlan() {
+    if (activeProfile !== 'runfuerza') return;
+    if (!state.settings) state.settings = {};
+    if (state.settings.planStart) return;   // ya inicializado
+
+    state.settings.planStart = getTodayKey();
+
+    var imported = 0;
+    try {
+      var raw = localStorage.getItem('gym_calendar_data_sergio');
+      if (raw) {
+        var src = JSON.parse(raw);
+        if (src && src.progress) {
+          if (!state.progress) state.progress = {};
+          Object.keys(src.progress).forEach(function (exId) {
+            if (!state.progress[exId] && Array.isArray(src.progress[exId]) && src.progress[exId].length) {
+              state.progress[exId] = src.progress[exId].slice();
+              imported++;
+            }
+          });
+        }
+      }
+    } catch (e) { /* sin historial que importar */ }
+
+    saveState();
+    if (imported) showToast('Importados los pesos de ' + imported + ' ejercicios');
+  }
+
   function switchProfile(profileId) {
     if (!PROFILES[profileId]) return;
     activeProfile = profileId;
@@ -5532,6 +5680,7 @@
     PHASES = PROFILES[activeProfile].phases;
     ACTIVE_WARMUP = PROFILES[activeProfile].warmup;
     state = loadState();
+    initCombinedPlan();
     // Cada perfil guarda sus propios cambios de ejercicio
     reregisterSwappedExercises();
     updateProfileUI();
@@ -5632,6 +5781,7 @@
   // INIT
   // =============================================
   function init() {
+    initCombinedPlan();
     reregisterSwappedExercises();
     renderRoutineStatus();
     renderCurrentDay();

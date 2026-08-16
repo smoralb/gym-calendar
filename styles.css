@@ -3282,77 +3282,6 @@ body.onboarding-lock::before {
 /* =============================================
    PLAN DE CARRERA
    ============================================= */
-.running-settings {
-  margin-top: 14px;
-  padding-top: 14px;
-  border-top: 1px solid var(--border-color);
-}
-
-.running-toggle {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  width: 100%;
-  padding: 11px 14px;
-  border-radius: 10px;
-  border: 1px solid var(--border-color);
-  background: var(--surface-2, #1e2235);
-  color: var(--text-primary);
-  font-size: 0.85rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.running-settings.on .running-toggle {
-  border-color: #f39c12;
-}
-
-.running-toggle-state {
-  font-size: 0.72rem;
-  font-weight: 700;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.running-settings.on .running-toggle-state {
-  color: #f39c12;
-}
-
-.running-settings-sub {
-  font-size: 0.7rem;
-  color: var(--text-muted);
-  margin: 12px 0 8px;
-}
-
-.weekday-chip.running-chip.active {
-  background: #f39c12;
-  border-color: #f39c12;
-  color: #14161f;
-}
-
-.running-settings-week {
-  margin-top: 10px;
-  font-size: 0.75rem;
-  color: var(--text-secondary);
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-}
-
-.running-restart {
-  border: none;
-  background: none;
-  color: var(--accent-primary);
-  font-size: 0.72rem;
-  font-weight: 600;
-  text-decoration: underline;
-  cursor: pointer;
-  padding: 0;
-}
-
 /* ---- Tarjeta de sesión ---- */
 .running-card {
   background: var(--surface-1, #16192a);
@@ -3542,3 +3471,66 @@ body.onboarding-lock::before {
 .calendar-day.running-day.missed {
   opacity: 0.55;
 }
+
+/* =============================================
+   SUPERSERIES Y BLOQUE DE MEJORA
+   ============================================= */
+.superset-group {
+  border: 1px solid rgba(243, 156, 18, 0.35);
+  border-radius: 14px;
+  padding: 8px;
+  margin-bottom: 14px;
+  background: rgba(243, 156, 18, 0.04);
+}
+
+.superset-group .exercise-card {
+  margin-bottom: 8px;
+}
+
+.superset-group .exercise-card:last-child {
+  margin-bottom: 0;
+}
+
+.superset-header {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #f39c12;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 4px 8px 8px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.superset-rounds {
+  font-size: 0.66rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.running-block-header {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 18px 0 10px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-color);
+}
+
+.plan-week-note {
+  margin-top: 14px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: rgba(243, 156, 18, 0.10);
+  border: 1px solid rgba(243, 156, 18, 0.35);
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}
+
+.plan-week-note strong { color: #f39c12; }

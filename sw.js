@@ -1,4 +1,4 @@
-const CACHE_NAME = 'gym-calendar-v4.11.0';
+const CACHE_NAME = 'gym-calendar-v4.12.0';
 // Media del dataset (jsDelivr). Cache aparte: sobrevive a los deploys de la app.
 const MEDIA_CACHE = 'gym-calendar-exercise-media-v1';
 const MEDIA_ORIGIN = 'https://cdn.jsdelivr.net';
