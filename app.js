@@ -1,12 +1,12 @@
 /* =============================================
    Gym Calendar - App de Rutina de Ejercicios
-   Versión: 4.13.2 — Arreglo del service worker: servía ficheros viejos
+   Versión: 4.14.0 — Avance automático al completar un ejercicio
    ============================================= */
 
 (function () {
   'use strict';
 
-  var APP_VERSION = '4.13.2';
+  var APP_VERSION = '4.14.0';
 
   // =============================================
   // SERGIO_PHASES: plan Push/Pull/Pierna 3 días/semana
@@ -2392,8 +2392,41 @@
   // =============================================
   // PROGRESS
   // =============================================
-  function toggleCompletion(exerciseId) {
+  // Al completar un ejercicio abierto se pliega y se abre el siguiente que
+  // quede pendiente, para no tener que ir cerrando y abriendo fichas a mano
+  // en mitad de la serie. `originalId` es la clave de expandedCards, que no
+  // coincide con exerciseId cuando el ejercicio está sustituido.
+  function advanceToNextPending(originalId) {
+    if (!expandedCards[originalId]) return null;   // no estaba abierto: no se toca nada
+    expandedCards[originalId] = false;
+
+    var routineIdx = getTodayRoutine();
+    if (routineIdx === -1) return null;
+    var day = getPhase(getTodayKey()).days[routineIdx];
+    if (!day || !day.exercises) return null;
+
+    var items = getEffectiveExercises(day);
+    var completions = getTodayCompletions();
+    var from = -1;
+    items.forEach(function (it, i) { if (it.originalId === originalId) from = i; });
+
+    // Primero hacia abajo, y si no queda nada, se vuelve a los que saltaste
+    var order = [];
+    for (var i = from + 1; i < items.length; i++) order.push(items[i]);
+    for (var j = 0; j < from; j++) order.push(items[j]);
+
+    for (var k = 0; k < order.length; k++) {
+      if (!completions[order[k].ex.id]) {
+        expandedCards[order[k].originalId] = true;
+        return order[k].originalId;
+      }
+    }
+    return null;
+  }
+
+  function toggleCompletion(exerciseId, originalId) {
     var key = getTodayKey();
+    var nextId = null;
     if (!state.completions[key]) state.completions[key] = {};
     if (state.completions[key][exerciseId]) {
       delete state.completions[key][exerciseId];
@@ -2401,12 +2434,22 @@
       state.completions[key][exerciseId] = true;
       playCompleteSound();
       vibrate();
+      if (originalId) nextId = advanceToNextPending(originalId);
       // Check if all exercises done (Eva motivational message)
       if (activeProfile === 'eva') checkEvaWorkoutComplete();
     }
     saveState();
     renderCurrentDay();
     updateAll();
+
+    // Tras repintar, dejar a la vista la ficha que se acaba de abrir
+    if (nextId) {
+      var card = document.getElementById('card-' + nextId);
+      if (card && card.scrollIntoView) {
+        try { card.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+        catch (e) { card.scrollIntoView(); }
+      }
+    }
   }
 
   function EVA_MESSAGES() {
@@ -3811,7 +3854,7 @@
     container.querySelectorAll('.check-btn').forEach(function(btn) {
       btn.addEventListener('click', function(e) {
         e.stopPropagation();
-        toggleCompletion(btn.dataset.ex);
+        toggleCompletion(btn.dataset.ex, btn.dataset.orig);
       });
     });
 
