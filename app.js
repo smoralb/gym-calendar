@@ -1,12 +1,12 @@
 /* =============================================
    Gym Calendar - App de Rutina de Ejercicios
-   Versión: 4.14.0 — Avance automático al completar un ejercicio
+   Versión: 4.15.0 — Motor de restricciones, núcleo curado y validador
    ============================================= */
 
 (function () {
   'use strict';
 
-  var APP_VERSION = '4.14.0';
+  var APP_VERSION = '4.15.0';
 
   // =============================================
   // SERGIO_PHASES: plan Push/Pull/Pierna 3 días/semana
@@ -3188,11 +3188,13 @@
     var baseTarget = baseRec ? baseRec.tg : null;
     var basePart = baseRec ? baseRec.bp : null;
 
-    // Material declarado en el asistente, si el usuario hizo el tutorial.
+    // Material declarado en el asistente. Si no hizo el tutorial no sabemos
+    // qué tiene, así que no se restringe; pero si lo hizo, es restricción dura
+    // para TODOS los motivos: nunca tiene sentido proponer algo que no puede
+    // hacer, ni aunque el motivo sea la dificultad o el dolor.
     var plan = loadCustomPlan();
-    var answers = (plan && plan.answers) ? plan.answers : null;
-    var gearSet = answers ? allowedEquipment(answers) : null;
-    var place = answers ? effectivePlace(answers) : null;
+    var answers = (plan && plan.answers) ? normalizeAnswers(plan.answers) : null;
+    var inventory = answers ? getInventory(answers) : null;
 
     // Universo de partida. Sin mapeo al dataset no hay patrón ni nivel de
     // referencia: se tira de búsqueda por texto y se relajan los filtros.
@@ -3209,6 +3211,9 @@
       var names = {};
       universe.forEach(function (rec) {
         if (excluded[rec.id]) return;
+        // Restricción dura, en todos los niveles de relajación: proponer algo
+        // para lo que no tienes material nunca es una alternativa válida.
+        if (inventory && !canPerform(rec, inventory)) return;
         var t = EXERCISE_TAGS.tagsFor(rec);
         if (!t) return;
 
@@ -3218,16 +3223,11 @@
         var score = 0;
 
         if (relax === 0) {
-          if (reasonKey === 'material') {
-            // Con el mismo material seguiría sin poder hacerlo.
+          if (reasonKey === "material") {
+            // Con el mismo material seguiría sin poder hacerlo
             if (baseEq && rec.eq === baseEq) return;
-            if (gearSet) {
-              if (!gearSet[rec.eq || '']) return;
-            } else if (place === 'gimnasio') {
-              if (!t.gimnasio && !t.casa && !t.sin_material) return;
-            } else if (!t.sin_material && !t.casa) {
-              return;
-            }
+            // Sin inventario declarado se tira a lo más seguro: peso corporal
+            if (!inventory && !t.sin_material && !t.casa) return;
             if (t.sin_material) score += 8;
             else if (t.casa) score += 4;
 
@@ -4927,20 +4927,33 @@
   // tags. La rutina se guarda como un perfil más ('mia'), así que hereda todo
   // lo que ya funciona: calendario, pesos, progreso y estadísticas.
   // =============================================
-  // Material de casa que aparece en el dataset, agrupado en pastillas. Cada
-  // opción lista los valores `eq` del catálogo que desbloquea. El peso
-  // corporal no está: siempre se puede hacer, se marque lo que se marque.
+  // =============================================
+  // INVENTARIO DE MATERIAL
+  // =============================================
+  // Única fuente de verdad sobre qué puede hacer el usuario. Antes había dos
+  // respuestas solapadas ('place' y 'gear') que se filtraban por separado y con
+  // criterio permisivo: marcar «gimnasio» junto a cualquier otra cosa anulaba
+  // todo filtro, y no declarar material significaba «todo vale» en vez de
+  // «sólo peso corporal». De ahí salían mancuernas y máquinas a quien había
+  // dicho que entrenaba en casa sin nada.
+  //
+  // Ahora el sitio es sólo un preajuste que rellena este inventario, y el
+  // inventario es una restricción DURA que se aplica en un único sitio.
   var GEAR_OPTIONS = [
-    { value: 'dumbbell', label: '🏋️ Mancuernas', desc: 'Un par de mancuernas o pesas', eq: ['dumbbell'] },
-    { value: 'band', label: '🎗️ Bandas elásticas', desc: 'Gomas o bandas de resistencia', eq: ['band', 'resistance band'] },
-    { value: 'kettlebell', label: '🔔 Kettlebell', desc: 'Pesa rusa', eq: ['kettlebell'] },
-    { value: 'stability_ball', label: '🟣 Fitball', desc: 'Pelota grande de estabilidad', eq: ['stability ball'] },
-    { value: 'medicine_ball', label: '⚽ Balón medicinal', desc: 'Balón con peso', eq: ['medicine ball'] },
-    { value: 'wheel_roller', label: '🎡 Rueda abdominal', desc: 'Rueda de core (ab wheel)', eq: ['wheel roller'] },
-    { value: 'roller', label: '🧻 Foam roller', desc: 'Rodillo de espuma para masaje y movilidad', eq: ['roller'] },
-    { value: 'rope', label: '➰ Comba o cuerda', desc: 'Cuerda de saltar', eq: ['rope'] },
-    { value: 'bosu', label: '🌗 Bosu', desc: 'Media pelota de equilibrio', eq: ['bosu ball'] },
-    { value: 'weighted', label: '🎒 Lastre o chaleco', desc: 'Chaleco, tobilleras o mochila con peso', eq: ['weighted'] }
+    { value: 'dumbbell', label: '🏋️ Mancuernas', desc: 'Un par de mancuernas o pesas', eq: ['dumbbell'], home: true },
+    { value: 'band', label: '🎗️ Bandas elásticas', desc: 'Gomas o bandas de resistencia', eq: ['band', 'resistance band'], home: true },
+    { value: 'kettlebell', label: '🔔 Kettlebell', desc: 'Pesa rusa', eq: ['kettlebell'], home: true },
+    { value: 'stability_ball', label: '🟣 Fitball', desc: 'Pelota grande de estabilidad', eq: ['stability ball'], home: true },
+    { value: 'medicine_ball', label: '⚽ Balón medicinal', desc: 'Balón con peso', eq: ['medicine ball'], home: true },
+    { value: 'wheel_roller', label: '🎡 Rueda abdominal', desc: 'Rueda de core (ab wheel)', eq: ['wheel roller'], home: true },
+    { value: 'roller', label: '🧻 Foam roller', desc: 'Rodillo de espuma para masaje y movilidad', eq: ['roller'], home: true },
+    { value: 'rope', label: '➰ Comba o cuerda', desc: 'Cuerda de saltar', eq: ['rope'], home: true },
+    { value: 'bosu', label: '🌗 Bosu', desc: 'Media pelota de equilibrio', eq: ['bosu ball'], home: true },
+    { value: 'weighted', label: '🎒 Lastre o chaleco', desc: 'Chaleco, tobilleras o mochila con peso', eq: ['weighted'], home: true },
+    { value: 'barbell', label: '🏋️‍♂️ Barra y discos', desc: 'Barra olímpica, barra Z o barra hexagonal', eq: ['barbell', 'ez barbell', 'olympic barbell', 'trap bar'], home: false },
+    { value: 'cable', label: '🔗 Poleas', desc: 'Torre de poleas o máquina de cables', eq: ['cable'], home: false },
+    { value: 'machine', label: '⚙️ Máquinas', desc: 'Máquinas guiadas, multipower y asistidas', eq: ['leverage machine', 'smith machine', 'sled machine', 'assisted'], home: false },
+    { value: 'cardio_machine', label: '🚴 Máquinas de cardio', desc: 'Bici estática, elíptica, escaladora o remo', eq: ['stationary bike', 'elliptical machine', 'stepmill machine', 'skierg machine', 'upper body ergometer'], home: false }
   ];
 
   // value de GEAR_OPTIONS -> valores `eq` del dataset
@@ -4949,6 +4962,244 @@
     GEAR_OPTIONS.forEach(function (o) { map[o.value] = o.eq; });
     return map;
   })();
+
+  // Qué material desbloquea cada sitio al elegirlo en el asistente. Sólo
+  // prerrellena el inventario: después se puede quitar y añadir a mano.
+  var PLACE_PRESET = {
+    gimnasio: GEAR_OPTIONS.map(function (o) { return o.value; }),
+    casa: ['dumbbell', 'band'],
+    sin_material: []
+  };
+
+  // El peso corporal siempre está disponible: no depende de tener nada.
+  var BODYWEIGHT_EQ = 'body weight';
+
+  // Inventario efectivo a partir de las respuestas. NUNCA devuelve null ni
+  // "sin restricción": si no se ha declarado material, es sólo peso corporal.
+  function getInventory(answers) {
+    var set = {};
+    set[BODYWEIGHT_EQ] = 1;
+    answerList(answers, 'gear').forEach(function (g) {
+      (GEAR_EQUIPMENT[g] || []).forEach(function (eq) { set[eq] = 1; });
+    });
+    return set;
+  }
+
+  // Restricción dura y único punto de verdad. Lo usan el generador, el bloque
+  // preventivo y el buscador de alternativas: antes cada uno filtraba a su
+  // manera y por eso se colaban ejercicios imposibles.
+  function canPerform(rec, inventory) {
+    if (!rec) return false;
+    return !!inventory[rec.eq || BODYWEIGHT_EQ];
+  }
+
+  // Planes guardados antes de este cambio traen 'place' y puede que ningún
+  // 'gear'. Se traducen al inventario nuevo siendo conservador: si dijo
+  // gimnasio, tenía todo; si no consta material, sólo peso corporal.
+  function normalizeAnswers(answers) {
+    if (!answers) return answers;
+    if (answers.gear !== undefined && answerList(answers, 'gear').length) return answers;
+    var places = answerList(answers, 'place');
+    if (places.indexOf('gimnasio') !== -1) {
+      answers.gear = PLACE_PRESET.gimnasio.slice();
+    } else if (!answers.gear) {
+      answers.gear = [];
+    }
+    return answers;
+  }
+
+  // =============================================
+  // CORE_EXERCISES: núcleo curado
+  // =============================================
+  // El generador SÓLO elige de aquí. El catálogo completo (~1300) se queda para
+  // la pestaña Ejercicios y para «Buscar alternativa», donde la elección la
+  // hace el usuario viendo la ficha y el riesgo es bajo.
+  //
+  // Existe porque los datos de origen no bastan: el nivel se adivinaba con
+  // expresiones regulares sobre el nombre en inglés, y el material del dataset
+  // a veces miente ("Inverse leg curl (on pull-up cable machine)" viene
+  // etiquetado como peso corporal). Así, a un principiante sin material se le
+  // llegó a recetar "Flag" y "Ring dips".
+  //
+  //   db      id en el dataset, para la animación y los pasos
+  //   grupo   grupo muscular canónico, para el reparto de volumen
+  //   mat     material real necesario (valores `eq` del dataset)
+  //   nivel   verificado a mano, no inferido
+  //   facil / dificil   cadena de progresión dentro de este núcleo
+  //   evitar  zonas que lo desaconsejan
+  var CORE_EXERCISES = [
+    // ---------- EMPUJE · peso corporal ----------
+    { id: 'flex_pared', db: '0659', nombre: 'Flexiones en la pared', patron: 'empuje', grupo: 'pecho', mat: [], nivel: 'principiante', dificil: 'flex_inclinadas' },
+    { id: 'flex_inclinadas', db: '0493', nombre: 'Flexiones inclinadas', patron: 'empuje', grupo: 'pecho', mat: [], nivel: 'principiante', facil: 'flex_pared', dificil: 'flex_rodillas' },
+    { id: 'flex_rodillas', db: '3211', nombre: 'Flexiones de rodillas', patron: 'empuje', grupo: 'pecho', mat: [], nivel: 'principiante', facil: 'flex_inclinadas', dificil: 'flexiones' },
+    { id: 'flexiones', db: '0662', nombre: 'Flexiones', patron: 'empuje', grupo: 'pecho', mat: [], nivel: 'intermedio', facil: 'flex_rodillas', dificil: 'flex_declinadas', evitar: ['muneca', 'hombro'] },
+    { id: 'flex_declinadas', db: '0279', nombre: 'Flexiones con pies elevados', patron: 'empuje', grupo: 'pecho', mat: [], nivel: 'avanzado', facil: 'flexiones', evitar: ['muneca', 'hombro'] },
+    { id: 'flex_diamante', db: '0283', nombre: 'Flexiones diamante', patron: 'empuje', grupo: 'triceps', mat: [], nivel: 'intermedio', facil: 'flex_rodillas', evitar: ['muneca', 'codo'] },
+    { id: 'fondos_banco', db: '0129', nombre: 'Fondos de tríceps en banco', patron: 'empuje', grupo: 'triceps', mat: [], nivel: 'principiante', dificil: 'fondos_triceps_bw', evitar: ['hombro'] },
+    { id: 'fondos_triceps_bw', db: '0814', nombre: 'Fondos de tríceps', patron: 'empuje', grupo: 'triceps', mat: [], nivel: 'intermedio', facil: 'fondos_banco', evitar: ['hombro'] },
+
+    // ---------- EMPUJE · mancuernas ----------
+    { id: 'press_banca_mc', db: '0289', nombre: 'Press de pecho con mancuernas', patron: 'empuje', grupo: 'pecho', mat: ['dumbbell'], nivel: 'principiante', dificil: 'press_inclinado_mc' },
+    { id: 'press_inclinado_mc', db: '0314', nombre: 'Press inclinado con mancuernas', patron: 'empuje', grupo: 'pecho', mat: ['dumbbell'], nivel: 'intermedio', facil: 'press_banca_mc' },
+    { id: 'aperturas_mc', db: '0308', nombre: 'Aperturas con mancuernas', patron: 'empuje', grupo: 'pecho', mat: ['dumbbell'], nivel: 'intermedio', evitar: ['hombro'] },
+    { id: 'press_hombro_mc', db: '0405', nombre: 'Press de hombro sentado', patron: 'empuje', grupo: 'hombro', mat: ['dumbbell'], nivel: 'principiante', dificil: 'press_hombro_pie' },
+    { id: 'press_hombro_pie', db: '0426', nombre: 'Press de hombro de pie', patron: 'empuje', grupo: 'hombro', mat: ['dumbbell'], nivel: 'intermedio', facil: 'press_hombro_mc' },
+    { id: 'arnold_mc', db: '2137', nombre: 'Press Arnold', patron: 'empuje', grupo: 'hombro', mat: ['dumbbell'], nivel: 'intermedio', facil: 'press_hombro_mc', evitar: ['hombro'] },
+    { id: 'elev_laterales', db: '0334', nombre: 'Elevaciones laterales', patron: 'empuje', grupo: 'hombro', mat: ['dumbbell'], nivel: 'principiante' },
+    { id: 'ext_triceps_mc', db: '2188', nombre: 'Extensión de tríceps tras nuca', patron: 'empuje', grupo: 'triceps', mat: ['dumbbell'], nivel: 'principiante', evitar: ['codo', 'hombro'] },
+    { id: 'patada_triceps', db: '0333', nombre: 'Patada de tríceps', patron: 'empuje', grupo: 'triceps', mat: ['dumbbell'], nivel: 'principiante' },
+
+    // ---------- EMPUJE · bandas ----------
+    { id: 'press_banda', db: '1254', nombre: 'Press de pecho con banda', patron: 'empuje', grupo: 'pecho', mat: ['band'], nivel: 'principiante' },
+    { id: 'elev_frontal_banda', db: '0978', nombre: 'Elevación frontal con banda', patron: 'empuje', grupo: 'hombro', mat: ['band'], nivel: 'principiante' },
+
+    // ---------- EMPUJE · barra, polea y máquinas ----------
+    { id: 'press_banca_barra', db: '0025', nombre: 'Press de banca con barra', patron: 'empuje', grupo: 'pecho', mat: ['barbell'], nivel: 'intermedio', evitar: ['hombro'] },
+    { id: 'press_militar_barra', db: '0091', nombre: 'Press militar con barra', patron: 'empuje', grupo: 'hombro', mat: ['barbell'], nivel: 'intermedio', evitar: ['hombro'] },
+    { id: 'pushdown_polea', db: '0201', nombre: 'Extensión de tríceps en polea', patron: 'empuje', grupo: 'triceps', mat: ['cable'], nivel: 'principiante' },
+    { id: 'elev_lat_polea', db: '0178', nombre: 'Elevación lateral en polea', patron: 'empuje', grupo: 'hombro', mat: ['cable'], nivel: 'principiante' },
+
+    // ---------- TIRÓN · peso corporal ----------
+    { id: 'remo_invertido_rod', db: '2300', nombre: 'Remo invertido con rodillas flexionadas', patron: 'tiron', grupo: 'espalda', mat: [], nivel: 'principiante', dificil: 'remo_invertido' },
+    { id: 'remo_invertido', db: '0499', nombre: 'Remo invertido', patron: 'tiron', grupo: 'espalda', mat: [], nivel: 'intermedio', facil: 'remo_invertido_rod', dificil: 'dominadas_supinas' },
+    { id: 'retraccion_escapular', db: '0688', nombre: 'Retracción escapular en barra', patron: 'tiron', grupo: 'espalda', mat: [], nivel: 'principiante', dificil: 'remo_invertido' },
+    { id: 'dominadas_supinas', db: '1326', nombre: 'Dominadas supinas', patron: 'tiron', grupo: 'espalda', mat: [], nivel: 'avanzado', facil: 'remo_invertido', dificil: 'dominadas', evitar: ['codo', 'hombro'] },
+    { id: 'dominadas', db: '0652', nombre: 'Dominadas', patron: 'tiron', grupo: 'espalda', mat: [], nivel: 'avanzado', facil: 'dominadas_supinas', evitar: ['hombro'] },
+
+    // ---------- TIRÓN · mancuernas ----------
+    { id: 'remo_mc', db: '0293', nombre: 'Remo inclinado con mancuernas', patron: 'tiron', grupo: 'espalda', mat: ['dumbbell'], nivel: 'principiante', dificil: 'remo_una_mano_mc', evitar: ['espalda_baja'] },
+    { id: 'remo_una_mano_mc', db: '0292', nombre: 'Remo a una mano', patron: 'tiron', grupo: 'espalda', mat: ['dumbbell'], nivel: 'principiante', facil: 'remo_mc' },
+    { id: 'pajaro_mc', db: '0380', nombre: 'Pájaro con mancuernas', patron: 'tiron', grupo: 'hombro', mat: ['dumbbell'], nivel: 'principiante' },
+    { id: 'remo_menton_mc', db: '0437', nombre: 'Remo al mentón', patron: 'tiron', grupo: 'hombro', mat: ['dumbbell'], nivel: 'intermedio', evitar: ['hombro'] },
+    { id: 'curl_biceps_mc', db: '0294', nombre: 'Curl de bíceps', patron: 'tiron', grupo: 'biceps', mat: ['dumbbell'], nivel: 'principiante' },
+    { id: 'curl_martillo_mc', db: '0313', nombre: 'Curl martillo', patron: 'tiron', grupo: 'biceps', mat: ['dumbbell'], nivel: 'principiante' },
+    { id: 'curl_concentrado_mc', db: '0297', nombre: 'Curl concentrado', patron: 'tiron', grupo: 'biceps', mat: ['dumbbell'], nivel: 'intermedio' },
+    { id: 'encogimientos_mc', db: '0329', nombre: 'Encogimientos de hombros', patron: 'tiron', grupo: 'espalda', mat: ['dumbbell'], nivel: 'principiante' },
+
+    // ---------- TIRÓN · bandas, polea, barra y máquinas ----------
+    { id: 'remo_banda', db: '1003', nombre: 'Remo con banda', patron: 'tiron', grupo: 'espalda', mat: ['band'], nivel: 'principiante' },
+    { id: 'y_raise_banda', db: '1017', nombre: 'Elevación en Y con banda', patron: 'tiron', grupo: 'hombro', mat: ['band'], nivel: 'principiante' },
+    { id: 'jalon_polea', db: '2330', nombre: 'Jalón al pecho en polea', patron: 'tiron', grupo: 'espalda', mat: ['cable'], nivel: 'principiante' },
+    { id: 'remo_maquina', db: '1350', nombre: 'Remo en máquina', patron: 'tiron', grupo: 'espalda', mat: ['leverage machine'], nivel: 'principiante' },
+    { id: 'remo_barra', db: '0027', nombre: 'Remo con barra', patron: 'tiron', grupo: 'espalda', mat: ['barbell'], nivel: 'intermedio', evitar: ['espalda_baja'] },
+    { id: 'peso_muerto_barra', db: '0032', nombre: 'Peso muerto con barra', patron: 'tiron', grupo: 'isquios', mat: ['barbell'], nivel: 'avanzado', evitar: ['espalda_baja'] },
+
+    // ---------- PIERNA · peso corporal ----------
+    { id: 'puente_gluteo', db: '3013', nombre: 'Puente de glúteos', patron: 'pierna', grupo: 'gluteo', mat: [], nivel: 'principiante', dificil: 'puente_gluteo_1p' },
+    { id: 'puente_gluteo_1p', db: '3645', nombre: 'Puente de glúteos a una pierna', patron: 'pierna', grupo: 'gluteo', mat: [], nivel: 'intermedio', facil: 'puente_gluteo' },
+    { id: 'marcha_puente', db: '3561', nombre: 'Marcha en puente de glúteos', patron: 'pierna', grupo: 'gluteo', mat: [], nivel: 'principiante' },
+    { id: 'sentadilla_split', db: '2368', nombre: 'Zancada estática', patron: 'pierna', grupo: 'cuadriceps', mat: [], nivel: 'principiante', dificil: 'zancada_caminando', evitar: ['rodilla'] },
+    { id: 'zancada_caminando', db: '1460', nombre: 'Zancadas caminando', patron: 'pierna', grupo: 'cuadriceps', mat: [], nivel: 'intermedio', facil: 'sentadilla_split', evitar: ['rodilla'] },
+    { id: 'sentadilla_curtsey', db: '3769', nombre: 'Sentadilla curtsey', patron: 'pierna', grupo: 'gluteo', mat: [], nivel: 'intermedio', evitar: ['rodilla'] },
+    { id: 'gemelos_burro', db: '0284', nombre: 'Elevación de gemelos', patron: 'pierna', grupo: 'gemelo', mat: [], nivel: 'principiante', dificil: 'gemelos_1p' },
+    { id: 'gemelos_1p', db: '1387', nombre: 'Elevación de gemelos a una pierna', patron: 'pierna', grupo: 'gemelo', mat: [], nivel: 'principiante', facil: 'gemelos_burro' },
+    { id: 'sentadilla_sissy', db: '1489', nombre: 'Sentadilla sissy', patron: 'pierna', grupo: 'cuadriceps', mat: [], nivel: 'avanzado', evitar: ['rodilla'] },
+
+    // ---------- PIERNA · mancuernas y kettlebell ----------
+    { id: 'sentadilla_goblet', db: '1760', nombre: 'Sentadilla goblet', patron: 'pierna', grupo: 'cuadriceps', mat: ['dumbbell'], nivel: 'principiante', evitar: ['rodilla'] },
+    { id: 'sentadilla_mc', db: '0413', nombre: 'Sentadilla con mancuernas', patron: 'pierna', grupo: 'cuadriceps', mat: ['dumbbell'], nivel: 'principiante', evitar: ['rodilla'] },
+    { id: 'peso_muerto_rum_mc', db: '1459', nombre: 'Peso muerto rumano con mancuernas', patron: 'pierna', grupo: 'isquios', mat: ['dumbbell'], nivel: 'principiante', evitar: ['espalda_baja'] },
+    { id: 'zancada_mc', db: '0336', nombre: 'Zancadas con mancuernas', patron: 'pierna', grupo: 'cuadriceps', mat: ['dumbbell'], nivel: 'intermedio', evitar: ['rodilla'] },
+    { id: 'step_up_mc', db: '0431', nombre: 'Subida al cajón con mancuernas', patron: 'pierna', grupo: 'gluteo', mat: ['dumbbell'], nivel: 'principiante', evitar: ['rodilla'] },
+    { id: 'bulgara_mc', db: '0410', nombre: 'Sentadilla búlgara con mancuernas', patron: 'pierna', grupo: 'cuadriceps', mat: ['dumbbell'], nivel: 'intermedio', evitar: ['rodilla'] },
+    { id: 'goblet_kb', db: '0534', nombre: 'Sentadilla goblet con kettlebell', patron: 'pierna', grupo: 'cuadriceps', mat: ['kettlebell'], nivel: 'principiante', evitar: ['rodilla'] },
+
+    // ---------- PIERNA · bandas, barra y máquinas ----------
+    { id: 'sentadilla_banda', db: '1004', nombre: 'Sentadilla con banda', patron: 'pierna', grupo: 'cuadriceps', mat: ['band'], nivel: 'principiante', evitar: ['rodilla'] },
+    { id: 'hip_lift_banda', db: '1408', nombre: 'Elevación de cadera con banda', patron: 'pierna', grupo: 'gluteo', mat: ['band'], nivel: 'principiante' },
+    { id: 'step_up_banda', db: '1008', nombre: 'Subida al cajón con banda', patron: 'pierna', grupo: 'gluteo', mat: ['band'], nivel: 'principiante', evitar: ['rodilla'] },
+    { id: 'sentadilla_barra', db: '0043', nombre: 'Sentadilla con barra', patron: 'pierna', grupo: 'cuadriceps', mat: ['barbell'], nivel: 'avanzado', evitar: ['rodilla', 'espalda_baja'] },
+    { id: 'peso_muerto_rum_barra', db: '0085', nombre: 'Peso muerto rumano con barra', patron: 'pierna', grupo: 'isquios', mat: ['barbell'], nivel: 'intermedio', evitar: ['espalda_baja'] },
+    { id: 'hip_thrust_barra', db: '1409', nombre: 'Hip thrust con barra', patron: 'pierna', grupo: 'gluteo', mat: ['barbell'], nivel: 'intermedio' },
+    { id: 'prensa_piernas', db: '2287', nombre: 'Prensa de piernas', patron: 'pierna', grupo: 'cuadriceps', mat: ['leverage machine'], nivel: 'principiante', evitar: ['rodilla'] },
+    { id: 'curl_femoral', db: '0586', nombre: 'Curl femoral tumbado', patron: 'pierna', grupo: 'isquios', mat: ['leverage machine'], nivel: 'principiante' },
+    { id: 'ext_cuadriceps', db: '0585', nombre: 'Extensión de cuádriceps', patron: 'pierna', grupo: 'cuadriceps', mat: ['leverage machine'], nivel: 'principiante', evitar: ['rodilla'] },
+    { id: 'gemelos_maquina', db: '0594', nombre: 'Elevación de gemelos sentado', patron: 'pierna', grupo: 'gemelo', mat: ['leverage machine'], nivel: 'principiante' },
+
+    // ---------- CORE ----------
+    { id: 'plancha_rodillas', db: '3239', nombre: 'Plancha de rodillas', patron: 'core', grupo: 'core', mat: [], nivel: 'principiante', tiempo: true, dificil: 'plancha' },
+    { id: 'plancha', db: '0464', nombre: 'Plancha abdominal', patron: 'core', grupo: 'core', mat: [], nivel: 'principiante', tiempo: true, facil: 'plancha_rodillas', dificil: 'plancha_lateral', evitar: ['espalda_baja'] },
+    { id: 'plancha_lateral', db: '3544', nombre: 'Plancha lateral', patron: 'core', grupo: 'core', mat: [], nivel: 'intermedio', tiempo: true, facil: 'plancha' },
+    { id: 'dead_bug', db: '0276', nombre: 'Dead bug', patron: 'core', grupo: 'core', mat: [], nivel: 'principiante' },
+    { id: 'crunch', db: '3201', nombre: 'Crunch abdominal', patron: 'core', grupo: 'core', mat: [], nivel: 'principiante', evitar: ['cuello'] },
+    { id: 'crunch_inverso', db: '0872', nombre: 'Crunch inverso', patron: 'core', grupo: 'core', mat: [], nivel: 'principiante', evitar: ['espalda_baja'] },
+    { id: 'giro_ruso', db: '0687', nombre: 'Giro ruso', patron: 'core', grupo: 'core', mat: [], nivel: 'intermedio', evitar: ['espalda_baja'] },
+    { id: 'elev_piernas', db: '0620', nombre: 'Elevación de piernas tumbado', patron: 'core', grupo: 'core', mat: [], nivel: 'intermedio', evitar: ['espalda_baja'] },
+    { id: 'escaladores', db: '0630', nombre: 'Escaladores', patron: 'core', grupo: 'core', mat: [], nivel: 'intermedio', evitar: ['muneca'] },
+    { id: 'crunch_fitball', db: '1290', nombre: 'Crunch en fitball', patron: 'core', grupo: 'core', mat: ['stability ball'], nivel: 'principiante' },
+    { id: 'rueda_abdominal', db: '0876', nombre: 'Rueda abdominal', patron: 'core', grupo: 'core', mat: ['wheel roller'], nivel: 'avanzado', evitar: ['espalda_baja'] }
+  ];
+
+  var CORE_BY_ID = (function () {
+    var m = {};
+    CORE_EXERCISES.forEach(function (e) { m[e.id] = e; });
+    return m;
+  })();
+
+  // Prioridad del ejercicio dentro de su patrón. Sin esto el orden acababa
+  // siendo alfabético y una sesión de pierna salía con gemelos y glúteo pero
+  // sin ninguna sentadilla: los básicos tienen que ir primero.
+  //   1 = básico (patrón principal, mueve mucha masa)
+  //   2 = variante o secundario
+  //   3 = accesorio o aislamiento
+  var CORE_PRIMARY = {
+    flexiones: 1, flex_rodillas: 1, flex_inclinadas: 1, flex_pared: 1, flex_declinadas: 1,
+    press_banca_mc: 1, press_inclinado_mc: 1, press_banca_barra: 1, press_banda: 1,
+    press_hombro_mc: 1, press_hombro_pie: 1, press_militar_barra: 1,
+    remo_invertido: 1, remo_invertido_rod: 1, remo_mc: 1, remo_una_mano_mc: 1,
+    remo_barra: 1, remo_banda: 1, jalon_polea: 1, remo_maquina: 1,
+    dominadas: 1, dominadas_supinas: 1,
+    sentadilla_goblet: 1, sentadilla_mc: 1, sentadilla_barra: 1, sentadilla_banda: 1,
+    sentadilla_split: 1, zancada_caminando: 1, zancada_mc: 1, bulgara_mc: 1, goblet_kb: 1,
+    peso_muerto_rum_mc: 1, peso_muerto_rum_barra: 1, peso_muerto_barra: 1,
+    prensa_piernas: 1, hip_thrust_barra: 1, puente_gluteo: 1, puente_gluteo_1p: 1,
+    plancha: 1, plancha_rodillas: 1
+  };
+  var CORE_ACCESSORY = {
+    elev_laterales: 3, elev_lat_polea: 3, elev_frontal_banda: 3, y_raise_banda: 3,
+    pajaro_mc: 3, remo_menton_mc: 3, encogimientos_mc: 3,
+    curl_biceps_mc: 3, curl_martillo_mc: 3, curl_concentrado_mc: 3,
+    ext_triceps_mc: 3, patada_triceps: 3, pushdown_polea: 3, flex_diamante: 3,
+    fondos_banco: 3, fondos_triceps_bw: 3, aperturas_mc: 3,
+    gemelos_burro: 3, gemelos_1p: 3, gemelos_maquina: 3,
+    curl_femoral: 3, ext_cuadriceps: 3, marcha_puente: 3, retraccion_escapular: 3,
+    crunch: 3, crunch_inverso: 3, giro_ruso: 3, elev_piernas: 3, escaladores: 3,
+    crunch_fitball: 3, rueda_abdominal: 3, dead_bug: 3, plancha_lateral: 3,
+    sentadilla_sissy: 3, sentadilla_curtsey: 3, step_up_mc: 3, step_up_banda: 3,
+    hip_lift_banda: 3
+  };
+  CORE_EXERCISES.forEach(function (e) {
+    e.prio = CORE_PRIMARY[e.id] ? 1 : (CORE_ACCESSORY[e.id] ? 3 : 2);
+  });
+
+
+  // Grupos musculares canónicos por patrón, para el reparto de volumen
+  var GROUPS_BY_PATTERN = {
+    empuje: ['pecho', 'hombro', 'triceps'],
+    tiron: ['espalda', 'biceps'],
+    pierna: ['cuadriceps', 'isquios', 'gluteo', 'gemelo'],
+    core: ['core']
+  };
+
+  var LEVEL_RANK = { principiante: 0, intermedio: 1, avanzado: 2 };
+
+  // Ejercicios del núcleo que encajan con el inventario, el nivel y las zonas
+  // a evitar. Es el único sitio donde se decide qué puede recetarse.
+  function coreAvailable(inventory, level, avoid) {
+    var maxRank = LEVEL_RANK[level] === undefined ? 1 : LEVEL_RANK[level];
+    avoid = avoid || [];
+    return CORE_EXERCISES.filter(function (e) {
+      if (LEVEL_RANK[e.nivel] > maxRank) return false;
+      for (var i = 0; i < (e.mat || []).length; i++) {
+        if (!inventory[e.mat[i]]) return false;
+      }
+      for (var j = 0; j < avoid.length; j++) {
+        if ((e.evitar || []).indexOf(avoid[j]) !== -1) return false;
+      }
+      return true;
+    });
+  }
+
 
   var WIZARD_STEPS = [
     {
@@ -4963,23 +5214,20 @@
       ]
     },
     {
-      key: 'place', title: '¿Dónde vas a entrenar?', multi: true,
-      hint: 'Puedes marcar varios sitios. Sólo se elegirán ejercicios que puedas hacer con lo que tengas.',
+      key: 'place', title: '¿Dónde vas a entrenar?', multi: false,
+      hint: 'Con esto marcamos el material más habitual de ese sitio. En el paso siguiente lo ajustas a lo que tengas de verdad.',
       options: [
         { value: 'gimnasio', label: '🏢 En el gimnasio', desc: 'Máquinas, barras, poleas y mancuernas' },
-        { value: 'casa', label: '🏠 En casa con material', desc: 'Mancuernas, bandas, kettlebell o fitball' },
+        { value: 'casa', label: '🏠 En casa', desc: 'Con el material que tengas' },
         { value: 'sin_material', label: '🤸 Sin material', desc: 'Sólo peso corporal' }
       ]
     },
     {
-      // Sólo tiene sentido si entrena en casa con material: quien va al
-      // gimnasio lo tiene todo, y 'sin material' ya dice que no hay nada.
-      key: 'gear', title: '¿Qué material tienes en casa?', multi: true, pills: true,
-      hint: 'Marca todo lo que tengas. Sólo se elegirán ejercicios que puedas hacer con ello (el peso corporal siempre entra).',
-      when: function (answers) {
-        var places = answerList(answers, 'place');
-        return places.indexOf('casa') !== -1 && places.indexOf('gimnasio') === -1;
-      },
+      // Se pregunta SIEMPRE. Antes se saltaba en varios caminos y quien no lo
+      // contestaba acababa sin ninguna restricción de material, que es como
+      // salían mancuernas y máquinas a quien entrenaba en casa sin nada.
+      key: 'gear', title: '¿Qué material tienes?', multi: true, pills: true,
+      hint: 'Marca sólo lo que tengas de verdad. No se elegirá ningún ejercicio que necesite algo que no esté marcado (el peso corporal siempre entra).',
       options: GEAR_OPTIONS
     },
     {
@@ -4993,12 +5241,38 @@
       ]
     },
     {
-      key: 'level', title: '¿Cuál es tu experiencia?',
-      hint: 'Marca el nivel de dificultad técnica de los ejercicios propuestos.',
+      key: 'minutes', title: '¿Cuánto tiempo tienes por sesión?',
+      hint: 'La sesión se construye para que quepa en ese rato, contando los descansos.',
       options: [
-        { value: 'principiante', label: '🌱 Empiezo ahora', desc: 'Menos de 6 meses entrenando' },
-        { value: 'intermedio', label: '💪 Tengo experiencia', desc: 'Entreno con regularidad desde hace tiempo' },
-        { value: 'avanzado', label: '⚡ Avanzado', desc: 'Domino la técnica de los básicos' }
+        { value: '30', label: '⏱️ 30 minutos', desc: 'Sesión corta y al grano' },
+        { value: '45', label: '⏱️ 45 minutos', desc: 'Lo más habitual' },
+        { value: '60', label: '⏱️ 60 minutos', desc: 'Sesión completa, sin prisa' },
+        { value: '90', label: '⏱️ 90 minutos', desc: 'Mucho volumen por sesión' }
+      ]
+    },
+    {
+      // Se pregunta por tiempo entrenando y no por "tu nivel": casi todo el
+      // mundo se sobreestima o se infravalora al responder lo segundo.
+      key: 'level', title: '¿Cuánto llevas entrenando de forma seguida?',
+      hint: 'Determina la dificultad técnica de los ejercicios que se proponen.',
+      options: [
+        { value: 'principiante', label: '🌱 Poco o nada', desc: 'Menos de 6 meses, o vuelvo después de un parón largo' },
+        { value: 'intermedio', label: '💪 Entre 6 meses y 2 años', desc: 'Entreno con regularidad y controlo los básicos' },
+        { value: 'avanzado', label: '⚡ Más de 2 años', desc: 'Técnica sólida en sentadilla, press y remo' }
+      ]
+    },
+    {
+      // Exclusión, no tratamiento: se quitan los movimientos que suelen dar
+      // guerra en esa zona. La app no da indicaciones médicas.
+      key: 'avoid', title: '¿Alguna zona que te moleste?', multi: true, pills: true,
+      hint: 'Se evitarán los ejercicios que suelen cargar esa zona. Si tienes una lesión, consúltalo antes con un profesional.',
+      options: [
+        { value: 'rodilla', label: '🦵 Rodilla', desc: 'Evita sentadillas profundas y zancadas' },
+        { value: 'hombro', label: '🤲 Hombro', desc: 'Evita press por encima de la cabeza y aperturas' },
+        { value: 'espalda_baja', label: '🔙 Espalda baja', desc: 'Evita peso muerto y flexiones de tronco' },
+        { value: 'muneca', label: '✋ Muñeca', desc: 'Evita apoyos con la mano abierta' },
+        { value: 'codo', label: '💪 Codo', desc: 'Evita extensiones forzadas de tríceps' },
+        { value: 'cuello', label: '🧣 Cuello', desc: 'Evita crunch con tracción de cuello' }
       ]
     },
     {
@@ -5009,6 +5283,7 @@
         { value: 'si', label: '🏃 Sí, corro', desc: 'Añade 2 ejercicios de la colección "Recuperación running"' }
       ]
     },
+
     {
       key: 'focus', title: '¿Alguna zona prioritaria?',
       hint: 'Se añade un ejercicio extra de esa zona en cada sesión que la trabaje.',
@@ -5138,21 +5413,19 @@
     var items = [];
     var goals = answerList(answers, 'goal');
     if (!goals.length) goals = ['hipertrofia'];
-    var place = effectivePlace(answers);
-    // El material declarado sólo acota cuando se entrena en casa: en el
-    // gimnasio se da por hecho que está todo disponible.
-    var gearSet = place === 'casa' ? allowedEquipment(answers) : null;
+    // Restricción dura: sólo entra lo que se puede hacer con el material
+    // declarado. Sin material declarado, sólo peso corporal.
+    var inventory = getInventory(answers);
+    var hasGymGear = GEAR_OPTIONS.some(function (o) {
+      return !o.home && answerList(answers, 'gear').indexOf(o.value) !== -1;
+    });
     EXERCISE_DB.all().forEach(function (rec) {
+      if (!canPerform(rec, inventory)) return;
       var t = EXERCISE_TAGS.tagsFor(rec);
       if (!t) return;
       // 'brazos' no es un patrón sino una marca sobre tirón/empuje, por eso
       // se comprueba como tag y no contra t._pattern.
       if (pattern === 'brazos' ? !t.brazos : t._pattern !== pattern) return;
-      // Material: 'sin_material' es un subconjunto de 'casa', y quien va al
-      // gimnasio puede hacer también lo de casa.
-      if (place === 'sin_material' && !t.sin_material) return;
-      if (place === 'casa' && !t.casa) return;
-      if (gearSet && !gearSet[rec.eq || '']) return;
       if (!EXERCISE_TAGS.fitsLevel(rec, answers.level)) return;
       // El objetivo filtra sólo cuando tiene sentido: en movilidad se buscan
       // estiramientos, y en el resto se descartan. Con varios objetivos basta
@@ -5173,7 +5446,7 @@
       goals.forEach(function (g) { if (t[g]) goalHits++; });
       // Encajar con un objetivo puntúa; encajar con varios a la vez, algo más.
       if (goalHits) score += 5 + (goalHits - 1);
-      if (place === 'gimnasio' && t.gimnasio) score += 2;             // aprovecha el material
+      if (hasGymGear && t.gimnasio) score += 2;                       // aprovecha el material
       if (t._level === answers.level) score += 2;                    // nivel exacto
       items.push({ rec: rec, score: score });
     });
@@ -5184,45 +5457,84 @@
     return items.map(function (i) { return i.rec; });
   }
 
+  // Minutos estimados de un ejercicio: series × (trabajo + descanso). Sirve
+  // para construir la sesión por tiempo en vez de por número de ejercicios,
+  // que era lo que obligaba a cuadrar los 30 minutos a mano.
+  function exerciseMinutes(series, restSec) {
+    return (series * (40 + restSec)) / 60;
+  }
+
+  function sessionMinutes(list, series, restSec) {
+    return list.length * exerciseMinutes(series, restSec);
+  }
+
+  // Candidatos del núcleo para un hueco del split. 'brazos' no es un patrón
+  // del núcleo sino bíceps y tríceps, así que se traduce aquí.
+  function slotCandidates(byPattern, byGroup, slot, sessionPattern) {
+    if (slot === "brazos") {
+      // El brazo que toca depende del día: el tríceps acompaña al empuje y el
+      // bíceps al tirón. Mezclarlos metía fondos de tríceps en el día de
+      // espalda, donde no pinta nada.
+      if (sessionPattern === "tiron") return (byGroup.biceps || []).concat(byGroup.triceps || []);
+      return (byGroup.triceps || []).concat(byGroup.biceps || []);
+    }
+    return byPattern[slot] || [];
+  }
+
   // Construye la rutina completa a partir de las respuestas del tutorial.
-  // Devuelve null si el catálogo no da para llenar ni una sesión.
+  // Devuelve null si el núcleo no da ni para llenar una sesión.
   function generateRoutine(answers) {
+    answers = normalizeAnswers(answers);
+    var inventory = getInventory(answers);
+    var level = answers.level || 'principiante';
+    var avoid = answerList(answers, 'avoid');
+    var pool = coreAvailable(inventory, level, avoid);
+    if (!pool.length) return null;
+
     var split = SPLITS[answers.days] || SPLITS['3'];
-    var perSession = exerciseCountFor(answers);
+    var goals = answerList(answers, 'goal');
+    if (!goals.length) goals = ['hipertrofia'];
     // Con varios objetivos manda el primero que se marcó para las series y
     // repeticiones: mezclar esquemas daría un progreso incoherente.
-    var scheme = GOAL_SCHEME[answerList(answers, 'goal')[0]] || GOAL_SCHEME.hipertrofia;
+    var scheme = GOAL_SCHEME[goals[0]] || GOAL_SCHEME.hipertrofia;
+    var minutes = parseInt(answers.minutes, 10) || 45;
 
-    // Cache de candidatos por patrón: se reutiliza en cada sesión.
-    // El seed rota la lista sin perder el orden por puntuación, así cada
-    // "Otros ejercicios" entra por un punto distinto de los mejor valorados.
-    var pool = {};
-    function poolFor(p) {
-      if (!pool[p]) {
-        var list = candidatesFor(p, answers);
-        if (wizardShuffleSeed && list.length > 1) {
-          var offset = wizardShuffleSeed % list.length;
-          list = list.slice(offset).concat(list.slice(0, offset));
+    var byPattern = {}, byGroup = {};
+    pool.forEach(function (e) {
+      (byPattern[e.patron] = byPattern[e.patron] || []).push(e);
+      (byGroup[e.grupo] = byGroup[e.grupo] || []).push(e);
+    });
+
+    // Ordena cada lista poniendo delante lo que encaja con el nivel exacto, y
+    // rota con el seed para que "Otros ejercicios" proponga algo distinto.
+    // Si ha declarado material, se prefiere lo cargado para los huecos
+    // principales: quien va al gimnasio espera press de banca, no flexiones.
+    var hasKit = Object.keys(inventory).length > 1;
+    Object.keys(byPattern).forEach(function (p) {
+      byPattern[p].sort(function (a, b) {
+        // Los básicos primero: son los que sostienen la sesión
+        if (a.prio !== b.prio) return a.prio - b.prio;
+        if (hasKit) {
+          var am = (a.mat && a.mat.length) ? 0 : 1, bm = (b.mat && b.mat.length) ? 0 : 1;
+          if (am !== bm) return am - bm;
         }
-        pool[p] = list;
+        var an = a.nivel === level ? 0 : 1, bn = b.nivel === level ? 0 : 1;
+        if (an !== bn) return an - bn;
+        return a.nombre.localeCompare(b.nombre);
+      });
+      if (wizardShuffleSeed && byPattern[p].length > 1) {
+        var off = wizardShuffleSeed % byPattern[p].length;
+        byPattern[p] = byPattern[p].slice(off).concat(byPattern[p].slice(0, off));
       }
-      return pool[p];
-    }
+    });
 
     var usedGlobal = {};   // evita repetir el mismo ejercicio en toda la rutina
-    var usedName = {};     // ...y que dos fichas distintas se vean igual
-    var picks = [];        // ejercicios elegidos por sesión
-
-    // El dataset trae variantes ("barbell upright row v. 2") que al traducir
-    // colapsan en el mismo nombre. Como el usuario no puede distinguirlas,
-    // se descartan por nombre visible además de por id.
-    var nameCache = {};
-    function displayName(rec) {
-      if (nameCache[rec.id] === undefined) {
-        nameCache[rec.id] = rec.esName ? rec.n : EXERCISE_DB.labelName(rec.n);
-      }
-      return nameCache[rec.id];
-    }
+    var picks = [];
+    var restSec = parseRestSeconds(scheme[0].rest) || 60;
+    var perExercise = exerciseMinutes(scheme[0].series, restSec);
+    // Calentamiento y transiciones se llevan un pellizco del tiempo declarado
+    var usableMinutes = Math.max(minutes - 6, 10);
+    var maxExercises = Math.max(3, Math.floor(usableMinutes / perExercise));
 
     split.forEach(function (session) {
       var patterns = session.patterns.slice();
@@ -5230,37 +5542,26 @@
       if (answers.focus && patterns.indexOf(answers.focus) !== -1) patterns.push(answers.focus);
       // Todas las sesiones cierran con core salvo las que ya son de core
       if (patterns.indexOf('core') === -1) patterns.push('core');
-      while (patterns.length < perSession) patterns.push(patterns[patterns.length % session.patterns.length]);
-      patterns = patterns.slice(0, perSession);
+      patterns = patterns.slice(0, maxExercises);
 
       var chosen = [];
-      var usedEquipment = {};   // para no montar la sesión entera con lo mismo
+      var usedGroup = {};
       patterns.forEach(function (p) {
-        var list = poolFor(p);
-        var fallback = null;
+        var list = slotCandidates(byPattern, byGroup, p, session.patterns[0]);
+        var pick = null, fallback = null;
         for (var i = 0; i < list.length; i++) {
-          if (usedGlobal[list[i].id] || usedName[displayName(list[i])]) continue;
-          // Se prefiere material que no se haya usado aún en esta sesión; si
-          // todo lo disponible repite, vale el primero libre.
-          if (usedEquipment[list[i].eq] && !fallback) { fallback = list[i]; continue; }
-          if (usedEquipment[list[i].eq]) continue;
-          fallback = list[i];
+          var e = list[i];
+          if (chosen.indexOf(e) !== -1) continue;      // nunca dos veces en la misma sesión
+          if (usedGroup[e.grupo]) { if (!fallback) fallback = e; continue; }
+          if (usedGlobal[e.id]) { if (!fallback) fallback = e; continue; }
+          pick = e;
           break;
         }
-        // Pool agotado: se tolera repetir un ejercicio de otra sesión, pero
-        // nunca dos veces en la misma (antes caía en list[0] a ciegas y salían
-        // sesiones con el mismo ejercicio dos veces).
-        if (!fallback) {
-          for (var j = 0; j < list.length; j++) {
-            var dn = displayName(list[j]);
-            if (chosen.every(function (c) { return displayName(c) !== dn; })) { fallback = list[j]; break; }
-          }
-        }
-        if (!fallback) return;
-        usedGlobal[fallback.id] = 1;
-        usedName[displayName(fallback)] = 1;
-        usedEquipment[fallback.eq] = 1;
-        chosen.push(fallback);
+        if (!pick) pick = fallback;
+        if (!pick) return;
+        usedGlobal[pick.id] = 1;
+        usedGroup[pick.grupo] = 1;
+        chosen.push(pick);
       });
       picks.push(chosen);
     });
@@ -5272,7 +5573,11 @@
     // porque este trabajo es de prevención y no sustituye a la carga.
     var preventive = [];
     if (answers.running === 'si') {
-      var rrPool = RUNNING_RECOVERY.filter(function (it) { return it.db || it.recordId; });
+      var rrPool = RUNNING_RECOVERY.filter(function (it) {
+        if (!it.db && !it.recordId) return false;
+        var rec = EXERCISE_DB.get(it.recordId || it.db);
+        return rec ? canPerform(rec, inventory) : false;
+      });
       var cursor = wizardShuffleSeed % (rrPool.length || 1);
       split.forEach(function (session, sIdx) {
         if (session.patterns.indexOf('pierna') === -1) { preventive[sIdx] = []; return; }
@@ -5307,6 +5612,12 @@
       };
     }
 
+    var GROUP_LABEL = {
+      pecho: 'Pecho', hombro: 'Hombro', triceps: 'Tríceps', espalda: 'Espalda',
+      biceps: 'Bíceps', cuadriceps: 'Cuádriceps', isquios: 'Isquiotibiales',
+      gluteo: 'Glúteo', gemelo: 'Gemelo', core: 'Core'
+    };
+
     // Una fase por bloque de 4 semanas, con los mismos ejercicios y más carga
     var phases = PHASE_NAMES.map(function (ph, phaseIdx) {
       var sc = scheme[phaseIdx];
@@ -5317,26 +5628,27 @@
         weeks: ph.weeks.slice(),
         days: split.map(function (session, sIdx) {
           return {
-            id: 'dia' + (sIdx + 1),
+            id: 'gen_d' + sIdx,
             day: session.day,
             emoji: session.emoji,
             title: session.title,
-            exercises: picks[sIdx].map(function (rec) {
-              var t = EXERCISE_TAGS.tagsFor(rec);
-              var timed = /\b(plank|hold|isometric)\b/.test(String(rec.n).toLowerCase());
+            exercises: (picks[sIdx] || []).map(function (e) {
+              var rec = EXERCISE_DB.get(e.db);
+              var timed = !!e.tiempo;
               return {
-                id: 'gen_' + rec.id,
-                dbId: rec.id,
-                name: displayName(rec),
-                muscle: EXERCISE_DB.labelTargetDisplay(rec.tg),
+                id: 'gen_' + e.id,
+                dbId: e.db,
+                coreId: e.id,
+                name: e.nombre,
+                muscle: GROUP_LABEL[e.grupo] || e.grupo,
                 series: sc.series,
                 reps: timed ? (20 + phaseIdx * 10) + ' seg' : sc.reps,
                 repsMin: timed ? 20 + phaseIdx * 10 : sc.repsMin,
                 repsMax: timed ? 20 + phaseIdx * 10 : sc.repsMax,
                 rest: sc.rest,
                 isTimed: timed,
-                focus: (rec.es && rec.es.length ? rec.es[0] : 'Movimiento controlado en todo el recorrido.'),
-                weightHint: t.sin_material ? 'Peso corporal' : 'Ajusta el peso a tu nivel'
+                focus: (rec && rec.es && rec.es.length ? rec.es[0] : 'Movimiento controlado en todo el recorrido.'),
+                weightHint: (e.mat && e.mat.length) ? 'Ajusta el peso a tu nivel' : 'Peso corporal'
               };
             }).concat((preventive[sIdx] || []).map(preventiveExercise))
           };
@@ -5345,16 +5657,160 @@
     });
 
     return {
-      version: 1,
+      version: 2,
       createdAt: getTodayKey(),
       answers: answers,
       phases: phases,
       trainingDays: (DEFAULT_DAYS_BY_COUNT[answers.days] || [1, 3, 5]).slice(),
       daysLabel: answers.days + ' días · '
-        + answerList(answers, 'goal').map(function (g) { return GOAL_LABEL[g] || ''; }).filter(Boolean).join(' + ')
-        + ' ' + (PLACE_LABEL[effectivePlace(answers)] || '')
+        + goals.map(function (g) { return GOAL_LABEL[g] || ''; }).filter(Boolean).join(' + ')
+        + ' · ' + minutes + ' min'
     };
   }
+
+  // =============================================
+  // VALIDADOR DE PLANES
+  // =============================================
+  // Se ejecuta antes de enseñar o guardar un plan. Existe porque el fallo del
+  // material se coló en producción sin que nada lo detectara: es más barato
+  // comprobar invariantes que confiar en que el generador siempre acierte.
+  function validatePlan(plan, answers) {
+    var problems = [];
+    if (!plan || !plan.phases || !plan.phases.length) {
+      return [{ tipo: 'vacio', msg: 'No se ha podido generar ninguna rutina' }];
+    }
+    var inventory = getInventory(answers);
+    var avoid = answerList(answers, 'avoid');
+    var minutes = parseInt(answers.minutes, 10) || 45;
+    var setsByGroup = {};
+
+    plan.phases[0].days.forEach(function (day) {
+      var seenNames = {};
+      var mins = 0;
+      day.exercises.forEach(function (ex) {
+        var core = ex.coreId ? CORE_BY_ID[ex.coreId] : null;
+
+        // Material: la invariante que originó todo esto
+        if (core) {
+          (core.mat || []).forEach(function (m) {
+            if (!inventory[m]) {
+              problems.push({ tipo: 'material', msg: ex.name + ' necesita ' + m + ' y no está en tu material' });
+            }
+          });
+          (core.evitar || []).forEach(function (z) {
+            if (avoid.indexOf(z) !== -1) {
+              problems.push({ tipo: 'lesion', msg: ex.name + ' no encaja con la zona que quieres evitar (' + z + ')' });
+            }
+          });
+          setsByGroup[core.grupo] = (setsByGroup[core.grupo] || 0) + (ex.series || 0);
+        } else if (!ex.preventive) {
+          problems.push({ tipo: 'sin_ficha', msg: ex.name + ' no está en el núcleo curado' });
+        }
+
+        if (seenNames[ex.name]) {
+          problems.push({ tipo: 'duplicado', msg: ex.name + ' aparece dos veces en ' + day.day });
+        }
+        seenNames[ex.name] = 1;
+
+        mins += exerciseMinutes(ex.series || 3, parseRestSeconds(ex.rest) || 60);
+      });
+
+      if (mins > minutes + 10) {
+        problems.push({ tipo: 'tiempo', msg: day.day + ' dura unos ' + Math.round(mins) + ' min y pediste ' + minutes });
+      }
+    });
+
+    // Equilibrio: ningún patrón mayor puede quedarse sin nada
+    ['empuje', 'tiron', 'pierna'].forEach(function (p) {
+      var total = 0;
+      (GROUPS_BY_PATTERN[p] || []).forEach(function (g) { total += setsByGroup[g] || 0; });
+      if (total === 0) {
+        problems.push({ tipo: 'equilibrio', msg: 'La rutina no entrena nada de ' + p });
+      }
+    });
+
+    return problems;
+  }
+
+  // Matriz de combinaciones de respuestas. Recorre el generador con muchas
+  // combinaciones y pasa cada plan por el validador. Es la prueba automatizada
+  // que el proyecto no tenía: el fallo del material llegó a producción porque
+  // nada comprobaba que el plan generado fuese coherente con lo respondido.
+  //
+  // Se ejecuta desde la consola:  gymSelfTest()
+  function gymSelfTest(verbose) {
+    if (!EXERCISE_DB.isLoaded()) {
+      console.warn('El catálogo aún no ha cargado. Prueba otra vez en un segundo.');
+      return null;
+    }
+    var places = ['gimnasio', 'casa', 'sin_material'];
+    var gearSets = [[], ['dumbbell'], ['band'], ['dumbbell', 'band'],
+                    ['dumbbell', 'band', 'kettlebell', 'barbell', 'cable', 'machine']];
+    var days = ['2', '3', '4', '5'];
+    var goals = [['fuerza'], ['hipertrofia'], ['tono'], ['perder_peso'], ['hipertrofia', 'fuerza']];
+    var levels = ['principiante', 'intermedio', 'avanzado'];
+    var minutesOpts = ['30', '45', '60'];
+    var avoids = [[], ['rodilla'], ['hombro', 'espalda_baja']];
+
+    var runs = 0, failed = 0;
+    var failures = [];
+
+    places.forEach(function (place) {
+      gearSets.forEach(function (gear) {
+        days.forEach(function (d) {
+          goals.forEach(function (goal) {
+            levels.forEach(function (level) {
+              minutesOpts.forEach(function (mins) {
+                avoids.forEach(function (avoid) {
+                  var answers = {
+                    place: place, gear: gear.slice(), days: d, goal: goal.slice(),
+                    level: level, minutes: mins, avoid: avoid.slice(),
+                    running: '', focus: ''
+                  };
+                  runs++;
+                  var plan = null, problems = null;
+                  try {
+                    plan = generateRoutine(answers);
+                    problems = validatePlan(plan, answers);
+                  } catch (e) {
+                    problems = [{ tipo: 'excepcion', msg: String(e && e.message || e) }];
+                  }
+                  if (problems && problems.length) {
+                    failed++;
+                    if (failures.length < 25) {
+                      failures.push({ answers: answers, problems: problems });
+                    }
+                  }
+                });
+              });
+            });
+          });
+        });
+      });
+    });
+
+    var pct = runs ? Math.round(((runs - failed) / runs) * 100) : 0;
+    console.log('gymSelfTest: ' + (runs - failed) + '/' + runs + ' combinaciones válidas (' + pct + '%)');
+    if (failures.length) {
+      console.warn('Primeros fallos:');
+      failures.forEach(function (f) {
+        console.warn('  [' + f.answers.place + ' | gear=' + (f.answers.gear.join(',') || 'nada')
+          + ' | ' + f.answers.days + 'd | ' + f.answers.level + ' | ' + f.answers.minutes + 'min'
+          + ' | evita=' + (f.answers.avoid.join(',') || '-') + ']');
+        f.problems.slice(0, 3).forEach(function (p) { console.warn('      · ' + p.tipo + ': ' + p.msg); });
+      });
+    }
+    if (verbose) return { runs: runs, failed: failed, failures: failures };
+    return { runs: runs, failed: failed };
+  }
+
+  // Se cuelgan del propio self-test para no ensuciar el ámbito global: sirven
+  // para inspeccionar un plan concreto desde la consola sin tocar la interfaz.
+  gymSelfTest.generate = generateRoutine;
+  gymSelfTest.validate = validatePlan;
+  gymSelfTest.core = CORE_EXERCISES;
+  window.gymSelfTest = gymSelfTest;
+
 
   // Registra el plan como perfil: rellena PROFILES, el mapa al dataset (para
   // las animaciones) y EXERCISE_META (para la descripción paso a paso).
@@ -5552,8 +6008,9 @@
     html += '<div class="wizard-nav">';
     if (wizardStep > 0) html += '<button class="wizard-back" id="wizardBack">← Atrás</button>';
     if (step.multi) {
-      html += '<button class="wizard-next" id="wizardNext"' + (selected.length ? '' : ' disabled') + '>'
-        + (selected.length > 1 ? 'Continuar (' + selected.length + ') →' : 'Continuar →') + '</button>';
+      html += '<button class="wizard-next" id="wizardNext"' + ((selected.length || stepAllowsEmpty(step)) ? '' : ' disabled') + '>'
+        + (selected.length > 1 ? 'Continuar (' + selected.length + ') →'
+           : (selected.length === 0 && stepAllowsEmpty(step) ? (step.key === "avoid" ? "Ninguna →" : "No tengo material →") : "Continuar →")) + '</button>';
     }
     html += '</div>';
 
@@ -5565,6 +6022,9 @@
         var value = btn.dataset.value;
         if (!step.multi) {
           wizardAnswers[step.key] = value;
+          // El sitio no filtra nada por sí mismo: sólo prerrellena el material
+          // del paso siguiente, que es el que manda y se puede corregir.
+          if (step.key === "place") wizardAnswers.gear = (PLACE_PRESET[value] || []).slice();
           wizardStep++;
           renderWizard();
           return;
@@ -5583,7 +6043,7 @@
     });
     var next = document.getElementById('wizardNext');
     if (next) next.addEventListener('click', function () {
-      if (!answerList(wizardAnswers, step.key).length) return;
+      if (!answerList(wizardAnswers, step.key).length && !stepAllowsEmpty(step)) return;
       wizardStep++;
       renderWizard();
     });
@@ -5593,13 +6053,17 @@
 
   // Etiqueta y estado del botón "Continuar" de los pasos múltiples. Se llama
   // al marcar y desmarcar, así el paso no necesita repintarse entero.
+  // El material admite cero opciones: 'no tengo nada' es una respuesta válida
+  // y además la más restrictiva. El resto de pasos siguen exigiendo una.
+  function stepAllowsEmpty(step) { return step.key === "gear" || step.key === "avoid"; }
+
   function updateWizardNext(step, selected) {
-    var next = document.getElementById('wizardNext');
+    var next = document.getElementById("wizardNext");
     if (!next || !step.multi) return;
-    next.disabled = selected.length === 0;
+    next.disabled = selected.length === 0 && !stepAllowsEmpty(step);
     next.textContent = selected.length > 1
-      ? 'Continuar (' + selected.length + ') →'
-      : 'Continuar →';
+      ? "Continuar (" + selected.length + ") →"
+      : (selected.length === 0 && stepAllowsEmpty(step) ? (step.key === "avoid" ? "Ninguna →" : "No tengo material →") : "Continuar →");
   }
 
   function renderWizardSummary(el) {
@@ -5653,7 +6117,15 @@
       renderWizard();
     });
 
-    document.getElementById('wizardSave').addEventListener('click', function () {
+    document.getElementById("wizardSave").addEventListener("click", function () {
+      // Nada se guarda sin pasar el validador: es más barato comprobar
+      // invariantes que fiarse de que el generador siempre acierte.
+      var problems = validatePlan(plan, wizardAnswers);
+      if (problems.length) {
+        console.warn("Plan rechazado por el validador:", problems);
+        showToast("⚠ " + problems[0].msg);
+        return;
+      }
       saveCustomPlan(plan);
       installCustomPlan(plan);
       addCustomProfileOption();
