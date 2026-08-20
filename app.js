@@ -1284,6 +1284,10 @@
     // Movimientos de aislamiento: fly, curl, extensión, elevación…
     var ISOLATION_RE = /\b(fly|flye|curl|extension|raise|kickback|pullover|shrug|crunch|lateral raise)\b/;
 
+    // El dataset marca estos como "body weight" pero requieren barra de
+    // dominadas, anillas o paralelas: no son ejercicios "sin material".
+    var NEEDS_BAR_RE = /\b(pull[- ]?up|pullup|chin[- ]?up|elevator|chest dip|l[- ]?pull[- ]?up|muscle[- ]?up|ring[- ]?dips?|swing 360|back lever|front lever|korean dips?|hanging pike|inverted row)\b/;
+
     function tagsFor(rec) {
       if (!rec) return null;
       if (rec._t) return rec._t;
@@ -1295,7 +1299,8 @@
       var t = {};
 
       // --- place ---
-      if (eq === 'body weight') { t.sin_material = 1; t.casa = 1; }
+      if (eq === 'body weight' && NEEDS_BAR_RE.test(name)) { t.gimnasio = 1; }
+      else if (eq === 'body weight') { t.sin_material = 1; t.casa = 1; }
       else if (HOME_EQUIPMENT[eq]) t.casa = 1;
       else t.gimnasio = 1;
 
@@ -1347,7 +1352,11 @@
       return LEVEL_ORDER[t._level] <= LEVEL_ORDER[level];
     }
 
-    return { tagsFor: tagsFor, has: has, fitsLevel: fitsLevel, levelOrder: LEVEL_ORDER };
+    function needsBar(rec) {
+      return rec && rec.eq === 'body weight' && NEEDS_BAR_RE.test(String(rec.n || '').toLowerCase());
+    }
+
+    return { tagsFor: tagsFor, has: has, fitsLevel: fitsLevel, levelOrder: LEVEL_ORDER, needsBar: needsBar };
   })();
 
   // Etiquetas visibles de los tags con los que se puede filtrar el catálogo.
@@ -4982,6 +4991,12 @@
     answerList(answers, 'gear').forEach(function (g) {
       (GEAR_EQUIPMENT[g] || []).forEach(function (eq) { set[eq] = 1; });
     });
+    // Acceso a barra de dominadas/anillas: sólo lo asumimos si hay material
+    // de gimnasio declarado (barra, poleas, máquinas...), no en peso corporal puro.
+    var hasGymGear = GEAR_OPTIONS.some(function (o) {
+      return !o.home && answerList(answers, 'gear').indexOf(o.value) !== -1;
+    });
+    if (hasGymGear) set._pullUpBar = 1;
     return set;
   }
 
@@ -4990,6 +5005,7 @@
   // manera y por eso se colaban ejercicios imposibles.
   function canPerform(rec, inventory) {
     if (!rec) return false;
+    if (EXERCISE_TAGS.needsBar(rec)) return !!inventory._pullUpBar;
     return !!inventory[rec.eq || BODYWEIGHT_EQ];
   }
 
