@@ -1,12 +1,12 @@
 /* =============================================
    Gym Calendar - App de Rutina de Ejercicios
-   Versión: 4.15.0 — Motor de restricciones, núcleo curado y validador
+   Versión: 4.16.0 — Feedback de usuarios conectado a Google Sheet
    ============================================= */
 
 (function () {
   'use strict';
 
-  var APP_VERSION = '4.15.0';
+  var APP_VERSION = '4.16.0';
 
   // =============================================
   // SERGIO_PHASES: plan Push/Pull/Pierna 3 días/semana
@@ -6357,6 +6357,8 @@
     if (wizardClose) wizardClose.addEventListener('click', closeRoutineWizard);
 
     setupServiceWorker();
+    setupFeedback();
+    flushFeedbackQueue();
 
     var pendingOnboarding = needsOnboarding();
     // Bloquea la app desde el primer frame para que no se vea el fondo
@@ -6380,6 +6382,129 @@
     if (vEl) vEl.textContent = 'v' + APP_VERSION;
 
     console.log('🏋️ Gym Calendar v' + APP_VERSION);
+  }
+
+  // =============================================
+  // FEEDBACK: IDEAS Y ERRORES
+  // ---------------------------------------------
+  // El destino es un Google Apps Script publicado como Web App que escribe una
+  // fila por reporte en una hoja de cálculo. Ver docs/feedback-apps-script.md.
+  // Apps Script no devuelve cabeceras CORS utilizables desde el navegador, así
+  // que enviamos con mode:'no-cors': la petición sale, pero la respuesta es
+  // opaca. Solo detectamos fallos de red, que es lo que nos importa (sin
+  // cobertura guardamos el reporte y lo reintentamos al volver a abrir la app).
+  // =============================================
+  var FEEDBACK_ENDPOINT = 'https://script.google.com/macros/s/AKfycbzq4e_9RF2bav4hhKsuKeJjNuuZAjZMez-MLTVeovhI8if2odB27kJqmNd7xYIuAnIsLQ/exec';
+  var FEEDBACK_QUEUE_KEY = 'gym_feedback_queue';
+  var FEEDBACK_MAX = 1000;
+
+  function readFeedbackQueue() {
+    try { return JSON.parse(localStorage.getItem(FEEDBACK_QUEUE_KEY)) || []; }
+    catch (e) { return []; }
+  }
+
+  function writeFeedbackQueue(queue) {
+    try { localStorage.setItem(FEEDBACK_QUEUE_KEY, JSON.stringify(queue.slice(-20))); }
+    catch (e) { /* almacenamiento lleno: el reporte se pierde, no rompemos nada */ }
+  }
+
+  function postFeedback(entry) {
+    if (!FEEDBACK_ENDPOINT) return Promise.reject(new Error('sin endpoint'));
+    return fetch(FEEDBACK_ENDPOINT, {
+      method: 'POST',
+      mode: 'no-cors',
+      // text/plain evita el preflight OPTIONS, que Apps Script no responde
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(entry)
+    });
+  }
+
+  // Reintenta lo que quedó pendiente por falta de red. Silencioso a propósito.
+  function flushFeedbackQueue() {
+    var queue = readFeedbackQueue();
+    if (!queue.length || !FEEDBACK_ENDPOINT) return;
+    writeFeedbackQueue([]);
+    queue.forEach(function (entry) {
+      postFeedback(entry).catch(function () {
+        writeFeedbackQueue(readFeedbackQueue().concat([entry]));
+      });
+    });
+  }
+
+  function setupFeedback() {
+    var fab = document.getElementById('feedbackFab');
+    var modal = document.getElementById('feedbackModal');
+    var overlay = document.getElementById('feedbackModalOverlay');
+    var closeBtn = document.getElementById('feedbackClose');
+    var textarea = document.getElementById('feedbackText');
+    var counter = document.getElementById('feedbackCount');
+    var sendBtn = document.getElementById('feedbackSend');
+    if (!fab || !modal || !textarea || !sendBtn) return;
+
+    var type = 'idea';
+
+    function open() {
+      modal.classList.remove('hidden');
+      fab.style.display = 'none';
+      setTimeout(function () { textarea.focus(); }, 120);
+    }
+
+    function close() {
+      modal.classList.add('hidden');
+      fab.style.display = '';
+      textarea.value = '';
+      counter.textContent = '0';
+      sendBtn.disabled = true;
+    }
+
+    fab.addEventListener('click', open);
+    closeBtn.addEventListener('click', close);
+    overlay.addEventListener('click', close);
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && !modal.classList.contains('hidden')) close();
+    });
+
+    modal.querySelectorAll('.feedback-type').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        type = btn.dataset.type;
+        modal.querySelectorAll('.feedback-type').forEach(function (b) {
+          b.classList.toggle('active', b === btn);
+        });
+      });
+    });
+
+    textarea.addEventListener('input', function () {
+      counter.textContent = String(textarea.value.length);
+      sendBtn.disabled = textarea.value.trim().length < 3;
+    });
+
+    sendBtn.addEventListener('click', function () {
+      var text = textarea.value.trim();
+      if (text.length < 3) return;
+
+      var entry = {
+        date: new Date().toISOString(),
+        type: type,
+        text: text.slice(0, FEEDBACK_MAX),
+        version: APP_VERSION,
+        profile: activeProfile,
+        userAgent: navigator.userAgent
+      };
+
+      sendBtn.disabled = true;
+      sendBtn.textContent = 'Enviando…';
+
+      postFeedback(entry).then(function () {
+        showToast('¡Gracias! Reporte enviado 🙌');
+      }).catch(function () {
+        // Sin red (o sin endpoint configurado): lo guardamos y reintentamos
+        writeFeedbackQueue(readFeedbackQueue().concat([entry]));
+        showToast('Sin conexión: lo enviaremos más tarde');
+      }).then(function () {
+        sendBtn.textContent = 'Enviar';
+        close();
+      });
+    });
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);

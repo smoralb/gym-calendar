@@ -150,6 +150,34 @@
     </div>
   </div>
 
+  <!-- BOTON FLOTANTE: REPORTAR IDEA O ERROR -->
+  <button id="feedbackFab" class="feedback-fab" aria-label="Reportar una idea o un error">
+    <span class="feedback-fab-icon">💬</span>
+  </button>
+
+  <!-- MODAL: REPORTAR IDEA O ERROR -->
+  <div id="feedbackModal" class="feedback-modal hidden">
+    <div class="feedback-modal-overlay" id="feedbackModalOverlay"></div>
+    <div class="feedback-modal-sheet">
+      <button class="feedback-close" id="feedbackClose" aria-label="Cerrar">✕</button>
+      <div class="feedback-title">¿Qué nos cuentas?</div>
+      <div class="feedback-sub">Una idea para mejorar la app o un fallo que hayas visto.</div>
+      <div class="feedback-types">
+        <button class="feedback-type active" data-type="idea">
+          <span class="feedback-type-icon">💡</span>
+          <span class="feedback-type-label">Idea</span>
+        </button>
+        <button class="feedback-type" data-type="error">
+          <span class="feedback-type-icon">🐛</span>
+          <span class="feedback-type-label">Error</span>
+        </button>
+      </div>
+      <textarea id="feedbackText" class="feedback-textarea" rows="5" maxlength="1000" placeholder="Escribe aquí lo que quieras contarnos…"></textarea>
+      <div class="feedback-counter"><span id="feedbackCount">0</span>/1000</div>
+      <button id="feedbackSend" class="feedback-send" disabled>Enviar</button>
+    </div>
+  </div>
+
   <!-- TOAST -->
   <div class="toast" id="toast"></div>
 
