@@ -1,20 +1,20 @@
 /* =============================================
    Gym Calendar - App de Rutina de Ejercicios
-   Versión: 4.17.0 — Fix: duplicados en el generador + modal de novedades
+   Versión: 4.18.0 — Plan de vuelta a correr disponible en el asistente
    ============================================= */
 
 (function () {
   'use strict';
 
-  var APP_VERSION = '4.17.0';
+  var APP_VERSION = '4.18.0';
 
   // Resumen corto de la versión actual para el modal de novedades. Sólo se
   // enseña una vez por versión (localStorage) y nunca durante el onboarding.
   var WHATS_NEW = {
-    version: '4.17.0',
+    version: '4.18.0',
     items: [
-      { icon: '🐛', text: 'Arreglado: al generar una rutina con "¿Corres?" activado, a veces salía un ejercicio duplicado y no dejaba avanzar.' },
-      { icon: '🧪', text: 'El generador ahora reintenta solo si detecta un problema, en vez de bloquear la pantalla de "Usar esta rutina".' }
+      { icon: '🏃', text: 'Si corres, el asistente ahora te ofrece incluir el plan de vuelta a correr de 12 semanas combinado con tus días de fuerza (con 2 o 3 días por semana).' },
+      { icon: '🐛', text: 'Arreglado: al generar una rutina con "¿Corres?" activado, a veces salía un ejercicio duplicado y no dejaba avanzar.' }
     ]
   };
 
@@ -5327,6 +5327,17 @@
         { value: 'si', label: '🏃 Sí, corro', desc: 'Añade 2 ejercicios de la colección "Recuperación running"' }
       ]
     },
+    {
+      // Sólo con 2 o 3 días de fuerza cabe la semana: con 4 o 5 no queda
+      // hueco para las 3 sesiones de carrera sin sacrificar el descanso.
+      key: 'runningPlan', title: '¿Quieres el plan de vuelta a correr?',
+      hint: '12 semanas progresivas de carrera (readaptación, base y camino a los 10 km), en días distintos a los de fuerza.',
+      when: function (a) { return a.running === 'si' && (a.days === '2' || a.days === '3'); },
+      options: [
+        { value: '', label: '🚫 No, gracias', desc: 'Sólo el bloque preventivo en pierna' },
+        { value: 'si', label: '🏃 Sí, incluir el plan de carrera', desc: '3 sesiones de carrera a la semana además de tus días de fuerza' }
+      ]
+    },
 
     {
       key: 'focus', title: '¿Alguna zona prioritaria?',
@@ -5684,41 +5695,72 @@
       gluteo: 'Glúteo', gemelo: 'Gemelo', core: 'Core'
     };
 
+    // Plan de vuelta a correr combinado: los días de carrera no llevan
+    // ejercicios propios, se resuelven en runtime contra RUNNING_PLAN por
+    // semana (getRunningSession), igual que en el plan de Sergio. Por eso el
+    // mismo runIdx 0/1/2 se repite en las tres fases sin cambiar nada.
+    function runningDay(idx) {
+      var days = ['Carrera', 'Carrera', 'Carrera larga'];
+      var titles = ['Sesión de carrera', 'Sesión de carrera', 'Rodaje largo de la semana'];
+      return {
+        id: 'gen_run' + idx, day: days[idx], emoji: idx === 2 ? '🏃‍♂️' : '🏃',
+        title: titles[idx], type: 'running', runIdx: idx, exercises: []
+      };
+    }
+
+    // Combinaciones de fuerza + carrera probadas (mismo patrón que el plan de
+    // Sergio): sólo para 2 y 3 días de fuerza, porque con 4 o 5 no queda
+    // hueco en la semana para las 3 sesiones de carrera sin quitar descanso.
+    var RUNNING_COMBOS = {
+      '2': { weekdays: [1, 2, 4, 5, 6], pattern: ['S', 'R', 'R', 'S', 'R'] },
+      '3': { weekdays: [1, 2, 3, 4, 5, 6], pattern: ['S', 'R', 'S', 'R', 'S', 'R'] }
+    };
+    var runningCombo = (answers.running === 'si' && answers.runningPlan === 'si') ? RUNNING_COMBOS[answers.days] : null;
+
+    function combineWithRunning(strengthDays) {
+      if (!runningCombo) return strengthDays;
+      var sIdx = 0, rIdx = 0;
+      return runningCombo.pattern.map(function (p) {
+        return p === 'S' ? strengthDays[sIdx++] : runningDay(rIdx++);
+      });
+    }
+
     // Una fase por bloque de 4 semanas, con los mismos ejercicios y más carga
     var phases = PHASE_NAMES.map(function (ph, phaseIdx) {
       var sc = scheme[phaseIdx];
+      var strengthDays = split.map(function (session, sIdx) {
+        return {
+          id: 'gen_d' + sIdx,
+          day: session.day,
+          emoji: session.emoji,
+          title: session.title,
+          exercises: (picks[sIdx] || []).map(function (e) {
+            var rec = EXERCISE_DB.get(e.db);
+            var timed = !!e.tiempo;
+            return {
+              id: 'gen_' + e.id,
+              dbId: e.db,
+              coreId: e.id,
+              name: e.nombre,
+              muscle: GROUP_LABEL[e.grupo] || e.grupo,
+              series: sc.series,
+              reps: timed ? (20 + phaseIdx * 10) + ' seg' : sc.reps,
+              repsMin: timed ? 20 + phaseIdx * 10 : sc.repsMin,
+              repsMax: timed ? 20 + phaseIdx * 10 : sc.repsMax,
+              rest: sc.rest,
+              isTimed: timed,
+              focus: (rec && rec.es && rec.es.length ? rec.es[0] : 'Movimiento controlado en todo el recorrido.'),
+              weightHint: (e.mat && e.mat.length) ? 'Ajusta el peso a tu nivel' : 'Peso corporal'
+            };
+          }).concat((preventive[sIdx] || []).map(preventiveExercise))
+        };
+      });
       return {
         id: 'fase' + (phaseIdx + 1),
         name: ph.name,
         subtitle: ph.subtitle,
         weeks: ph.weeks.slice(),
-        days: split.map(function (session, sIdx) {
-          return {
-            id: 'gen_d' + sIdx,
-            day: session.day,
-            emoji: session.emoji,
-            title: session.title,
-            exercises: (picks[sIdx] || []).map(function (e) {
-              var rec = EXERCISE_DB.get(e.db);
-              var timed = !!e.tiempo;
-              return {
-                id: 'gen_' + e.id,
-                dbId: e.db,
-                coreId: e.id,
-                name: e.nombre,
-                muscle: GROUP_LABEL[e.grupo] || e.grupo,
-                series: sc.series,
-                reps: timed ? (20 + phaseIdx * 10) + ' seg' : sc.reps,
-                repsMin: timed ? 20 + phaseIdx * 10 : sc.repsMin,
-                repsMax: timed ? 20 + phaseIdx * 10 : sc.repsMax,
-                rest: sc.rest,
-                isTimed: timed,
-                focus: (rec && rec.es && rec.es.length ? rec.es[0] : 'Movimiento controlado en todo el recorrido.'),
-                weightHint: (e.mat && e.mat.length) ? 'Ajusta el peso a tu nivel' : 'Peso corporal'
-              };
-            }).concat((preventive[sIdx] || []).map(preventiveExercise))
-          };
-        })
+        days: combineWithRunning(strengthDays)
       };
     });
 
@@ -5727,10 +5769,11 @@
       createdAt: getTodayKey(),
       answers: answers,
       phases: phases,
-      trainingDays: (DEFAULT_DAYS_BY_COUNT[answers.days] || [1, 3, 5]).slice(),
+      trainingDays: (runningCombo ? runningCombo.weekdays : (DEFAULT_DAYS_BY_COUNT[answers.days] || [1, 3, 5])).slice(),
       daysLabel: answers.days + ' días · '
         + goals.map(function (g) { return GOAL_LABEL[g] || ''; }).filter(Boolean).join(' + ')
         + ' · ' + minutes + ' min'
+        + (runningCombo ? ' · + carrera 12 sem' : '')
     };
   }
 
@@ -5822,6 +5865,10 @@
     // lo ejecutaba con running:'si' antes de llegar a producción.
     var runningOpts = ['', 'si'];
     var focusOpts = ['', 'empuje', 'tiron', 'pierna'];
+    // Plan combinado de carrera: sólo tiene efecto con running:'si' y 2-3
+    // días, pero se recorre siempre para comprobar que con otras respuestas
+    // (running:'' o 4-5 días) el generador lo ignora sin romper nada.
+    var runningPlanOpts = ['', 'si'];
 
     var runs = 0, failed = 0;
     var failures = [];
@@ -5835,25 +5882,27 @@
                 avoids.forEach(function (avoid) {
                   runningOpts.forEach(function (running) {
                     focusOpts.forEach(function (focus) {
-                      var answers = {
-                        place: place, gear: gear.slice(), days: d, goal: goal.slice(),
-                        level: level, minutes: mins, avoid: avoid.slice(),
-                        running: running, focus: focus
-                      };
-                      runs++;
-                      var plan = null, problems = null;
-                      try {
-                        plan = generateRoutine(answers);
-                        problems = validatePlan(plan, answers);
-                      } catch (e) {
-                        problems = [{ tipo: 'excepcion', msg: String(e && e.message || e) }];
-                      }
-                      if (problems && problems.length) {
-                        failed++;
-                        if (failures.length < 25) {
-                          failures.push({ answers: answers, problems: problems });
+                      runningPlanOpts.forEach(function (runningPlan) {
+                        var answers = {
+                          place: place, gear: gear.slice(), days: d, goal: goal.slice(),
+                          level: level, minutes: mins, avoid: avoid.slice(),
+                          running: running, focus: focus, runningPlan: runningPlan
+                        };
+                        runs++;
+                        var plan = null, problems = null;
+                        try {
+                          plan = generateRoutine(answers);
+                          problems = validatePlan(plan, answers);
+                        } catch (e) {
+                          problems = [{ tipo: 'excepcion', msg: String(e && e.message || e) }];
                         }
-                      }
+                        if (problems && problems.length) {
+                          failed++;
+                          if (failures.length < 25) {
+                            failures.push({ answers: answers, problems: problems });
+                          }
+                        }
+                      });
                     });
                   });
                 });
@@ -6188,12 +6237,16 @@
     plan.phases[0].days.forEach(function (day) {
       html += '<div class="wizard-day">';
       html += '  <div class="wizard-day-head">' + day.emoji + ' <strong>' + escapeHtml(day.day) + '</strong> · ' + escapeHtml(day.title) + '</div>';
-      html += '  <ul class="wizard-day-list">';
-      day.exercises.forEach(function (ex) {
-        html += '<li><span class="wizard-ex-name">' + escapeHtml(ex.name) + '</span>'
-          + '<span class="wizard-ex-meta">' + ex.series + '×' + escapeHtml(ex.reps) + ' · ' + escapeHtml(ex.muscle) + '</span></li>';
-      });
-      html += '  </ul>';
+      if (day.type === 'running') {
+        html += '  <p class="wizard-hint">Sesión del plan de carrera de 12 semanas. Cambia cada semana: verás el detalle exacto en el calendario.</p>';
+      } else {
+        html += '  <ul class="wizard-day-list">';
+        day.exercises.forEach(function (ex) {
+          html += '<li><span class="wizard-ex-name">' + escapeHtml(ex.name) + '</span>'
+            + '<span class="wizard-ex-meta">' + ex.series + '×' + escapeHtml(ex.reps) + ' · ' + escapeHtml(ex.muscle) + '</span></li>';
+        });
+        html += '  </ul>';
+      }
       html += '</div>';
     });
 
