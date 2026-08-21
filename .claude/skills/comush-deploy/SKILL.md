@@ -5,6 +5,36 @@ description: Bump semver version (major/minor/patch), update all version referen
 You are performing a **versioned deploy** for the gym-calendar project.
 Working directory: `I:\Workspace\gym-calendar`
 
+## Step 0 — Revisar la hoja de feedback antes de desplegar
+
+Los usuarios reportan errores desde el botón 💬 de la app y cada reporte
+cae como fila en esta hoja de Google Sheets:
+`https://docs.google.com/spreadsheets/d/1dGfjsrPsW7VqGvQw6uwt37zPF3VUjXQp9TT_Y23YFBs/edit?gid=0#gid=0`
+
+Columnas: `date`, `type` (`idea` o `error`), `text`, `version`, `profile`,
+`userAgent`. No hay columna de estado, así que no hay forma de saber
+automáticamente cuáles ya están resueltos — el criterio lo pone quien
+revisa.
+
+1. Lee la hoja. Prueba en este orden y usa el primero que funcione:
+   - CSV público: `WebFetch` a
+     `https://docs.google.com/spreadsheets/d/1dGfjsrPsW7VqGvQw6uwt37zPF3VUjXQp9TT_Y23YFBs/export?format=csv&gid=0`
+   - Si no es accesible (la hoja no es pública o WebFetch falla), y hay
+     herramientas de Google Drive/Sheets disponibles en la sesión, úsalas
+     para leer el contenido del fichero con ese ID.
+   - Si ninguna de las dos funciona, dilo explícitamente y pasa al Paso 1
+     sin bloquear el deploy por un problema de acceso.
+2. Filtra las filas con `type = error`. Ordénalas por fecha descendente.
+3. Si hay alguna:
+   - Resume las más recientes al usuario (fecha, versión en la que se
+     reportó, texto) — no hace falta listarlas todas si hay muchas, con
+     las últimas 5-10 basta.
+   - Pregunta si quiere seguir con el deploy tal cual, o pausar para
+     solucionar alguno de esos errores primero. La decisión es suya: no
+     canceles el deploy por tu cuenta, y no lo bloquees en silencio.
+4. Si no hay filas de tipo `error`, o la hoja está vacía, dilo brevemente
+   y continúa directamente al Paso 1 sin pedir confirmación.
+
 ## Step 1 — Determine bump type
 
 - If an argument was passed (e.g. `minor`, `major`, `patch`), use it.

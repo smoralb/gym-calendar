@@ -1290,6 +1290,15 @@ body {
   border-radius: 6px;
 }
 
+.day-detail-ex-item.completed {
+  opacity: 0.7;
+}
+
+.day-detail-ex-item.completed .dd-ex-name {
+  text-decoration: line-through;
+  color: var(--text-secondary);
+}
+
 .day-detail-ex-item .dd-ex-weight {
   color: var(--accent-green);
 }
@@ -2248,6 +2257,16 @@ body {
   margin: 0 auto;
   border-radius: var(--radius-sm);
   background: #fff;
+  /* iOS Safari intenta arrastrar la imagen al deslizar el dedo sobre ella
+     en vez de dejar hacer scroll a la página: se queda "enganchada" al
+     dedo y toda la pantalla se mueve de forma rara. Con esto el gesto se
+     trata siempre como scroll vertical normal. */
+  -webkit-user-drag: none;
+  user-drag: none;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  touch-action: pan-y;
 }
 
 .exercise-db-caption {

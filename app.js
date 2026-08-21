@@ -1,20 +1,20 @@
 /* =============================================
    Gym Calendar - App de Rutina de Ejercicios
-   Versión: 4.18.0 — Plan de vuelta a correr disponible en el asistente
+   Versión: 4.19.0 — Marcar entrenamientos pasados + fix imagen deslizante
    ============================================= */
 
 (function () {
   'use strict';
 
-  var APP_VERSION = '4.18.0';
+  var APP_VERSION = '4.19.0';
 
   // Resumen corto de la versión actual para el modal de novedades. Sólo se
   // enseña una vez por versión (localStorage) y nunca durante el onboarding.
   var WHATS_NEW = {
-    version: '4.18.0',
+    version: '4.19.0',
     items: [
-      { icon: '🏃', text: 'Si corres, el asistente ahora te ofrece incluir el plan de vuelta a correr de 12 semanas combinado con tus días de fuerza (con 2 o 3 días por semana).' },
-      { icon: '🐛', text: 'Arreglado: al generar una rutina con "¿Corres?" activado, a veces salía un ejercicio duplicado y no dejaba avanzar.' }
+      { icon: '✅', text: 'Ya puedes marcar como completados los ejercicios de días pasados desde la pestaña Inicio, no sólo los de hoy.' },
+      { icon: '🐛', text: 'Arreglado: al deslizar el dedo sobre la imagen del ejercicio en iPhone, se movía toda la pantalla en vez de hacer scroll normal.' }
     ]
   };
 
@@ -2489,6 +2489,29 @@
     }
   }
 
+  // Igual que toggleCompletion pero para el detalle de día de la pestaña
+  // Inicio, donde dateKey puede ser un día pasado: antes sólo se podía
+  // marcar el entrenamiento de hoy (toggleCompletion escribía siempre en
+  // getTodayKey()) y no había manera de registrar uno que ya se había hecho.
+  function toggleHomeCompletion(exerciseId, dateKey) {
+    dateKey = dateKey || getTodayKey();
+    if (!state.completions[dateKey]) state.completions[dateKey] = {};
+    if (state.completions[dateKey][exerciseId]) {
+      delete state.completions[dateKey][exerciseId];
+    } else {
+      state.completions[dateKey][exerciseId] = true;
+      if (dateKey === getTodayKey()) {
+        playCompleteSound();
+        vibrate();
+        if (activeProfile === 'eva') checkEvaWorkoutComplete();
+      }
+    }
+    saveState();
+    updateAll();
+    if (dateKey === getTodayKey()) renderCurrentDay();
+    refreshHomeDayDetail();
+  }
+
   function EVA_MESSAGES() {
     return [
       '¡Lo has hecho genial! 🌸 Cada día más fuerte 💪',
@@ -3805,7 +3828,7 @@
         var dbGif = EXERCISE_DB.gifUrl(dbRec);
         html += '  <div class="exercise-db-block">';
         if (dbGif) {
-          html += '    <img class="exercise-db-gif" loading="lazy" alt="Animación: ' + escapeHtml(dbRec.n) + '" src="' + dbGif + '">';
+          html += '    <img class="exercise-db-gif" loading="lazy" draggable="false" alt="Animación: ' + escapeHtml(dbRec.n) + '" src="' + dbGif + '">';
         }
         html += '    <div class="exercise-db-caption">' + escapeHtml(dbRec.n) + ' · ' + escapeHtml(EXERCISE_DB.labelEquipment(dbRec.eq)) + '</div>';
         if (dbRec.es && dbRec.es.length) {
@@ -4256,9 +4279,16 @@
 
     bindRunningDoneButtons(detailEl);
     detailEl.querySelectorAll('.home-ex-header').forEach(function(header) {
-      header.addEventListener('click', function() {
+      header.addEventListener('click', function(e) {
+        if (e.target.closest('.home-check-btn')) return;
         var exId = header.id.replace('home-header-', '');
         toggleHomeExpand(exId);
+      });
+    });
+    detailEl.querySelectorAll('.home-check-btn').forEach(function(btn) {
+      btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        toggleHomeCompletion(btn.dataset.ex, btn.dataset.date);
       });
     });
     // Temporizador de descanso
@@ -4373,9 +4403,12 @@
     var restStr = ex.rest || '—';
     var restSecs = parseRestSeconds(ex.rest);
     var isExpanded = !!homeExpandedCards[originalId];
+    // Se puede marcar como hecho cualquier día con fecha (pasado, hoy o
+    // futuro) salvo en las vistas explícitamente de sólo lectura.
+    var isDone = !readOnly && dateKey ? !!(getCompletionsForDate(dateKey)[ex.id]) : false;
     var html = '';
 
-    html += '<div class="day-detail-ex-item home-ex-card" id="home-card-' + originalId + '">';
+    html += '<div class="day-detail-ex-item home-ex-card' + (isDone ? ' completed' : '') + '" id="home-card-' + originalId + '">';
 
     // Clickable header
     html += '<div class="home-ex-header" id="home-header-' + originalId + '">';
@@ -4387,6 +4420,9 @@
       : '<span class="dd-ex-reps">' + ex.series + '×' + ex.reps + '</span>';
     html += '</div>';
     html += '  </div>';
+    if (!readOnly && dateKey) {
+      html += '  <button class="check-btn home-check-btn' + (isDone ? ' checked' : '') + '" data-ex="' + ex.id + '" data-date="' + dateKey + '">' + (isDone ? '✓' : '') + '</button>';
+    }
     html += '  <span class="exercise-chevron" id="home-chevron-' + originalId + '">' + (isExpanded ? '˅' : '›') + '</span>';
     html += '</div>';
 
@@ -4433,7 +4469,7 @@
       var gifSrc = EXERCISE_DB.gifUrl(dbRec);
       html += '  <div class="exercise-db-block">';
       if (gifSrc) {
-        html += '    <img class="exercise-db-gif" loading="lazy" alt="Animación: ' + escapeHtml(dbRec.n) + '" src="' + gifSrc + '">';
+        html += '    <img class="exercise-db-gif" loading="lazy" draggable="false" alt="Animación: ' + escapeHtml(dbRec.n) + '" src="' + gifSrc + '">';
       }
       html += '    <div class="exercise-db-caption">' + escapeHtml(dbRec.n) + ' · ' + escapeHtml(EXERCISE_DB.labelEquipment(dbRec.eq)) + '</div>';
       if (dbRec.es && dbRec.es.length) {
@@ -4532,7 +4568,10 @@
       runHtml += '  <div class="day-detail-date">' + formatted + ' (' + dayName + ')</div>';
       if (runInfo) {
         runHtml += '  <div class="day-detail-routine">🏃 Carrera · Semana ' + runInfo.week + ' de ' + RUNNING_TOTAL_WEEKS + '</div>';
-        runHtml += renderRunningSessionCard(dateKey, { readOnly: isPast });
+        // Los días pasados también se pueden marcar: antes quedaban en modo
+        // sólo lectura y no había forma de registrar una sesión de carrera
+        // que ya se hizo, sólo la de hoy o futuras.
+        runHtml += renderRunningSessionCard(dateKey, { readOnly: isFuture });
       } else {
         var rw = getRunningWeek(dateKey);
         runHtml += '  <div class="day-detail-msg">🏃 Día de carrera</div>';
@@ -4648,36 +4687,43 @@
     var count = 0;
     for (var k in completions) count++;
     var routineIdx = getRoutineForDate(dateKey);
-    var routineName = routineIdx !== null ? phase.days[routineIdx].day : '—';
-    var routineEmoji = routineIdx !== null ? phase.days[routineIdx].emoji : '🏋️';
+    var day = (routineIdx !== null && phase) ? phase.days[routineIdx] : null;
+    var routineName = day ? day.day : '—';
+    var routineEmoji = day ? day.emoji : '🏋️';
     var phaseInfo = phase ? ' · ' + phase.name : '';
+    // No sólo hoy: cualquier día sin fecha futura se puede seguir marcando.
+    // Antes esta vista era de sólo lectura en cuanto había un ejercicio
+    // marcado, así que no se podía completar el resto de un entreno pasado.
+    var editable = day && dateKey <= getTodayKey();
 
     var html = '<div class="day-detail-data">';
     html += '  <div class="day-detail-date">' + formatted + ' (' + dayName + ')' + phaseInfo + '</div>';
     html += '  <div class="day-detail-routine">' + routineEmoji + ' ' + routineName + (weekNum ? ' · Semana ' + weekNum : '') + '</div>';
     html += '  <div class="day-detail-exercises">';
 
-    var dayExercises = [];
-    if (routineIdx !== null && phase) dayExercises = phase.days[routineIdx].exercises;
-    else {
-      for (var exId in completions) { var ex = findExercise(exId); if (ex) dayExercises.push(ex); }
-    }
+    if (editable) {
+      html += renderHomeExerciseList(day, dateKey);
+    } else {
+      var dayExercises = [];
+      if (day) dayExercises = day.exercises;
+      else { for (var exId in completions) { var ex = findExercise(exId); if (ex) dayExercises.push(ex); } }
 
-    dayExercises.forEach(function (ex) {
-      var done = !!completions[ex.id];
-      if (!done) return;
-      var weightStr = '—';
-      var weightEntries = state.progress[ex.id];
-      if (weightEntries) {
-        for (var w = 0; w < weightEntries.length; w++) {
-          if (weightEntries[w].date === dateKey) { weightStr = weightEntries[w].weight + ' kg'; break; }
+      dayExercises.forEach(function (ex) {
+        var done = !!completions[ex.id];
+        if (!done) return;
+        var weightStr = '—';
+        var weightEntries = state.progress[ex.id];
+        if (weightEntries) {
+          for (var w = 0; w < weightEntries.length; w++) {
+            if (weightEntries[w].date === dateKey) { weightStr = weightEntries[w].weight + ' kg'; break; }
+          }
         }
-      }
-      var meta = EXERCISE_META[ex.id] || {};
-      html += renderExerciseDetailItemForHome(ex, meta, {
-        dateKey: dateKey, originalId: ex.id, readOnly: true, weightStr: weightStr
+        var meta = EXERCISE_META[ex.id] || {};
+        html += renderExerciseDetailItemForHome(ex, meta, {
+          dateKey: dateKey, originalId: ex.id, readOnly: true, weightStr: weightStr
+        });
       });
-    });
+    }
 
     html += '  </div>';
     html += '  <div class="day-detail-summary">' + count + ' ejercicios completados</div>';
