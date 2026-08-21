@@ -1,12 +1,12 @@
 /* =============================================
    Gym Calendar - App de Rutina de Ejercicios
-   Versión: 4.16.0 — Feedback de usuarios conectado a Google Sheet
+   Versión: 4.16.1 — Fix: la rutina desaparecía al completar un ejercicio cambiado
    ============================================= */
 
 (function () {
   'use strict';
 
-  var APP_VERSION = '4.16.0';
+  var APP_VERSION = '4.16.1';
 
   // =============================================
   // SERGIO_PHASES: plan Push/Pull/Pierna 3 días/semana
@@ -2345,6 +2345,24 @@
     return -1;
   }
 
+  // Los ejercicios cambiados (swap puntual o permanente) se completan con el
+  // id del sustituto, que no existe en PHASES. Para saber a qué día pertenecen
+  // hay que revertir ese id al del ejercicio original que reemplazan.
+  function resolveToOriginalId(exerciseId, dateKey) {
+    if (findExercise(exerciseId)) return exerciseId;
+    var perm = state.permanentSwaps || {};
+    for (var k in perm) {
+      if (perm[k] && perm[k].exercise && perm[k].exercise.id === exerciseId) return k;
+    }
+    var todaySwaps = (dateKey && state.swaps) ? state.swaps[dateKey] : null;
+    if (todaySwaps) {
+      for (var k2 in todaySwaps) {
+        if (todaySwaps[k2] && todaySwaps[k2].id === exerciseId) return k2;
+      }
+    }
+    return exerciseId;
+  }
+
   function getRoutineForDate(dateKey) {
     var dayCompletions = state.completions[dateKey];
     if (!dayCompletions) return null;
@@ -2352,7 +2370,7 @@
     var counts = [];
     for (var ci = 0; ci < numDays; ci++) counts.push(0);
     for (var exId in dayCompletions) {
-      var idx = findExerciseDay(exId);
+      var idx = findExerciseDay(resolveToOriginalId(exId, dateKey));
       if (idx >= 0 && idx < numDays) counts[idx]++;
     }
     var maxIdx = 0;
