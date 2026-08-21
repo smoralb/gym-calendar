@@ -1,12 +1,22 @@
 /* =============================================
    Gym Calendar - App de Rutina de Ejercicios
-   Versión: 4.16.1 — Fix: la rutina desaparecía al completar un ejercicio cambiado
+   Versión: 4.17.0 — Fix: duplicados en el generador + modal de novedades
    ============================================= */
 
 (function () {
   'use strict';
 
-  var APP_VERSION = '4.16.1';
+  var APP_VERSION = '4.17.0';
+
+  // Resumen corto de la versión actual para el modal de novedades. Sólo se
+  // enseña una vez por versión (localStorage) y nunca durante el onboarding.
+  var WHATS_NEW = {
+    version: '4.17.0',
+    items: [
+      { icon: '🐛', text: 'Arreglado: al generar una rutina con "¿Corres?" activado, a veces salía un ejercicio duplicado y no dejaba avanzar.' },
+      { icon: '🧪', text: 'El generador ahora reintenta solo si detecta un problema, en vez de bloquear la pantalla de "Usar esta rutina".' }
+    ]
+  };
 
   // =============================================
   // SERGIO_PHASES: plan Push/Pull/Pierna 3 días/semana
@@ -5615,10 +5625,32 @@
       var cursor = wizardShuffleSeed % (rrPool.length || 1);
       split.forEach(function (session, sIdx) {
         if (session.patterns.indexOf('pierna') === -1) { preventive[sIdx] = []; return; }
+        // Evita repetir el mismo ejercicio con lo ya elegido en la sesión.
+        // La identidad real es el id del dataset (db/recordId): el núcleo y
+        // el bloque de prevención son catálogos distintos que a veces
+        // apuntan al mismo ejercicio con nombres casi iguales (p.ej.
+        // "Puente de glúteos" en pierna y en prevención comparten db '3013').
+        // Comparar sólo por nombre no lo detectaría de forma fiable, así que
+        // se usa el id del dataset como clave y el nombre en minúsculas como
+        // respaldo para las entradas sin db (foam roller, etc.).
+        var used = {};
+        (picks[sIdx] || []).forEach(function (e) {
+          if (e.db) used['db:' + e.db] = 1;
+          used['name:' + e.nombre.toLowerCase()] = 1;
+        });
         var take = [];
-        for (var k = 0; k < 2 && rrPool.length; k++) {
-          take.push(rrPool[cursor % rrPool.length]);
+        var tries = 0;
+        while (take.length < 2 && tries < rrPool.length) {
+          var candidate = rrPool[cursor % rrPool.length];
           cursor++;
+          tries++;
+          var dbKey = (candidate.recordId || candidate.db) ? 'db:' + (candidate.recordId || candidate.db) : null;
+          var nameKey = 'name:' + candidate.name.toLowerCase();
+          if ((dbKey && used[dbKey]) || used[nameKey]) continue;
+          if (take.indexOf(candidate) !== -1) continue;
+          if (dbKey) used[dbKey] = 1;
+          used[nameKey] = 1;
+          take.push(candidate);
         }
         preventive[sIdx] = take;
       });
@@ -5785,6 +5817,11 @@
     var levels = ['principiante', 'intermedio', 'avanzado'];
     var minutesOpts = ['30', '45', '60'];
     var avoids = [[], ['rodilla'], ['hombro', 'espalda_baja']];
+    // running y focus quedaban fuera de la matriz y así se coló el bug de
+    // ejercicios duplicados del bloque de prevención para corredores: nada
+    // lo ejecutaba con running:'si' antes de llegar a producción.
+    var runningOpts = ['', 'si'];
+    var focusOpts = ['', 'empuje', 'tiron', 'pierna'];
 
     var runs = 0, failed = 0;
     var failures = [];
@@ -5796,25 +5833,29 @@
             levels.forEach(function (level) {
               minutesOpts.forEach(function (mins) {
                 avoids.forEach(function (avoid) {
-                  var answers = {
-                    place: place, gear: gear.slice(), days: d, goal: goal.slice(),
-                    level: level, minutes: mins, avoid: avoid.slice(),
-                    running: '', focus: ''
-                  };
-                  runs++;
-                  var plan = null, problems = null;
-                  try {
-                    plan = generateRoutine(answers);
-                    problems = validatePlan(plan, answers);
-                  } catch (e) {
-                    problems = [{ tipo: 'excepcion', msg: String(e && e.message || e) }];
-                  }
-                  if (problems && problems.length) {
-                    failed++;
-                    if (failures.length < 25) {
-                      failures.push({ answers: answers, problems: problems });
-                    }
-                  }
+                  runningOpts.forEach(function (running) {
+                    focusOpts.forEach(function (focus) {
+                      var answers = {
+                        place: place, gear: gear.slice(), days: d, goal: goal.slice(),
+                        level: level, minutes: mins, avoid: avoid.slice(),
+                        running: running, focus: focus
+                      };
+                      runs++;
+                      var plan = null, problems = null;
+                      try {
+                        plan = generateRoutine(answers);
+                        problems = validatePlan(plan, answers);
+                      } catch (e) {
+                        problems = [{ tipo: 'excepcion', msg: String(e && e.message || e) }];
+                      }
+                      if (problems && problems.length) {
+                        failed++;
+                        if (failures.length < 25) {
+                          failures.push({ answers: answers, problems: problems });
+                        }
+                      }
+                    });
+                  });
                 });
               });
             });
@@ -6100,8 +6141,31 @@
       : (selected.length === 0 && stepAllowsEmpty(step) ? (step.key === "avoid" ? "Ninguna →" : "No tengo material →") : "Continuar →");
   }
 
+  // Genera y, si el validador encuentra algo, reintenta con otras semillas de
+  // barajado antes de enseñar nada al usuario. Antes un fallo del generador
+  // (p.ej. el bloque de prevención repitiendo un ejercicio del núcleo) se
+  // enseñaba tal cual y el usuario se quedaba bloqueado en "Usar esta rutina"
+  // sin ninguna forma de arreglarlo por su cuenta.
+  function generateValidRoutine(answers) {
+    var originalSeed = wizardShuffleSeed;
+    var plan = generateRoutine(answers);
+    var problems = validatePlan(plan, answers);
+    var attempt = 0;
+    while (problems.length && attempt < 5) {
+      attempt++;
+      wizardShuffleSeed = originalSeed + attempt * 7919;
+      var candidate = generateRoutine(answers);
+      var candidateProblems = validatePlan(candidate, answers);
+      if (!candidateProblems.length) { plan = candidate; problems = candidateProblems; break; }
+      if (candidate && (!plan || candidateProblems.length < problems.length)) { plan = candidate; problems = candidateProblems; }
+    }
+    wizardShuffleSeed = originalSeed;
+    if (problems.length) console.warn('generateValidRoutine: no se encontró una rutina sin problemas tras reintentar', problems);
+    return plan;
+  }
+
   function renderWizardSummary(el) {
-    var plan = generateRoutine(wizardAnswers);
+    var plan = generateValidRoutine(wizardAnswers);
     if (!plan) {
       el.innerHTML = '<div class="wizard-empty">No hemos encontrado suficientes ejercicios con esos criterios. '
         + '<button class="wizard-back" id="wizardBack">← Cambiar respuestas</button></div>';
@@ -6392,6 +6456,7 @@
 
     setupServiceWorker();
     setupFeedback();
+    setupWhatsNew();
     flushFeedbackQueue();
 
     var pendingOnboarding = needsOnboarding();
@@ -6462,6 +6527,43 @@
       postFeedback(entry).catch(function () {
         writeFeedbackQueue(readFeedbackQueue().concat([entry]));
       });
+    });
+  }
+
+  // Enseña el resumen de la versión actual una sola vez, comparando con la
+  // última versión vista en localStorage. Nunca se enseña en onboarding (el
+  // usuario nuevo no tiene nada previo con lo que comparar) ni si no hay
+  // novedades que contar.
+  function setupWhatsNew() {
+    if (!WHATS_NEW.items.length) return;
+    if (needsOnboarding()) return;
+    var seen = localStorage.getItem('gym_whatsnew_seen');
+    if (seen === WHATS_NEW.version) return;
+
+    var modal = document.getElementById('whatsNewModal');
+    var overlay = document.getElementById('whatsNewModalOverlay');
+    var closeBtn = document.getElementById('whatsNewClose');
+    var okBtn = document.getElementById('whatsNewOk');
+    var sub = document.getElementById('whatsNewSub');
+    var list = document.getElementById('whatsNewList');
+    if (!modal || !list) return;
+
+    sub.textContent = 'Esto es lo que ha cambiado en la v' + WHATS_NEW.version + ':';
+    list.innerHTML = WHATS_NEW.items.map(function (it) {
+      return '<li><span class="whatsnew-item-icon">' + it.icon + '</span><span>' + escapeHtml(it.text) + '</span></li>';
+    }).join('');
+
+    function close() {
+      modal.classList.add('hidden');
+      localStorage.setItem('gym_whatsnew_seen', WHATS_NEW.version);
+    }
+
+    modal.classList.remove('hidden');
+    closeBtn.addEventListener('click', close);
+    overlay.addEventListener('click', close);
+    okBtn.addEventListener('click', close);
+    document.addEventListener('keydown', function onEsc(e) {
+      if (e.key === 'Escape' && !modal.classList.contains('hidden')) { close(); document.removeEventListener('keydown', onEsc); }
     });
   }
 
