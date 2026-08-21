@@ -1,20 +1,19 @@
 /* =============================================
    Gym Calendar - App de Rutina de Ejercicios
-   Versión: 4.19.0 — Marcar entrenamientos pasados + fix imagen deslizante
+   Versión: 4.20.0 — Rediseño visual: paleta neutra y tarjetas planas
    ============================================= */
 
 (function () {
   'use strict';
 
-  var APP_VERSION = '4.19.0';
+  var APP_VERSION = '4.20.0';
 
   // Resumen corto de la versión actual para el modal de novedades. Sólo se
   // enseña una vez por versión (localStorage) y nunca durante el onboarding.
   var WHATS_NEW = {
-    version: '4.19.0',
+    version: '4.20.0',
     items: [
-      { icon: '✅', text: 'Ya puedes marcar como completados los ejercicios de días pasados desde la pestaña Inicio, no sólo los de hoy.' },
-      { icon: '🐛', text: 'Arreglado: al deslizar el dedo sobre la imagen del ejercicio en iPhone, se movía toda la pantalla en vez de hacer scroll normal.' }
+      { icon: '🎨', text: 'Nuevo aspecto visual: paleta de color más neutra, tarjetas más planas y checkbox y flecha de "ver más" mejor proporcionados.' }
     ]
   };
 
