@@ -1,5 +1,5 @@
 ---
-description: Bump semver version (major/minor/patch), update all version references across the project, commit and push. Gym-calendar project only.
+description: Deploy de gym-calendar. Revisa la hoja de feedback, sube la version semver (major/minor/patch), actualiza todas sus referencias, commit y push. Solo para el proyecto gym-calendar; no confundir con el comando global comush-deploy, que publica otro proyecto distinto (Compose/Wasm).
 ---
 
 You are performing a **versioned deploy** for the gym-calendar project.
@@ -170,7 +170,8 @@ similar filler.
 
 ## Notes
 
-- This skill lives in `.claude/skills/comush-deploy/` and only applies to this project. It does NOT affect the global comush-deploy skill.
+- This skill lives in `.claude/skills/comush-deploy-gym/` and only applies to this project.
+- The name carries the `-gym` suffix on purpose: there is a **separate** global command at `~/.claude/commands/comush-deploy.md` that deploys a different project (a Compose Multiplatform / Wasm site, via `gradlew.bat :composeApp:publishWasmToDocs`). They do completely different things, so the names are kept distinct to avoid invoking the wrong one.
 - The version is visible in the app header (injected by `APP_VERSION` in `app.js`).
 - GitHub Pages updates automatically when `master` is pushed (no separate deploy step needed — the repo serves from the `master` branch root).
 - If `git status` is clean (nothing to commit beyond version files), still bump the version and push — it forces a PWA cache refresh for users.
