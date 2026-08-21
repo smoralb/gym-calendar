@@ -1623,6 +1623,10 @@ body {
   user-select: none;
 }
 
+.exercise-chevron.expanded {
+  transform: rotate(90deg);
+}
+
 /* Reuse exercise-body styles for home cards */
 .home-ex-card .exercise-body {
   max-height: 0;
@@ -1732,12 +1736,30 @@ body {
   border-top: 1px solid var(--border-color);
 }
 
+.profile-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
 .profile-modal-title {
-  text-align: center;
   font-size: 1rem;
   font-weight: 600;
   color: var(--text-secondary);
-  margin-bottom: 20px;
+}
+
+.profile-modal-edit {
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: var(--font);
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 6px 8px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .profile-modal-options {
@@ -1832,6 +1854,55 @@ body {
   font-size: 0.95rem;
   font-weight: 600;
   color: var(--text-primary);
+}
+
+/* Círculo de «añadir». Mismo tamaño que un plan pero en trazo discontinuo y
+   sin relleno, para que se lea como una acción y no como un plan más. */
+.profile-option-new {
+  border-style: dashed;
+}
+
+.profile-option-new .profile-option-initial {
+  background: transparent;
+  border: 2px dashed var(--border-color);
+  color: var(--text-secondary);
+  font-size: 1.6rem;
+  font-weight: 400;
+}
+
+.profile-option-new .profile-option-name {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+/* Modo edición: la × de borrar se monta sobre la esquina del círculo. */
+.profile-option { position: relative; }
+
+.profile-option-delete {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--accent-primary);
+  color: #fff;
+  font-size: 1rem;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* En modo edición tocar la tarjeta renombra, así que se insinúa con un
+   contorno tenue en vez de dejarla igual que fuera del modo. */
+.profile-modal-options.editing .profile-option:not(.profile-option-new) {
+  border-style: dashed;
+}
+
+.profile-modal-options.editing .profile-option-new {
+  display: none;
 }
 
 .profile-badge[data-profile="eva"] {

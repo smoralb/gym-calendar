@@ -48,21 +48,12 @@
       <div id="profileModal" class="profile-modal hidden">
         <div class="profile-modal-overlay" id="profileModalOverlay"></div>
         <div class="profile-modal-sheet">
-          <div class="profile-modal-title">¿Quién entrena hoy?</div>
-          <div class="profile-modal-options">
-            <button class="profile-option" data-profile="sergio">
-              <span class="profile-option-initial">S</span>
-              <span class="profile-option-name">Sergio</span>
-            </button>
-            <button class="profile-option" data-profile="eva">
-              <span class="profile-option-initial">E</span>
-              <span class="profile-option-name">Eva</span>
-            </button>
-            <button class="profile-option" data-profile="gely">
-              <span class="profile-option-initial">G</span>
-              <span class="profile-option-name">Gely</span>
-            </button>
+          <div class="profile-modal-head">
+            <div class="profile-modal-title">Tus planes</div>
+            <button id="planEditToggle" class="profile-modal-edit">✏️ Editar</button>
           </div>
+          <!-- Los planes se pintan desde el registro (renderPlanOptions) -->
+          <div class="profile-modal-options"></div>
           <button id="redoWizardBtn" class="profile-modal-action">
             <span class="profile-modal-action-icon">🎯</span>
             <span class="profile-modal-action-text">

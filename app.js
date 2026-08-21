@@ -1,19 +1,20 @@
 /* =============================================
    Gym Calendar - App de Rutina de Ejercicios
-   Versión: 4.20.0 — Rediseño visual: paleta neutra y tarjetas planas
+   Versión: 4.21.0 — Varios planes: crear, renombrar y borrar
    ============================================= */
 
 (function () {
   'use strict';
 
-  var APP_VERSION = '4.20.0';
+  var APP_VERSION = '4.21.0';
 
   // Resumen corto de la versión actual para el modal de novedades. Sólo se
   // enseña una vez por versión (localStorage) y nunca durante el onboarding.
   var WHATS_NEW = {
-    version: '4.20.0',
+    version: '4.21.0',
     items: [
-      { icon: '🎨', text: 'Nuevo aspecto visual: paleta de color más neutra, tarjetas más planas y checkbox y flecha de "ver más" mejor proporcionados.' }
+      { icon: '➕', text: 'Ya puedes tener varios planes a la vez: pulsa tu inicial y usa el botón "+" para crear uno nuevo sin perder el que ya tenías.' },
+      { icon: '✏️', text: 'Desde "Editar" en ese mismo panel puedes renombrar tus planes o borrar los que no uses.' }
     ]
   };
 
@@ -1977,13 +1978,161 @@
   // del bloque del tutorial, así que sus constantes viven aquí: declaradas más
   // abajo llegarían sin valor a installCustomPlan().
   var CUSTOM_PROFILE_ID = 'mia';
-  var CUSTOM_PLAN_KEY = 'gym_custom_plan';
+  var CUSTOM_PLAN_KEY = 'gym_custom_plan';   // legado: sólo se lee al migrar
+  var PLANS_KEY = 'gym_plans';
+  var ACTIVE_PLAN_KEY = 'gym_active_plan';
+  var LEGACY_ACTIVE_KEY = 'gym_active_profile';
 
-  var PROFILES = {
+  // Calentamiento de los planes generados por el asistente, que no traen uno
+  // propio (los fijos sí: WARMUP, WARMUP_EVA, WARMUP_GELY).
+  var GENERATED_WARMUP = {
+    general: '🔥 5 min de movilidad articular (cuello, hombros, muñecas, cadera, tobillos)',
+    approach: '➕ 1-2 series de aproximación con peso ligero en el primer ejercicio'
+  };
+
+  // Plantillas fijas. Viven en el código, así que un plan de estos que se
+  // borre siempre se puede volver a crear desde el botón "+": lo único que no
+  // vuelve es el progreso registrado.
+  var BUILTIN_PROFILES = {
     sergio: { name: 'Sergio', initial: 'S', phases: RUNFUERZA_PHASES, warmup: WARMUP, defaultDays: [1, 2, 4, 5, 6], daysLabel: '5 días · fuerza + carrera' },
     eva:    { name: 'Eva',    initial: 'E', phases: EVA_PHASES,    warmup: WARMUP_EVA, defaultDays: [1, 4], daysLabel: '2 días por semana' },
     gely:   { name: 'Gely',   initial: 'G', phases: GELY_PHASES,   warmup: WARMUP_GELY, defaultDays: [1, 3, 5], daysLabel: '3 días tono + remo' }
   };
+
+  // =============================================
+  // REGISTRO DE PLANES
+  // =============================================
+  // Antes había tres perfiles escritos a mano y UN único plan generado, así
+  // que crear un plan pisaba el anterior. Ahora hay un registro con N planes
+  // y PROFILES se deriva de él en cada arranque, en vez de estar fijo.
+  //
+  // «Perfil» significaba dos cosas a la vez: una persona (Sergio, Eva, Gely) y
+  // un plan («Mi plan»). Aquí pasan a ser sólo planes; la persona es el
+  // dispositivo, y más adelante será la cuenta.
+  //
+  //   gym_plans                  { version, plans: { <id>: entrada } }
+  //   gym_active_plan            id del plan seleccionado
+  //   gym_calendar_data_<id>     estado (formato de siempre, sin tocar)
+  var planRegistry = null;
+
+  // Los planes nuevos nacen con UUID, nunca con ids correlativos ('plan2').
+  // Si mañana dos dispositivos suben a la misma cuenta, dos planes distintos
+  // llamados 'plan2' serían la misma fila. Los fijos conservan su id legible
+  // porque ya es la clave de su gym_calendar_data_<id>.
+  function newPlanId() {
+    try {
+      if (window.crypto && typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+    } catch (e) {}
+    return 'plan-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+  }
+
+  function loadPlanRegistry() {
+    try {
+      var raw = localStorage.getItem(PLANS_KEY);
+      if (!raw) return null;
+      var data = JSON.parse(raw);
+      return (data && data.plans) ? data : null;
+    } catch (e) { return null; }
+  }
+
+  function savePlanRegistry() {
+    try { localStorage.setItem(PLANS_KEY, JSON.stringify(planRegistry)); } catch (e) {}
+  }
+
+  // Construye el registro la primera vez. NO intenta adivinar de quién es cada
+  // plan: registra todos los que encuentre y ya los borrará el usuario desde
+  // el modal. Es justo lo que se ve hoy en pantalla, así que al actualizar no
+  // cambia nada de golpe.
+  //
+  // Tampoco borra las claves antiguas: si hubiera que revertir el despliegue,
+  // la versión anterior las sigue encontrando intactas.
+  function migratePlansRegistry() {
+    var existing = loadPlanRegistry();
+    if (existing) return existing;
+
+    var now = new Date().toISOString();
+    var reg = { version: 1, plans: {} };
+
+    Object.keys(BUILTIN_PROFILES).forEach(function (id) {
+      reg.plans[id] = {
+        id: id,
+        name: BUILTIN_PROFILES[id].name,
+        initial: BUILTIN_PROFILES[id].initial,
+        builtin: true,
+        createdAt: now,
+        updatedAt: now
+      };
+    });
+
+    var legacy = null;
+    try {
+      var raw = localStorage.getItem(CUSTOM_PLAN_KEY);
+      legacy = raw ? JSON.parse(raw) : null;
+    } catch (e) {}
+    if (legacy && legacy.phases) {
+      // Conserva el id 'mia' a propósito: es la clave de gym_calendar_data_mia
+      // y cambiarla dejaría su historial huérfano.
+      reg.plans[CUSTOM_PROFILE_ID] = {
+        id: CUSTOM_PROFILE_ID,
+        name: 'Mi plan',
+        initial: 'M',
+        builtin: false,
+        createdAt: legacy.createdAt || now,
+        updatedAt: now,
+        plan: legacy
+      };
+    }
+
+    planRegistry = reg;
+    savePlanRegistry();
+    return reg;
+  }
+
+  // Una entrada del registro -> la forma que espera el resto de la app.
+  function planEntryToProfile(entry) {
+    if (!entry) return null;
+    if (entry.builtin) {
+      var t = BUILTIN_PROFILES[entry.id];
+      if (!t) return null;   // plantilla retirada del código
+      return {
+        name: entry.name || t.name,
+        initial: entry.initial || t.initial,
+        phases: t.phases,
+        warmup: t.warmup,
+        defaultDays: t.defaultDays.slice(),
+        daysLabel: t.daysLabel,
+        builtin: true
+      };
+    }
+    if (!entry.plan || !entry.plan.phases) return null;
+    return {
+      name: entry.name || 'Mi plan',
+      initial: entry.initial || 'M',
+      phases: entry.plan.phases,
+      warmup: GENERATED_WARMUP,
+      defaultDays: (entry.plan.trainingDays || [1, 3, 5]).slice(),
+      daysLabel: entry.plan.daysLabel,
+      generated: true
+    };
+  }
+
+  // PROFILES lo consultan ~30 sitios como PROFILES[id]; se mantiene el nombre
+  // y se rellena en sitio para no invalidar ninguna referencia.
+  var PROFILES = {};
+
+  function rebuildProfiles() {
+    Object.keys(PROFILES).forEach(function (k) { delete PROFILES[k]; });
+    Object.keys(planRegistry.plans).forEach(function (id) {
+      var p = planEntryToProfile(planRegistry.plans[id]);
+      if (p) PROFILES[id] = p;
+    });
+  }
+
+  function getPlanEntry(id) { return planRegistry.plans[id] || null; }
+
+  function listPlanEntries() {
+    return Object.keys(planRegistry.plans).map(function (id) { return planRegistry.plans[id]; });
+  }
 
   function migrateOldData() {
     var oldKey = 'gym_calendar_data';
@@ -1997,27 +2146,34 @@
 
   migrateOldData();
 
-  // Al pasar Sergio a fuerza + carrera, el «Mi plan» que hubiera guardado el
-  // tutorial se retira una sola vez: convivían como dos planes completos y
-  // sobraba uno. El tutorial sigue disponible y vuelve a crearlo si se usa.
-  (function dropLegacyCustomPlan() {
-    try {
-      if (localStorage.getItem('gym_custom_plan_removed')) return;
-      localStorage.setItem('gym_custom_plan_removed', '1');
-      localStorage.removeItem(CUSTOM_PLAN_KEY);
-      if (localStorage.getItem('gym_active_profile') === CUSTOM_PROFILE_ID) {
-        localStorage.setItem('gym_active_profile', 'sergio');
-      }
-    } catch (e) { /* modo privado */ }
-  })();
+  // Aquí vivía dropLegacyCustomPlan(), que borraba el «Mi plan» del tutorial
+  // porque convivía con el de Sergio y «sobraba uno». Con el registro de
+  // planes eso ya no es un problema: tener varios es justo lo que se busca.
+  //
+  // Se retira además porque se ejecutaba ANTES que migratePlansRegistry() y
+  // habría borrado el plan antiguo justo antes de que el registro lo recogiera.
+  // La bandera gym_custom_plan_removed se deja donde está por si hubiera que
+  // revertir el despliegue.
 
-  // El plan generado por el tutorial es un perfil más, así que se registra
-  // antes de resolver el perfil activo (si no, «Mi plan» no existiría todavía).
-  var savedCustomPlan = loadCustomPlan();
-  if (savedCustomPlan) installCustomPlan(savedCustomPlan);
+  // El registro se construye antes de resolver el plan activo: si no, los
+  // planes generados todavía no existirían al elegir cuál está seleccionado.
+  planRegistry = migratePlansRegistry();
+  rebuildProfiles();
 
-  var activeProfile = localStorage.getItem('gym_active_profile') || 'sergio';
-  if (!PROFILES[activeProfile]) activeProfile = 'sergio';
+  // activeProfile conserva el nombre porque lo leen muchos sitios, pero desde
+  // el registro de planes lo que guarda es un id de plan, no una persona.
+  var activeProfile = null;
+  try {
+    activeProfile = localStorage.getItem(ACTIVE_PLAN_KEY)
+      || localStorage.getItem(LEGACY_ACTIVE_KEY);
+  } catch (e) {}
+  if (!activeProfile || !PROFILES[activeProfile]) {
+    // Si el plan activo ya no existe (borrado), se cae al primero que haya.
+    activeProfile = PROFILES.sergio ? 'sergio' : Object.keys(PROFILES)[0];
+  }
+  // Se fija ya la clave nueva: si no, quien migra y no cambia de plan se
+  // quedaría dependiendo indefinidamente de la clave antigua.
+  try { localStorage.setItem(ACTIVE_PLAN_KEY, activeProfile); } catch (e) {}
 
   // These are updated by switchProfile()
   var PHASES = PROFILES[activeProfile].phases;
@@ -3113,7 +3269,7 @@
     var body = document.getElementById('home-body-' + exerciseId);
     var chevron = document.getElementById('home-chevron-' + exerciseId);
     if (body) body.classList.toggle('expanded', !!homeExpandedCards[exerciseId]);
-    if (chevron) chevron.textContent = homeExpandedCards[exerciseId] ? '˅' : '›';
+    if (chevron) chevron.classList.toggle('expanded', !!homeExpandedCards[exerciseId]);
   }
 
   // Precedencia: el cambio puntual de esa fecha manda sobre el permanente, y
@@ -3141,7 +3297,7 @@
     var body = document.getElementById('body-' + originalId);
     var chevron = document.getElementById('chevron-' + originalId);
     if (body) body.classList.toggle('expanded', !!expandedCards[originalId]);
-    if (chevron) chevron.textContent = expandedCards[originalId] ? '˅' : '›';
+    if (chevron) chevron.classList.toggle('expanded', !!expandedCards[originalId]);
   }
 
   function swapExercise(originalId, altExercise, dateKey) {
@@ -3780,7 +3936,7 @@
       html += '    </div>';
       html += '  </div>';
       html += '  <button class="check-btn' + (isCompleted ? ' checked' : '') + '" data-ex="' + ex.id + '" data-orig="' + originalId + '">' + (isCompleted ? '✓' : '') + '</button>';
-      html += '  <span class="exercise-chevron" id="chevron-' + originalId + '">' + (isExpanded ? '˅' : '›') + '</span>';
+      html += '  <span class="exercise-chevron' + (isExpanded ? ' expanded' : '') + '" id="chevron-' + originalId + '">›</span>';
       html += '</div>';
 
       // BODY (expandable)
@@ -4422,7 +4578,7 @@
     if (!readOnly && dateKey) {
       html += '  <button class="check-btn home-check-btn' + (isDone ? ' checked' : '') + '" data-ex="' + ex.id + '" data-date="' + dateKey + '">' + (isDone ? '✓' : '') + '</button>';
     }
-    html += '  <span class="exercise-chevron" id="home-chevron-' + originalId + '">' + (isExpanded ? '˅' : '›') + '</span>';
+    html += '  <span class="exercise-chevron' + (isExpanded ? ' expanded' : '') + '" id="home-chevron-' + originalId + '">›</span>';
     html += '</div>';
 
     // Expandable body
@@ -5983,29 +6139,18 @@
 
   // Registra el plan como perfil: rellena PROFILES, el mapa al dataset (para
   // las animaciones) y EXERCISE_META (para la descripción paso a paso).
-  function installCustomPlan(plan) {
+  // Mapea los ejercicios del plan al dataset (animación) y a EXERCISE_META
+  // (instrucciones paso a paso). Se separa de la instalación del perfil
+  // porque hay que repetirlo cuando termina de cargar el catálogo.
+  function registerPlanExercises(plan) {
     if (!plan || !plan.phases) return;
-
-    PROFILES[CUSTOM_PROFILE_ID] = {
-      name: 'Mi plan',
-      initial: 'M',
-      phases: plan.phases,
-      warmup: {
-        general: '🔥 5 min de movilidad articular (cuello, hombros, muñecas, cadera, tobillos)',
-        approach: '➕ 1-2 series de aproximación con peso ligero en el primer ejercicio'
-      },
-      defaultDays: plan.trainingDays.slice(),
-      daysLabel: plan.daysLabel,
-      generated: true
-    };
-
     plan.phases.forEach(function (phase) {
       phase.days.forEach(function (day) {
         day.exercises.forEach(function (ex) {
           if (!ex.dbId) return;
           EXERCISE_DB_MAP[ex.id] = ex.dbId;
           // La descripción sale del dataset, que puede no haber cargado aún:
-          // por eso se vuelve a instalar el plan cuando termine la carga.
+          // por eso se vuelven a registrar los planes cuando termine la carga.
           if (!EXERCISE_META[ex.id] || !EXERCISE_META[ex.id].description) {
             var rec = EXERCISE_DB.get(ex.dbId);
             EXERCISE_META[ex.id] = {
@@ -6019,15 +6164,100 @@
     });
   }
 
-  function loadCustomPlan() {
-    try {
-      var raw = localStorage.getItem(CUSTOM_PLAN_KEY);
-      return raw ? JSON.parse(raw) : null;
-    } catch (e) { return null; }
+  // Registra los ejercicios de todos los planes generados que haya guardados.
+  function registerAllPlanExercises() {
+    listPlanEntries().forEach(function (entry) {
+      if (entry.plan) registerPlanExercises(entry.plan);
+    });
   }
 
-  function saveCustomPlan(plan) {
-    try { localStorage.setItem(CUSTOM_PLAN_KEY, JSON.stringify(plan)); } catch (e) {}
+  // Da de alta (o actualiza) un plan generado en el registro y lo deja
+  // disponible en PROFILES. Devuelve el id, que para un plan nuevo es el UUID
+  // recién creado.
+  function upsertGeneratedPlan(plan, opts) {
+    opts = opts || {};
+    if (!plan || !plan.phases) return null;
+    var id = opts.id || newPlanId();
+    var prev = planRegistry.plans[id];
+    var now = new Date().toISOString();
+
+    planRegistry.plans[id] = {
+      id: id,
+      name: opts.name || (prev && prev.name) || 'Mi plan',
+      initial: opts.initial || (prev && prev.initial) || 'M',
+      builtin: false,
+      createdAt: (prev && prev.createdAt) || now,
+      updatedAt: now,
+      plan: plan
+    };
+
+    savePlanRegistry();
+    rebuildProfiles();
+    registerPlanExercises(plan);
+    return id;
+  }
+
+  // Borra un plan y su historial. Devuelve false si es el último que queda:
+  // sin ningún plan la app se quedaría en una pantalla vacía sin salida.
+  function deletePlan(id) {
+    if (!planRegistry.plans[id]) return false;
+    if (Object.keys(planRegistry.plans).length <= 1) return false;
+
+    delete planRegistry.plans[id];
+    savePlanRegistry();
+    rebuildProfiles();
+    try { localStorage.removeItem('gym_calendar_data_' + id); } catch (e) {}
+    return true;
+  }
+
+  function renamePlan(id, name) {
+    var entry = planRegistry.plans[id];
+    if (!entry || !name) return;
+    entry.name = name;
+    entry.initial = name.trim().charAt(0).toUpperCase() || entry.initial;
+    entry.updatedAt = new Date().toISOString();
+    savePlanRegistry();
+    rebuildProfiles();
+  }
+
+  // Nombre libre para un plan nuevo. Con varios planes generados, llamarlos
+  // todos «Mi plan» los haría indistinguibles en el modal.
+  function nextPlanName() {
+    var used = {};
+    listPlanEntries().forEach(function (e) { used[e.name] = 1; });
+    if (!used['Mi plan']) return 'Mi plan';
+    for (var i = 2; i < 100; i++) {
+      if (!used['Mi plan ' + i]) return 'Mi plan ' + i;
+    }
+    return 'Mi plan';
+  }
+
+  // Cuánto historial tiene un plan. Lo usa el diálogo de borrado: un
+  // «¿seguro?» a secas no da información para decidir, y en un dispositivo
+  // compartido el plan que se borra puede no ser el tuyo.
+  function getPlanHistoryStats(id) {
+    try {
+      var raw = localStorage.getItem('gym_calendar_data_' + id);
+      if (!raw) return { workouts: 0, logs: 0 };
+      var data = JSON.parse(raw);
+      var workouts = data.completions ? Object.keys(data.completions).length : 0;
+      var logs = 0;
+      if (data.progress) {
+        Object.keys(data.progress).forEach(function (k) {
+          logs += (data.progress[k] || []).length;
+        });
+      }
+      return { workouts: workouts, logs: logs };
+    } catch (e) { return { workouts: 0, logs: 0 }; }
+  }
+
+  // El plan del asistente: hasta ahora sólo podía haber uno.
+  function loadCustomPlan() {
+    var entry = getPlanEntry(activeProfile);
+    if (entry && entry.plan) return entry.plan;
+    var found = null;
+    listPlanEntries().forEach(function (e) { if (!found && e.plan) found = e.plan; });
+    return found;
   }
 
   // ---- Onboarding de primer arranque ----
@@ -6042,7 +6272,9 @@
   function needsOnboarding() {
     try {
       if (localStorage.getItem(ONBOARDING_KEY)) return false;
-      if (loadCustomPlan() || localStorage.getItem('gym_active_profile')) {
+      if (loadCustomPlan()
+          || localStorage.getItem(ACTIVE_PLAN_KEY)
+          || localStorage.getItem(LEGACY_ACTIVE_KEY)) {
         markOnboardingDone();
         return false;
       }
@@ -6067,20 +6299,42 @@
 
   // En modo onboarding el asistente ocupa toda la pantalla y no se puede cerrar.
   var wizardOnboarding = false;
+  // 'edit'   → rehace el plan indicado, conservando su id y su historial
+  // 'create' → plan nuevo, con respuestas en blanco y UUID propio
+  var wizardMode = 'edit';
+  var wizardTargetId = null;
 
-  function openRoutineWizard(onboarding) {
+  function openRoutineWizard(onboarding, opts) {
+    opts = opts || {};
     if (!EXERCISE_DB.isLoaded()) {
       showToast('Cargando catálogo…');
-      EXERCISE_DB.load().then(function () { openRoutineWizard(onboarding); }).catch(function () {
+      EXERCISE_DB.load().then(function () { openRoutineWizard(onboarding, opts); }).catch(function () {
         showToast('No se pudo cargar el catálogo');
       });
       return;
     }
     wizardOnboarding = onboarding === true;
+    wizardMode = opts.mode === 'create' ? 'create' : 'edit';
     wizardStep = 0;
     wizardAnswers = {};
-    var existing = loadCustomPlan();
-    if (existing && existing.answers) wizardAnswers = existing.answers;
+
+    if (wizardMode === 'edit') {
+      // Rehacer un plan parte de sus respuestas: así el cuestionario sale
+      // relleno y sólo hay que cambiar lo que se quiera.
+      wizardTargetId = opts.planId || activeProfile;
+      var entry = getPlanEntry(wizardTargetId);
+      // Un plan de plantilla no tiene respuestas que rehacer; al tocarle
+      // «cambiar objetivo» se genera uno nuevo en vez de sobrescribirlo.
+      if (!entry || entry.builtin) {
+        wizardMode = 'create';
+        wizardTargetId = null;
+      } else if (entry.plan && entry.plan.answers) {
+        wizardAnswers = entry.plan.answers;
+      }
+    } else {
+      wizardTargetId = null;
+    }
+
     renderWizard();
     var modal = document.getElementById('wizardModal');
     modal.classList.toggle('onboarding', wizardOnboarding);
@@ -6322,32 +6576,131 @@
         showToast("⚠ " + problems[0].msg);
         return;
       }
-      saveCustomPlan(plan);
-      installCustomPlan(plan);
-      addCustomProfileOption();
+      // En modo 'edit' conserva el id, así el plan mantiene su historial.
+      // En 'create' nace con UUID propio y no pisa nada.
+      var isEdit = wizardMode === 'edit' && wizardTargetId && getPlanEntry(wizardTargetId);
+      var planId = upsertGeneratedPlan(plan, isEdit ? { id: wizardTargetId } : { name: nextPlanName() });
+      if (!planId) { showToast('⚠ No se ha podido guardar el plan'); return; }
+
       markOnboardingDone();
       finishRoutineWizard();
-      switchProfile(CUSTOM_PROFILE_ID);
+      renderPlanOptions();
+      switchProfile(planId);
       switchTab('rutina');
-      showToast('Rutina creada 🎉');
+      showToast(isEdit ? 'Rutina actualizada 🎉' : 'Rutina creada 🎉');
     });
   }
 
   // Cada regeneración rota los candidatos para que salgan ejercicios distintos.
   var wizardShuffleSeed = 0;
 
-  // Añade (o refresca) la opción «Mi plan» en el selector de perfiles.
-  function addCustomProfileOption() {
-    if (!PROFILES[CUSTOM_PROFILE_ID]) return;
+  // ---- Selector de planes ----
+  // Antes los tres perfiles estaban escritos a mano en index.html y sólo se
+  // añadía «Mi plan» por JS. Ahora se pinta entero desde el registro, porque
+  // el número de planes es variable.
+  var planEditMode = false;
+
+  function renderPlanOptions() {
     var wrap = document.querySelector('.profile-modal-options');
-    if (!wrap || wrap.querySelector('[data-profile="' + CUSTOM_PROFILE_ID + '"]')) return;
-    var btn = document.createElement('button');
-    btn.className = 'profile-option';
-    btn.dataset.profile = CUSTOM_PROFILE_ID;
-    btn.innerHTML = '<span class="profile-option-initial">M</span><span class="profile-option-name">Mi plan</span>';
-    btn.addEventListener('click', function () { switchProfile(CUSTOM_PROFILE_ID); });
-    wrap.appendChild(btn);
+    if (!wrap) return;
+    wrap.innerHTML = '';
+
+    listPlanEntries().forEach(function (entry) {
+      if (!PROFILES[entry.id]) return;
+      var btn = document.createElement('button');
+      btn.className = 'profile-option' + (entry.id === activeProfile ? ' active' : '');
+      btn.dataset.profile = entry.id;
+      btn.innerHTML = '<span class="profile-option-initial">' + escapeHtml(entry.initial || '?') + '</span>'
+        + '<span class="profile-option-name">' + escapeHtml(entry.name) + '</span>';
+
+      if (planEditMode) {
+        var del = document.createElement('span');
+        del.className = 'profile-option-delete';
+        del.textContent = '×';
+        del.setAttribute('aria-label', 'Borrar ' + entry.name);
+        del.addEventListener('click', function (e) {
+          e.stopPropagation();
+          confirmDeletePlan(entry.id);
+        });
+        btn.appendChild(del);
+        btn.addEventListener('click', function () { promptRenamePlan(entry.id); });
+      } else {
+        btn.addEventListener('click', function () { switchProfile(entry.id); });
+      }
+      wrap.appendChild(btn);
+    });
+
+    // Círculo de «añadir», con el mismo tamaño que los planes pero en trazo
+    // discontinuo para que no se lea como un plan más.
+    var add = document.createElement('button');
+    add.className = 'profile-option profile-option-new';
+    add.innerHTML = '<span class="profile-option-initial">+</span>'
+      + '<span class="profile-option-name">Nuevo plan</span>';
+    add.addEventListener('click', function () {
+      closeProfileSelector();
+      openRoutineWizard(false, { mode: 'create' });
+    });
+    wrap.appendChild(add);
   }
+
+  // Borrar es la vía por la que cada uno se queda sólo con sus planes, así que
+  // el aviso tiene que decir QUÉ se pierde: en un dispositivo compartido el
+  // plan que se borra puede no ser el tuyo.
+  function confirmDeletePlan(id) {
+    var entry = getPlanEntry(id);
+    if (!entry) return;
+
+    if (Object.keys(planRegistry.plans).length <= 1) {
+      showToast('No puedes quedarte sin ningún plan');
+      return;
+    }
+
+    var stats = getPlanHistoryStats(id);
+    var msg = '¿Borrar el plan «' + entry.name + '»?';
+    if (stats.workouts || stats.logs) {
+      msg += '\n\nSe perderán ' + stats.workouts + ' día(s) de entrenamiento registrados'
+           + ' y ' + stats.logs + ' registro(s) de peso.';
+    }
+    msg += entry.builtin
+      ? '\n\nAl ser una plantilla, podrás volver a crearlo desde «+», pero el progreso no se recupera.'
+      : '\n\nEsta acción no se puede deshacer.';
+
+    if (!window.confirm(msg)) return;
+
+    var wasActive = (id === activeProfile);
+    if (!deletePlan(id)) { showToast('No se ha podido borrar'); return; }
+
+    if (wasActive) {
+      switchProfile(Object.keys(PROFILES)[0]);
+    } else {
+      renderPlanOptions();
+    }
+    showToast('Plan borrado');
+  }
+
+  function promptRenamePlan(id) {
+    var entry = getPlanEntry(id);
+    if (!entry) return;
+    var name = window.prompt('Nombre del plan', entry.name);
+    if (name === null) return;
+    name = name.trim();
+    if (!name) return;
+    renamePlan(id, name);
+    renderPlanOptions();
+    updateProfileUI();
+  }
+
+  function togglePlanEditMode() {
+    planEditMode = !planEditMode;
+    var btn = document.getElementById('planEditToggle');
+    if (btn) btn.textContent = planEditMode ? 'Hecho' : '✏️ Editar';
+    var wrap = document.querySelector('.profile-modal-options');
+    if (wrap) wrap.classList.toggle('editing', planEditMode);
+    renderPlanOptions();
+  }
+
+  // Se mantiene el nombre antiguo: lo llaman varios puntos del arranque.
+  function addCustomProfileOption() { renderPlanOptions(); }
 
   // =============================================
   // PROFILE SWITCHER
@@ -6369,10 +6722,15 @@
 
   function openProfileSelector() {
     var modal = document.getElementById('profileModal');
-    if (modal) modal.classList.remove('hidden');
+    if (!modal) return;
+    renderPlanOptions();
+    modal.classList.remove('hidden');
   }
 
   function closeProfileSelector() {
+    // El modo edición no debe sobrevivir al cierre: al reabrir se espera
+    // poder cambiar de plan de un toque, no borrarlo sin querer.
+    if (planEditMode) togglePlanEditMode();
     var modal = document.getElementById('profileModal');
     if (modal) modal.classList.add('hidden');
   }
@@ -6405,7 +6763,12 @@
   function switchProfile(profileId) {
     if (!PROFILES[profileId]) return;
     activeProfile = profileId;
-    localStorage.setItem('gym_active_profile', activeProfile);
+    try {
+      localStorage.setItem(ACTIVE_PLAN_KEY, activeProfile);
+      // Se sigue escribiendo la clave antigua para que revertir el despliegue
+      // no deje al usuario en un plan que la versión anterior no conoce.
+      localStorage.setItem(LEGACY_ACTIVE_KEY, activeProfile);
+    } catch (e) {}
     PHASES = PROFILES[activeProfile].phases;
     ACTIVE_WARMUP = PROFILES[activeProfile].warmup;
     state = loadState();
@@ -6419,7 +6782,7 @@
     if (currentTab === 'home') renderHome();
     if (currentTab === 'stats') renderStats();
     closeProfileSelector();
-    showToast('Perfil: ' + PROFILES[activeProfile].name);
+    showToast('Plan: ' + PROFILES[activeProfile].name);
   }
 
   // =============================================
@@ -6531,9 +6894,11 @@
     var overlay = document.getElementById('profileModalOverlay');
     if (overlay) overlay.addEventListener('click', closeProfileSelector);
 
-    document.querySelectorAll('.profile-option').forEach(function (btn) {
-      btn.addEventListener('click', function () { switchProfile(btn.dataset.profile); });
-    });
+    // Los planes ya no están escritos en el HTML: se pintan desde el registro
+    // y cada botón lleva su propio listener (ver renderPlanOptions).
+
+    var editToggle = document.getElementById('planEditToggle');
+    if (editToggle) editToggle.addEventListener('click', togglePlanEditMode);
 
     // Rehacer el tutorial desde el menú. No va en modo onboarding: aquí sí se
     // puede cerrar sin completarlo, y el plan actual se mantiene hasta que se
@@ -6541,10 +6906,10 @@
     var redoBtn = document.getElementById('redoWizardBtn');
     if (redoBtn) redoBtn.addEventListener('click', function () {
       closeProfileSelector();
-      openRoutineWizard(false);
+      openRoutineWizard(false, { mode: 'edit', planId: activeProfile });
     });
 
-    addCustomProfileOption();
+    renderPlanOptions();
     updateProfileUI();
 
     var wizardOverlay = document.getElementById('wizardModalOverlay');
@@ -6563,8 +6928,8 @@
 
     // Carga el catálogo en segundo plano y repinta cuando esté listo
     EXERCISE_DB.load().then(function () {
-      // Ahora sí hay dataset: el plan generado recupera sus descripciones
-      if (savedCustomPlan) installCustomPlan(savedCustomPlan);
+      // Ahora sí hay dataset: los planes generados recuperan sus descripciones
+      registerAllPlanExercises();
       // Los sustitutos guardados necesitan el dataset para recuperar sus pasos
       reregisterSwappedExercises();
       if (currentTab === 'rutina') renderCurrentDay();
