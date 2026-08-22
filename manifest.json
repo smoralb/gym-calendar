@@ -1,8 +1,8 @@
 {
   "name": "Gym Calendar - Rutina de Ejercicios",
   "short_name": "Gym Calendar",
-  "version": "4.21.0",
-  "description": "Calendario de rutina de ejercicios 3 días/semana: Empuje, Tirón, Pierna",
+  "version": "4.22.0",
+  "description": "Genera y sigue tu programa de entrenamiento de 12 semanas, adaptado a tu material, tus días y tu objetivo",
   "start_url": "/gym-calendar/",
   "scope": "/gym-calendar/",
   "display": "standalone",

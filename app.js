@@ -1,20 +1,21 @@
 /* =============================================
    Gym Calendar - App de Rutina de Ejercicios
-   Versión: 4.21.0 — Varios planes: crear, renombrar y borrar
+   Versión: 4.22.0 — Rutinas por volumen semanal, programas con nombre
    ============================================= */
 
 (function () {
   'use strict';
 
-  var APP_VERSION = '4.21.0';
+  var APP_VERSION = '4.22.0';
 
   // Resumen corto de la versión actual para el modal de novedades. Sólo se
   // enseña una vez por versión (localStorage) y nunca durante el onboarding.
   var WHATS_NEW = {
-    version: '4.21.0',
+    version: '4.22.0',
     items: [
-      { icon: '➕', text: 'Ya puedes tener varios planes a la vez: pulsa tu inicial y usa el botón "+" para crear uno nuevo sin perder el que ya tenías.' },
-      { icon: '✏️', text: 'Desde "Editar" en ese mismo panel puedes renombrar tus planes o borrar los que no uses.' }
+      { icon: '💪', text: 'Las rutinas nuevas se construyen por series semanales de cada músculo, no rellenando huecos: hay bastante más volumen, el día de pierna siempre lleva cuádriceps y el tiempo que declaras cambia de verdad la sesión.' },
+      { icon: '🧠', text: 'Nuevo botón "¿Por qué este entrenamiento?" en Rutina: te explica qué programa sigues, cuántas series necesita cada músculo y cuántas llevas esta semana.' },
+      { icon: '📋', text: 'Puedes elegir tipo de entrenamiento (Push · Pull · Legs, Torso · Pierna, Cuerpo completo…), ya hay opción de 6 días y las semanas 4, 8 y 12 son de descarga.' }
     ]
   };
 
@@ -2155,6 +2156,18 @@
   // La bandera gym_custom_plan_removed se deja donde está por si hubiera que
   // revertir el despliegue.
 
+  // Si había sesión previa hay que averiguarlo ANTES de tocar nada: la propia
+  // migración escribe gym_plans y gym_active_plan, así que consultarlo después
+  // haría creer que todo el mundo es un usuario existente y el onboarding no
+  // saltaría jamás.
+  var hadPriorSession = false;
+  try {
+    hadPriorSession = !!(localStorage.getItem(PLANS_KEY)
+      || localStorage.getItem(ACTIVE_PLAN_KEY)
+      || localStorage.getItem(LEGACY_ACTIVE_KEY)
+      || localStorage.getItem(CUSTOM_PLAN_KEY));
+  } catch (e) {}
+
   // El registro se construye antes de resolver el plan activo: si no, los
   // planes generados todavía no existirían al elegir cuál está seleccionado.
   planRegistry = migratePlansRegistry();
@@ -2171,9 +2184,16 @@
     // Si el plan activo ya no existe (borrado), se cae al primero que haya.
     activeProfile = PROFILES.sergio ? 'sergio' : Object.keys(PROFILES)[0];
   }
-  // Se fija ya la clave nueva: si no, quien migra y no cambia de plan se
-  // quedaría dependiendo indefinidamente de la clave antigua.
-  try { localStorage.setItem(ACTIVE_PLAN_KEY, activeProfile); } catch (e) {}
+  // Se fija ya la clave nueva para quien MIGRA, que si no se quedaría
+  // dependiendo indefinidamente de la clave antigua.
+  //
+  // Sólo si ya había sesión: escribirla siempre marcaba como usuario
+  // existente a cualquiera que abriese la app una vez, de modo que quien
+  // abandonaba el onboarding a medias volvía a entrar y se encontraba metido
+  // en un plan por defecto que nunca eligió, sin ver el asistente otra vez.
+  if (hadPriorSession) {
+    try { localStorage.setItem(ACTIVE_PLAN_KEY, activeProfile); } catch (e) {}
+  }
 
   // These are updated by switchProfile()
   var PHASES = PROFILES[activeProfile].phases;
@@ -3888,6 +3908,24 @@
     html += '  </div>';
     html += '</div>';
 
+    // Semana de descarga: se avisa en vez de dejar que parezca un error que
+    // toquen menos series de las habituales.
+    var planActual = loadCustomPlan();
+    if (planActual && planActual.deloadWeeks
+        && planActual.deloadWeeks.indexOf(getWeekNumber(getTodayKey())) !== -1) {
+      html += '<div class="warmup-card"><div class="warmup-card-icon">🌙</div>'
+           + '<div class="warmup-card-content"><div class="warmup-card-emphasis">Semana de descarga</div>'
+           + '<div class="warmup-card-text">Baja el peso o quita una serie de cada ejercicio. '
+           + 'Doce semanas seguidas subiendo carga acaban en estancamiento: esta semana toca recuperar.</div>'
+           + '</div></div>';
+    }
+
+    // Explicación bajo demanda: durante el entrenamiento se quiere levantar,
+    // no leer, así que es un botón discreto y no un bloque de texto.
+    if (planActual && planActual.splitName) {
+      html += '<button class="why-open-btn" id="whyOpenBtn">¿Por qué este entrenamiento?</button>';
+    }
+
     var effectiveExercises = getEffectiveExercises(day);
 
     // Agrupado de superseries y del bloque de mejora de running. Sólo se activa
@@ -4052,6 +4090,9 @@
     html += '</div>';
 
     container.innerHTML = html;
+
+    var whyBtn = container.querySelector('#whyOpenBtn');
+    if (whyBtn) whyBtn.addEventListener('click', openWhyModal);
 
     var finishBtn = container.querySelector('#finishWorkoutBtn');
     if (finishBtn) finishBtn.addEventListener('click', finishWorkout);
@@ -5418,6 +5459,14 @@
   });
 
 
+  // Nombre legible de cada grupo. A nivel de módulo porque lo usan tanto el
+  // generador como el validador y la capa explicativa.
+  var GROUP_LABEL_G = {
+    pecho: 'Pecho', hombro: 'Hombro', triceps: 'Tríceps', espalda: 'Espalda',
+    biceps: 'Bíceps', cuadriceps: 'Cuádriceps', isquios: 'Isquiotibiales',
+    gluteo: 'Glúteo', gemelo: 'Gemelo', core: 'Core'
+  };
+
   // Grupos musculares canónicos por patrón, para el reparto de volumen
   var GROUPS_BY_PATTERN = {
     empuje: ['pecho', 'hombro', 'triceps'],
@@ -5425,6 +5474,16 @@
     pierna: ['cuadriceps', 'isquios', 'gluteo', 'gemelo'],
     core: ['core']
   };
+
+  // Patrón al que pertenece cada grupo. Sirve para sustituir un grupo sin
+  // ejercicios disponibles por otro del mismo tren.
+  var PATTERN_BY_GROUP = (function () {
+    var m = {};
+    Object.keys(GROUPS_BY_PATTERN).forEach(function (p) {
+      GROUPS_BY_PATTERN[p].forEach(function (g) { m[g] = p; });
+    });
+    return m;
+  })();
 
   var LEVEL_RANK = { principiante: 0, intermedio: 1, avanzado: 2 };
 
@@ -5477,13 +5536,33 @@
     },
     {
       key: 'days', title: '¿Cuántos días por semana?',
-      hint: 'Con más días la rutina se reparte en más grupos musculares.',
+      hint: 'Con más días se reparte mejor el trabajo y cada músculo se entrena más veces.',
       options: [
         { value: '2', label: '2 días', desc: 'Dos sesiones de cuerpo completo' },
-        { value: '3', label: '3 días', desc: 'Empuje · Tirón · Pierna' },
-        { value: '4', label: '4 días', desc: 'Torso · Pierna, dos veces' },
-        { value: '5', label: '5 días', desc: 'Un grupo muscular por sesión' }
+        { value: '3', label: '3 días', desc: 'Cuerpo completo o Push · Pull · Legs' },
+        { value: '4', label: '4 días', desc: 'Torso · Pierna, o PPL con día extra' },
+        { value: '5', label: '5 días', desc: 'PPL más torso y pierna' },
+        { value: '6', label: '6 días', desc: 'Push · Pull · Legs dos veces' }
       ]
+    },
+    {
+      // Sólo se pregunta cuando hay más de un programa razonable para esos
+      // días. Con 2 o 6 sólo existe una opción, así que preguntar sería ruido.
+      key: 'split', title: '¿Qué tipo de entrenamiento prefieres?',
+      hint: 'Los dos funcionan. Cambian en cuántas veces por semana entrenas cada músculo y en cómo de largas son las sesiones.',
+      when: function (a) { return splitsForDays(a.days).length > 1; },
+      dynamicOptions: function (a) {
+        var rec = recommendedSplit(a);
+        return splitsForDays(a.days).map(function (s) {
+          return {
+            value: s.id,
+            label: (rec && s.id === rec.id ? '✅ ' : '') + s.name,
+            desc: s.freqLabel + ' · ' + s.desc
+              + (rec && s.id === rec.id ? '\nRecomendado para lo que has contestado.' : '')
+          };
+        });
+      },
+      options: []
     },
     {
       key: 'minutes', title: '¿Cuánto tiempo tienes por sesión?',
@@ -5553,34 +5632,185 @@
     }
   ];
 
-  // Reparto de patrones por sesión según los días disponibles.
-  var SPLITS = {
-    2: [
-      { day: 'Cuerpo completo A', emoji: '🔥', title: 'Empuje, pierna y core', patterns: ['pierna', 'empuje', 'tiron', 'core'] },
-      { day: 'Cuerpo completo B', emoji: '💪', title: 'Tirón, pierna y core', patterns: ['tiron', 'pierna', 'empuje', 'core'] }
-    ],
-    3: [
-      { day: 'Empuje', emoji: '🔥', title: 'Pecho, hombro y tríceps', patterns: ['empuje', 'empuje', 'brazos'] },
-      { day: 'Tirón', emoji: '💪', title: 'Espalda, hombro posterior y bíceps', patterns: ['tiron', 'tiron', 'brazos'] },
-      { day: 'Pierna', emoji: '🦵', title: 'Pierna y core', patterns: ['pierna', 'pierna', 'core'] }
-    ],
-    4: [
-      { day: 'Torso A', emoji: '🔥', title: 'Pecho, hombro y tríceps', patterns: ['empuje', 'empuje', 'brazos'] },
-      { day: 'Pierna A', emoji: '🦵', title: 'Cuádriceps, glúteo y core', patterns: ['pierna', 'pierna', 'core'] },
-      { day: 'Torso B', emoji: '💪', title: 'Espalda, hombro posterior y bíceps', patterns: ['tiron', 'tiron', 'brazos'] },
-      { day: 'Pierna B', emoji: '🦵', title: 'Isquios, glúteo y core', patterns: ['pierna', 'pierna', 'core'] }
-    ],
-    5: [
-      { day: 'Pecho', emoji: '🔥', title: 'Pecho y tríceps', patterns: ['empuje', 'empuje', 'brazos'] },
-      { day: 'Espalda', emoji: '💪', title: 'Espalda y bíceps', patterns: ['tiron', 'tiron', 'brazos'] },
-      { day: 'Pierna', emoji: '🦵', title: 'Pierna completa', patterns: ['pierna', 'pierna', 'pierna'] },
-      { day: 'Hombro', emoji: '🎯', title: 'Hombro y brazos', patterns: ['empuje', 'brazos', 'brazos'] },
-      { day: 'Core', emoji: '🧘', title: 'Zona media y estabilidad', patterns: ['core', 'core', 'core'] }
-    ]
-  };
+  // =============================================
+  // CATÁLOGO DE PROGRAMAS (SPLITS)
+  // =============================================
+  // Antes esto era un reparto de PATRONES por sesión y el generador rellenaba
+  // un hueco por patrón. Eso producía rutinas incoherentes: días de pierna sin
+  // cuádriceps (los huecos 'pierna' se iban a glúteo e isquios) y tríceps en
+  // el día de tirón (el hueco 'brazos' caía a tríceps si el bíceps ya estaba).
+  //
+  // Ahora cada sesión declara GRUPOS MUSCULARES:
+  //   required  tienen que aparecer sí o sí → garantiza la cobertura
+  //   optional  se añaden si sobra tiempo y les falta volumen semanal
+  //
+  // Que un grupo no esté listado en un día es lo que impide la contaminación
+  // cruzada: el tríceps sólo existe en sesiones de empuje.
+  var SPLIT_CATALOG = [
+    {
+      id: 'fullbody2', name: 'Cuerpo completo', days: 2, freq: 2, freqLabel: '2× por músculo',
+      desc: 'Cada sesión trabaja todo el cuerpo. Con dos días es lo que más estímulo da por músculo.',
+      why: 'Con dos días a la semana, repartir por zonas dejaría cada músculo entrenado una sola vez. Trabajando todo el cuerpo en cada sesión, cada grupo recibe estímulo dos veces.',
+      sessions: [
+        { day: 'Cuerpo completo A', emoji: '🔥', required: ['cuadriceps', 'pecho', 'espalda'], optional: ['hombro', 'core', 'gluteo'] },
+        { day: 'Cuerpo completo B', emoji: '💪', required: ['isquios', 'espalda', 'pecho'], optional: ['biceps', 'triceps', 'core'] }
+      ]
+    },
+    {
+      id: 'fullbody3', name: 'Cuerpo completo', days: 3, freq: 3, freqLabel: '3× por músculo',
+      desc: 'Todo el cuerpo en cada sesión. Máxima frecuencia, sesiones más variadas.',
+      why: 'Entrenar cada músculo tres veces por semana reparte mejor el volumen y ayuda a asentar la técnica, porque repites los mismos movimientos más a menudo.',
+      sessions: [
+        { day: 'Cuerpo completo A', emoji: '🔥', required: ['cuadriceps', 'pecho', 'espalda'], optional: ['hombro', 'core'] },
+        { day: 'Cuerpo completo B', emoji: '💪', required: ['isquios', 'espalda', 'hombro'], optional: ['biceps', 'core'] },
+        { day: 'Cuerpo completo C', emoji: '🦵', required: ['gluteo', 'pecho', 'espalda'], optional: ['triceps', 'gemelo', 'core'] }
+      ]
+    },
+    {
+      id: 'ppl', name: 'Push · Pull · Legs', days: 3, freq: 1, freqLabel: '1× por músculo',
+      desc: 'Empuje, tirón y pierna en días separados. Sesiones más largas y centradas.',
+      why: 'Separar empuje, tirón y pierna hace que cada grupo llegue descansado a su día y puedas cargar más. A cambio, cada músculo se entrena una vez por semana.',
+      sessions: [
+        { day: 'Empuje', emoji: '🔥', required: ['pecho', 'hombro'], optional: ['triceps'] },
+        { day: 'Tirón', emoji: '💪', required: ['espalda'], optional: ['biceps', 'core'] },
+        { day: 'Pierna', emoji: '🦵', required: ['cuadriceps', 'isquios'], optional: ['gluteo', 'gemelo', 'core'] }
+      ]
+    },
+    {
+      id: 'upper_lower', name: 'Torso · Pierna', days: 4, freq: 2, freqLabel: '2× por músculo',
+      desc: 'Dos días de tren superior y dos de tren inferior.',
+      why: 'Con cuatro días, alternar torso y pierna deja a cada músculo entrenado dos veces por semana con descanso de sobra entre sesiones.',
+      sessions: [
+        { day: 'Torso A', emoji: '🔥', required: ['pecho', 'espalda'], optional: ['hombro', 'triceps'] },
+        { day: 'Pierna A', emoji: '🦵', required: ['cuadriceps', 'gluteo'], optional: ['gemelo', 'core'] },
+        { day: 'Torso B', emoji: '💪', required: ['espalda', 'hombro'], optional: ['pecho', 'biceps'] },
+        { day: 'Pierna B', emoji: '🦿', required: ['isquios', 'cuadriceps'], optional: ['gluteo', 'core'] }
+      ]
+    },
+    {
+      id: 'ppl_torso', name: 'Push · Pull · Legs + Torso', days: 4, freq: 1.3, freqLabel: '~1,3× por músculo',
+      desc: 'El reparto clásico de tres días más una sesión extra de torso.',
+      why: 'Mantiene la separación de empuje, tirón y pierna, y añade un cuarto día de torso para subir el volumen de pecho y espalda, que suelen ser la prioridad.',
+      sessions: [
+        { day: 'Empuje', emoji: '🔥', required: ['pecho', 'hombro'], optional: ['triceps'] },
+        { day: 'Tirón', emoji: '💪', required: ['espalda'], optional: ['biceps', 'core'] },
+        { day: 'Pierna', emoji: '🦵', required: ['cuadriceps', 'isquios'], optional: ['gluteo', 'gemelo'] },
+        { day: 'Torso', emoji: '🎯', required: ['pecho', 'espalda'], optional: ['hombro', 'biceps', 'triceps', 'core'] }
+      ]
+    },
+    {
+      id: 'ppl_ul', name: 'Push · Pull · Legs + Torso/Pierna', days: 5, freq: 1.6, freqLabel: '~1,6× por músculo',
+      desc: 'Tres días de PPL y dos más de torso y pierna.',
+      why: 'Cinco días permiten volver a cada músculo casi dos veces por semana sin sesiones interminables. Es el reparto que mejor aprovecha ese número de días.',
+      sessions: [
+        { day: 'Empuje', emoji: '🔥', required: ['pecho', 'hombro'], optional: ['triceps'] },
+        { day: 'Tirón', emoji: '💪', required: ['espalda'], optional: ['biceps', 'core'] },
+        { day: 'Pierna', emoji: '🦵', required: ['cuadriceps', 'isquios'], optional: ['gluteo', 'gemelo'] },
+        { day: 'Torso', emoji: '🎯', required: ['pecho', 'espalda'], optional: ['hombro', 'biceps', 'triceps'] },
+        { day: 'Pierna y core', emoji: '🦿', required: ['gluteo', 'cuadriceps'], optional: ['isquios', 'gemelo', 'core'] }
+      ]
+    },
+    {
+      id: 'ppl2', name: 'Push · Pull · Legs ×2', days: 6, freq: 2, freqLabel: '2× por músculo',
+      desc: 'El reparto de tres días, repetido dos veces por semana.',
+      why: 'Repetir el ciclo dos veces da frecuencia doble en cada músculo manteniendo sesiones cortas. Es exigente: requiere poder entrenar seis días.',
+      sessions: [
+        { day: 'Empuje A', emoji: '🔥', required: ['pecho', 'hombro'], optional: ['triceps'] },
+        { day: 'Tirón A', emoji: '💪', required: ['espalda'], optional: ['biceps', 'core'] },
+        { day: 'Pierna A', emoji: '🦵', required: ['cuadriceps', 'isquios'], optional: ['gluteo', 'gemelo'] },
+        { day: 'Empuje B', emoji: '🔥', required: ['hombro', 'pecho'], optional: ['triceps', 'core'] },
+        { day: 'Tirón B', emoji: '💪', required: ['espalda'], optional: ['biceps', 'core'] },
+        { day: 'Pierna B', emoji: '🦿', required: ['gluteo', 'cuadriceps'], optional: ['isquios', 'gemelo'] }
+      ]
+    }
+  ];
+
+  function splitsForDays(days) {
+    return SPLIT_CATALOG.filter(function (s) { return String(s.days) === String(days); });
+  }
+
+  function getSplitById(id) {
+    for (var i = 0; i < SPLIT_CATALOG.length; i++) {
+      if (SPLIT_CATALOG[i].id === id) return SPLIT_CATALOG[i];
+    }
+    return null;
+  }
+
+  // Programa recomendado para unas respuestas. Regla: a más frecuencia por
+  // músculo mejor, salvo en fuerza, donde interesa concentrar la carga en
+  // sesiones más pesadas y con más descanso entre ellas.
+  function recommendedSplit(answers) {
+    var opts = splitsForDays(answers.days);
+    if (!opts.length) return null;
+    var goals = answerList(answers, 'goal');
+    var priorizaFuerza = goals[0] === 'fuerza';
+    var best = opts[0];
+    opts.forEach(function (s) {
+      // La frecuencia es un dato declarado en el catálogo, no algo deducido
+      // contando apariciones en `required`: esa cuenta engañaba y llegó a
+      // recomendar PPL+Torso (1,3×) por encima de Torso·Pierna (2×).
+      //
+      // Para hipertrofia y tono gana la frecuencia alta; en fuerza interesa
+      // concentrar la carga en menos sesiones, más pesadas.
+      var mejor = priorizaFuerza ? (s.freq < best.freq) : (s.freq > best.freq);
+      if (mejor && s !== best) best = s;
+    });
+    return best;
+  }
+
+  // Resuelve el programa de un plan: el elegido, o el recomendado si no hay
+  // elección (planes antiguos, o números de días con una sola opción).
+  function resolveSplit(answers) {
+    return getSplitById(answers.split) || recommendedSplit(answers) || splitsForDays('3')[0];
+  }
 
   // Días de la semana por defecto según cuántas sesiones tenga la rutina.
-  var DEFAULT_DAYS_BY_COUNT = { 2: [1, 4], 3: [1, 3, 5], 4: [1, 2, 4, 5], 5: [1, 2, 3, 4, 5] };
+  var DEFAULT_DAYS_BY_COUNT = { 2: [1, 4], 3: [1, 3, 5], 4: [1, 2, 4, 5], 5: [1, 2, 3, 4, 5], 6: [1, 2, 3, 4, 5, 6] };
+
+  // =============================================
+  // VOLUMEN SEMANAL OBJETIVO
+  // =============================================
+  // El eje del generador. Antes se rellenaban N huecos y el volumen salía de
+  // rebote: pecho y espalda acababan con 3 series semanales (la referencia
+  // para hipertrofia son 10-20) mientras el core llegaba a 9-21 porque cada
+  // sesión añadía un hueco de core automático.
+  //
+  // Series por grupo y semana. Los grupos grandes aguantan (y necesitan) más
+  // volumen que los pequeños.
+  var BIG_GROUPS = { pecho: 1, espalda: 1, cuadriceps: 1, isquios: 1, gluteo: 1 };
+
+  var VOLUME_TARGETS = {
+    hipertrofia:  { grande: { principiante: 9, intermedio: 13, avanzado: 16 },
+                    pequeno: { principiante: 6, intermedio: 9, avanzado: 12 } },
+    fuerza:       { grande: { principiante: 6, intermedio: 9, avanzado: 12 },
+                    pequeno: { principiante: 4, intermedio: 6, avanzado: 8 } },
+    tono:         { grande: { principiante: 8, intermedio: 11, avanzado: 14 },
+                    pequeno: { principiante: 6, intermedio: 8, avanzado: 10 } },
+    perder_peso:  { grande: { principiante: 8, intermedio: 11, avanzado: 14 },
+                    pequeno: { principiante: 6, intermedio: 8, avanzado: 10 } },
+    movilidad:    { grande: { principiante: 6, intermedio: 8, avanzado: 10 },
+                    pequeno: { principiante: 4, intermedio: 6, avanzado: 8 } }
+  };
+
+  // El core es un grupo pequeño más y tiene su propio techo: dejó de añadirse
+  // automáticamente en cada sesión, que es lo que lo convertía en el músculo
+  // más entrenado del programa.
+  function volumeTargetFor(grupo, answers) {
+    var goals = answerList(answers, 'goal');
+    var goal = goals[0] || 'hipertrofia';
+    var t = VOLUME_TARGETS[goal] || VOLUME_TARGETS.hipertrofia;
+    var level = answers.level || 'principiante';
+    var tabla = BIG_GROUPS[grupo] ? t.grande : t.pequeno;
+    return tabla[level] || tabla.principiante;
+  }
+
+  var GOAL_VOLUME_RATIONALE = {
+    hipertrofia: 'Para ganar masa muscular hacen falta entre 10 y 20 series por músculo y semana. Por debajo de ese rango apenas hay estímulo para crecer.',
+    fuerza: 'En fuerza importa más la carga que el volumen: menos series, más peso y descansos largos para levantar al máximo en cada una.',
+    tono: 'Series algo más altas y descansos cortos: buscas trabajo continuo y resistencia muscular más que ganar tamaño.',
+    perder_peso: 'Mucho trabajo con poco descanso para mantener el gasto alto, conservando el músculo mientras pierdes grasa.',
+    movilidad: 'Volumen moderado y control del movimiento: el objetivo es la calidad y el rango, no acumular series.'
+  };
 
   // Series, repeticiones y descanso por objetivo y fase.
   // Las tres fases repiten los mismos ejercicios subiendo la exigencia.
@@ -5629,89 +5859,11 @@
 
   // Con varios sitios marcados manda el más permisivo: quien va al gimnasio
   // puede hacer también lo de casa, y 'sin material' es un subconjunto de 'casa'.
-  var PLACE_RANK = { sin_material: 0, casa: 1, gimnasio: 2 };
-  function effectivePlace(answers) {
-    var best = null;
-    answerList(answers, 'place').forEach(function (p) {
-      if (best === null || (PLACE_RANK[p] || 0) > (PLACE_RANK[best] || 0)) best = p;
-    });
-    return best === null ? 'gimnasio' : best;
-  }
-
-  // Set de valores `eq` permitidos por el material marcado en casa, o null si
-  // no se ha contestado (entonces vale cualquier material casero, como antes).
-  function allowedEquipment(answers) {
-    var gear = answerList(answers, 'gear');
-    if (!gear.length) return null;
-    var set = { 'body weight': 1 };
-    gear.forEach(function (g) {
-      (GEAR_EQUIPMENT[g] || []).forEach(function (eq) { set[eq] = 1; });
-    });
-    return set;
-  }
-
   var PHASE_NAMES = [
     { name: 'Mes 1 · Adaptación', subtitle: 'Semanas 1 a 4 — Aprende la técnica', weeks: [1, 2, 3, 4] },
     { name: 'Mes 2 · Progresión', subtitle: 'Semanas 5 a 8 — Sube la carga', weeks: [5, 6, 7, 8] },
     { name: 'Mes 3 · Intensidad', subtitle: 'Semanas 9 a 12 — Máxima exigencia', weeks: [9, 10, 11, 12] }
   ];
-
-  // Cuántos ejercicios pide cada sesión. Con poco tiempo o poco nivel, menos.
-  function exerciseCountFor(answers) {
-    if (answers.days === '5') return 4;
-    if (answers.days === '2') return 6;
-    return 5;
-  }
-
-  // Candidatos del dataset para un patrón concreto, ya filtrados por material
-  // y nivel y ordenados de básico a accesorio.
-  function candidatesFor(pattern, answers) {
-    var items = [];
-    var goals = answerList(answers, 'goal');
-    if (!goals.length) goals = ['hipertrofia'];
-    // Restricción dura: sólo entra lo que se puede hacer con el material
-    // declarado. Sin material declarado, sólo peso corporal.
-    var inventory = getInventory(answers);
-    var hasGymGear = GEAR_OPTIONS.some(function (o) {
-      return !o.home && answerList(answers, 'gear').indexOf(o.value) !== -1;
-    });
-    EXERCISE_DB.all().forEach(function (rec) {
-      if (!canPerform(rec, inventory)) return;
-      var t = EXERCISE_TAGS.tagsFor(rec);
-      if (!t) return;
-      // 'brazos' no es un patrón sino una marca sobre tirón/empuje, por eso
-      // se comprueba como tag y no contra t._pattern.
-      if (pattern === 'brazos' ? !t.brazos : t._pattern !== pattern) return;
-      if (!EXERCISE_TAGS.fitsLevel(rec, answers.level)) return;
-      // El objetivo filtra sólo cuando tiene sentido: en movilidad se buscan
-      // estiramientos, y en el resto se descartan. Con varios objetivos basta
-      // con encajar en uno (unión), si no la intersección dejaría el catálogo
-      // casi vacío al mezclar, por ejemplo, fuerza y movilidad.
-      var fitsGoal = goals.some(function (g) {
-        if (g === 'movilidad') return !!(t.movilidad || t.core || t.principiante);
-        if (t.movilidad) return false;
-        if (g === 'fuerza') return !!(t.fuerza || t._compound);
-        if (g === 'perder_peso') return !(t.gimnasio && !t._compound);
-        return true;
-      });
-      if (!fitsGoal) return;
-
-      var score = 0;
-      if (t._compound) score += 10;                                  // básicos primero
-      var goalHits = 0;
-      goals.forEach(function (g) { if (t[g]) goalHits++; });
-      // Encajar con un objetivo puntúa; encajar con varios a la vez, algo más.
-      if (goalHits) score += 5 + (goalHits - 1);
-      if (hasGymGear && t.gimnasio) score += 2;                       // aprovecha el material
-      if (t._level === answers.level) score += 2;                    // nivel exacto
-      items.push({ rec: rec, score: score });
-    });
-
-    items.sort(function (a, b) {
-      return b.score - a.score || a.rec.n.length - b.rec.n.length || a.rec.n.localeCompare(b.rec.n);
-    });
-    return items.map(function (i) { return i.rec; });
-  }
 
   // Minutos estimados de un ejercicio: series × (trabajo + descanso). Sirve
   // para construir la sesión por tiempo en vez de por número de ejercicios,
@@ -5720,22 +5872,13 @@
     return (series * (40 + restSec)) / 60;
   }
 
-  function sessionMinutes(list, series, restSec) {
-    return list.length * exerciseMinutes(series, restSec);
-  }
-
-  // Candidatos del núcleo para un hueco del split. 'brazos' no es un patrón
-  // del núcleo sino bíceps y tríceps, así que se traduce aquí.
-  function slotCandidates(byPattern, byGroup, slot, sessionPattern) {
-    if (slot === "brazos") {
-      // El brazo que toca depende del día: el tríceps acompaña al empuje y el
-      // bíceps al tirón. Mezclarlos metía fondos de tríceps en el día de
-      // espalda, donde no pinta nada.
-      if (sessionPattern === "tiron") return (byGroup.biceps || []).concat(byGroup.triceps || []);
-      return (byGroup.triceps || []).concat(byGroup.biceps || []);
-    }
-    return byPattern[slot] || [];
-  }
+  // Aquí vivían candidatesFor(), exerciseCountFor(), sessionMinutes(),
+  // allowedEquipment(), effectivePlace() y slotCandidates(). Las cinco
+  // primeras eran restos del generador anterior (el que recorría el dataset
+  // completo) y no se llamaban desde ningún sitio; candidatesFor() en
+  // concreto eran 45 líneas con puntuación y ordenación que parecían el
+  // corazón del algoritmo. slotCandidates() sí se usaba, pero la sustituye el
+  // mapa de grupos por sesión de SPLIT_CATALOG.
 
   // Construye la rutina completa a partir de las respuestas del tutorial.
   // Devuelve null si el núcleo no da ni para llenar una sesión.
@@ -5747,7 +5890,8 @@
     var pool = coreAvailable(inventory, level, avoid);
     if (!pool.length) return null;
 
-    var split = SPLITS[answers.days] || SPLITS['3'];
+    var splitDef = resolveSplit(answers);
+    var split = splitDef.sessions;
     var goals = answerList(answers, 'goal');
     if (!goals.length) goals = ['hipertrofia'];
     // Con varios objetivos manda el primero que se marcó para las series y
@@ -5755,19 +5899,18 @@
     var scheme = GOAL_SCHEME[goals[0]] || GOAL_SCHEME.hipertrofia;
     var minutes = parseInt(answers.minutes, 10) || 45;
 
-    var byPattern = {}, byGroup = {};
+    var byGroup = {};
     pool.forEach(function (e) {
-      (byPattern[e.patron] = byPattern[e.patron] || []).push(e);
       (byGroup[e.grupo] = byGroup[e.grupo] || []).push(e);
     });
 
     // Ordena cada lista poniendo delante lo que encaja con el nivel exacto, y
-    // rota con el seed para que "Otros ejercicios" proponga algo distinto.
+    // rota con el seed para que regenerar proponga algo distinto.
     // Si ha declarado material, se prefiere lo cargado para los huecos
     // principales: quien va al gimnasio espera press de banca, no flexiones.
     var hasKit = Object.keys(inventory).length > 1;
-    Object.keys(byPattern).forEach(function (p) {
-      byPattern[p].sort(function (a, b) {
+    Object.keys(byGroup).forEach(function (g) {
+      byGroup[g].sort(function (a, b) {
         // Los básicos primero: son los que sostienen la sesión
         if (a.prio !== b.prio) return a.prio - b.prio;
         if (hasKit) {
@@ -5778,47 +5921,109 @@
         if (an !== bn) return an - bn;
         return a.nombre.localeCompare(b.nombre);
       });
-      if (wizardShuffleSeed && byPattern[p].length > 1) {
-        var off = wizardShuffleSeed % byPattern[p].length;
-        byPattern[p] = byPattern[p].slice(off).concat(byPattern[p].slice(0, off));
+      if (wizardShuffleSeed && byGroup[g].length > 1) {
+        var off = wizardShuffleSeed % byGroup[g].length;
+        byGroup[g] = byGroup[g].slice(off).concat(byGroup[g].slice(0, off));
       }
     });
 
     var usedGlobal = {};   // evita repetir el mismo ejercicio en toda la rutina
     var picks = [];
     var restSec = parseRestSeconds(scheme[0].rest) || 60;
-    var perExercise = exerciseMinutes(scheme[0].series, restSec);
+    var seriesPorEjercicio = scheme[0].series;
+    var perExercise = exerciseMinutes(seriesPorEjercicio, restSec);
     // Calentamiento y transiciones se llevan un pellizco del tiempo declarado
     var usableMinutes = Math.max(minutes - 6, 10);
-    var maxExercises = Math.max(3, Math.floor(usableMinutes / perExercise));
+    // Tope de seguridad: sin él, 90 minutos podrían generar sesiones
+    // interminables si el volumen objetivo no se alcanza nunca.
+    var maxExercises = Math.max(3, Math.min(9, Math.floor(usableMinutes / perExercise)));
+
+    // Series acumuladas por grupo en TODA la semana. Es la variable que
+    // gobierna el relleno: se prioriza siempre el grupo más lejos de su meta.
+    var weeklySets = {};
+    function faltaPara(grupo) {
+      return volumeTargetFor(grupo, answers) - (weeklySets[grupo] || 0);
+    }
+
+    // Primer candidato disponible de un grupo, evitando lo ya usado.
+    // `permitirRepetirGlobal` sólo se activa para los grupos obligatorios: es
+    // preferible repetir un ejercicio entre días que dejar sin cubrir el
+    // cuádriceps en el día de pierna.
+    function elegir(grupo, enSesion, permitirRepetirGlobal) {
+      var lista = byGroup[grupo] || [];
+      var fallback = null;
+      for (var i = 0; i < lista.length; i++) {
+        var e = lista[i];
+        if (enSesion.indexOf(e) !== -1) continue;     // nunca dos veces el mismo día
+        if (usedGlobal[e.id]) { if (!fallback) fallback = e; continue; }
+        return e;
+      }
+      return permitirRepetirGlobal ? fallback : null;
+    }
+
+    function registrar(e, chosen) {
+      usedGlobal[e.id] = 1;
+      weeklySets[e.grupo] = (weeklySets[e.grupo] || 0) + seriesPorEjercicio;
+      chosen.push(e);
+    }
 
     split.forEach(function (session) {
-      var patterns = session.patterns.slice();
-      // La zona prioritaria añade un hueco extra en las sesiones que la trabajan
-      if (answers.focus && patterns.indexOf(answers.focus) !== -1) patterns.push(answers.focus);
-      // Todas las sesiones cierran con core salvo las que ya son de core
-      if (patterns.indexOf('core') === -1) patterns.push('core');
-      patterns = patterns.slice(0, maxExercises);
-
       var chosen = [];
-      var usedGroup = {};
-      patterns.forEach(function (p) {
-        var list = slotCandidates(byPattern, byGroup, p, session.patterns[0]);
-        var pick = null, fallback = null;
-        for (var i = 0; i < list.length; i++) {
-          var e = list[i];
-          if (chosen.indexOf(e) !== -1) continue;      // nunca dos veces en la misma sesión
-          if (usedGroup[e.grupo]) { if (!fallback) fallback = e; continue; }
-          if (usedGlobal[e.id]) { if (!fallback) fallback = e; continue; }
-          pick = e;
-          break;
+
+      // a) Obligatorios: cubren los grupos que definen la sesión. Sin esto
+      //    salían días de pierna sin nada de cuádriceps.
+      session.required.forEach(function (grupo) {
+        if (chosen.length >= maxExercises) return;
+        var e = elegir(grupo, chosen, true);
+        // Si ese grupo no tiene NINGÚN ejercicio posible (quien evita la
+        // rodilla se queda sin cuádriceps: todos lo cargan), se sustituye por
+        // otro del mismo patrón antes que perder el tren inferior entero.
+        // Rodilla delicada no significa no entrenar pierna, significa
+        // entrenar glúteo e isquios.
+        if (!e) {
+          var patron = PATTERN_BY_GROUP[grupo];
+          (GROUPS_BY_PATTERN[patron] || []).some(function (alt) {
+            if (alt === grupo) return false;
+            var s = elegir(alt, chosen, false);
+            if (s) { e = s; return true; }
+            return false;
+          });
         }
-        if (!pick) pick = fallback;
-        if (!pick) return;
-        usedGlobal[pick.id] = 1;
-        usedGroup[pick.grupo] = 1;
-        chosen.push(pick);
+        if (e) registrar(e, chosen);
       });
+
+      // b) Relleno por volumen: mientras quepa en el tiempo declarado, se
+      //    añade al grupo que más lejos esté de su objetivo semanal. Esto es
+      //    lo que hace que declarar 90 minutos sirva de algo — antes 45, 60 y
+      //    90 producían exactamente la misma rutina.
+      var candidatos = session.required.concat(session.optional || []);
+      // El foco prioritario sube al grupo elegido dentro de esta sesión
+      var focoGrupos = GROUPS_BY_PATTERN[answers.focus] || [];
+
+      while (chosen.length < maxExercises) {
+        var mejorGrupo = null, mejorFalta = 0;
+        candidatos.forEach(function (g) {
+          var falta = faltaPara(g);
+          if (focoGrupos.indexOf(g) !== -1) falta += 3;   // prioriza la zona elegida
+          // Se probó a desempatar por quien menos series lleva, pero empeoró
+          // el reparto (más desequilibrios en el self-test, no menos): al
+          // repartir por igual entre grupos con la misma falta, ninguno
+          // llegaba a su objetivo. Se deja el orden de la lista como criterio.
+          if (falta > mejorFalta) { mejorFalta = falta; mejorGrupo = g; }
+        });
+        if (!mejorGrupo) break;                 // todos han llegado a su meta
+
+        var extra = elegir(mejorGrupo, chosen, false);
+        if (!extra) {
+          // Sin candidatos nuevos para ese grupo: se descarta de esta sesión
+          // para no quedarse dando vueltas eligiéndolo una y otra vez.
+          candidatos = candidatos.filter(function (g) { return g !== mejorGrupo; });
+          if (!candidatos.length) break;
+          continue;
+        }
+        registrar(extra, chosen);
+      }
+
       picks.push(chosen);
     });
 
@@ -5836,7 +6041,13 @@
       });
       var cursor = wizardShuffleSeed % (rrPool.length || 1);
       split.forEach(function (session, sIdx) {
-        if (session.patterns.indexOf('pierna') === -1) { preventive[sIdx] = []; return; }
+        // Las sesiones ya no declaran patrones sino grupos musculares: se
+        // considera día de pierna el que trabaje alguno del tren inferior.
+        var gruposSesion = session.required.concat(session.optional || []);
+        var esPierna = (GROUPS_BY_PATTERN.pierna || []).some(function (g) {
+          return gruposSesion.indexOf(g) !== -1;
+        });
+        if (!esPierna) { preventive[sIdx] = []; return; }
         // Evita repetir el mismo ejercicio con lo ya elegido en la sesión.
         // La identidad real es el id del dataset (db/recordId): el núcleo y
         // el bloque de prevención son catálogos distintos que a veces
@@ -5890,11 +6101,7 @@
       };
     }
 
-    var GROUP_LABEL = {
-      pecho: 'Pecho', hombro: 'Hombro', triceps: 'Tríceps', espalda: 'Espalda',
-      biceps: 'Bíceps', cuadriceps: 'Cuádriceps', isquios: 'Isquiotibiales',
-      gluteo: 'Glúteo', gemelo: 'Gemelo', core: 'Core'
-    };
+    var GROUP_LABEL = GROUP_LABEL_G;
 
     // Plan de vuelta a correr combinado: los días de carrera no llevan
     // ejercicios propios, se resuelven en runtime contra RUNNING_PLAN por
@@ -5926,7 +6133,47 @@
       });
     }
 
-    // Una fase por bloque de 4 semanas, con los mismos ejercicios y más carga
+    // Progresión de peso corporal: quien entrena sin material no puede "subir
+    // el peso", así que en las fases 2 y 3 se pasa a la variante más difícil
+    // de la cadena facil/dificil (flexiones en pared → de rodillas → normales).
+    // Los ejercicios con material progresan añadiendo carga, así que no se
+    // tocan. Estas cadenas llevaban declaradas 29 ejercicios sin que nada las
+    // leyera.
+    // Ojo con el nivel: progresar a la variante difícil ES subir de nivel, así
+    // que este pool NO se filtra por el nivel actual del usuario (si no, un
+    // principiante nunca llegaría a «Flexiones», que son intermedio, y la
+    // progresión no existiría). Material y lesiones sí se siguen respetando:
+    // esas son restricciones duras, no cosas que se superen entrenando.
+    var disponibles = {};
+    coreAvailable(inventory, 'avanzado', avoid).forEach(function (e) { disponibles[e.id] = e; });
+
+    function progresar(e, phaseIdx) {
+      if (phaseIdx === 0) return e;
+      if (e.mat && e.mat.length) return e;         // con material se sube peso
+      var actual = e;
+      for (var paso = 0; paso < phaseIdx; paso++) {
+        var sig = actual.dificil ? disponibles[actual.dificil] : null;
+        // disponibles ya está filtrado por nivel, material y lesiones: si la
+        // variante dura no encaja con el usuario, se queda como está.
+        if (!sig) break;
+        actual = sig;
+      }
+      return actual;
+    }
+
+    // Título de la sesión a partir de los grupos que trabaja de verdad, en vez
+    // de un texto fijo que podía no corresponderse con lo elegido.
+    function tituloSesion(sIdx) {
+      var vistos = [], lista = picks[sIdx] || [];
+      lista.forEach(function (e) {
+        var l = GROUP_LABEL[e.grupo] || e.grupo;
+        if (vistos.indexOf(l) === -1) vistos.push(l);
+      });
+      return vistos.join(' · ') || 'Sesión';
+    }
+
+    // Una fase por bloque de 4 semanas: mismos huecos, más carga y, en peso
+    // corporal, variantes más difíciles.
     var phases = PHASE_NAMES.map(function (ph, phaseIdx) {
       var sc = scheme[phaseIdx];
       var strengthDays = split.map(function (session, sIdx) {
@@ -5934,8 +6181,9 @@
           id: 'gen_d' + sIdx,
           day: session.day,
           emoji: session.emoji,
-          title: session.title,
-          exercises: (picks[sIdx] || []).map(function (e) {
+          title: tituloSesion(sIdx),
+          exercises: (picks[sIdx] || []).map(function (base) {
+            var e = progresar(base, phaseIdx);
             var rec = EXERCISE_DB.get(e.db);
             var timed = !!e.tiempo;
             return {
@@ -5965,11 +6213,27 @@
       };
     });
 
+    // Objetivo semanal alcanzado por el plan, para poder explicárselo al
+    // usuario sin recalcularlo en cada render.
+    var volumePlan = {};
+    Object.keys(weeklySets).forEach(function (g) {
+      volumePlan[g] = { sets: weeklySets[g], target: volumeTargetFor(g, answers) };
+    });
+
     return {
-      version: 2,
+      version: 3,
       createdAt: getTodayKey(),
       answers: answers,
       phases: phases,
+      splitId: splitDef.id,
+      splitName: splitDef.name,
+      splitWhy: splitDef.why,
+      freqLabel: splitDef.freqLabel,
+      volume: volumePlan,
+      volumeWhy: GOAL_VOLUME_RATIONALE[goals[0]] || GOAL_VOLUME_RATIONALE.hipertrofia,
+      // Última semana de cada fase: se baja el volumen para recuperar. Doce
+      // semanas de intensidad creciente sin descarga acaban en estancamiento.
+      deloadWeeks: [4, 8, 12],
       trainingDays: (runningCombo ? runningCombo.weekdays : (DEFAULT_DAYS_BY_COUNT[answers.days] || [1, 3, 5])).slice(),
       daysLabel: answers.days + ' días · '
         + goals.map(function (g) { return GOAL_LABEL[g] || ''; }).filter(Boolean).join(' + ')
@@ -5994,11 +6258,37 @@
     var minutes = parseInt(answers.minutes, 10) || 45;
     var setsByGroup = {};
 
+    // Los días del plan y las sesiones del programa van en el mismo orden,
+    // salvo cuando se intercalan días de carrera (que no tienen ejercicios).
+    var splitDef = plan.splitId ? getSplitById(plan.splitId) : null;
+    var sesionesSplit = splitDef ? splitDef.sessions.slice() : null;
+
+    // Grupos para los que existe algún ejercicio con este material, nivel y
+    // lesiones. Sin esto, exigir cobertura de cuádriceps a quien ha marcado
+    // «me molesta la rodilla» marcaba como roto un plan correcto: todos los
+    // ejercicios de cuádriceps para principiante llevan evitar:['rodilla'],
+    // así que no hay ninguno que ofrecer y omitirlo es lo que toca.
+    var gruposDisponibles = {};
+    var disponiblesPorGrupo = {};
+    coreAvailable(inventory, answers.level || 'principiante', avoid).forEach(function (e) {
+      gruposDisponibles[e.grupo] = 1;
+      disponiblesPorGrupo[e.grupo] = (disponiblesPorGrupo[e.grupo] || 0) + 1;
+    });
+    var usadosPorGrupo = {};   // ejercicios DISTINTOS usados de cada grupo
+
     plan.phases[0].days.forEach(function (day) {
       var seenNames = {};
       var mins = 0;
+      var gruposDelDia = {};
+      var sesion = null;
+      if (sesionesSplit && day.type !== 'running') sesion = sesionesSplit.shift();
+
       day.exercises.forEach(function (ex) {
         var core = ex.coreId ? CORE_BY_ID[ex.coreId] : null;
+        if (core) {
+          gruposDelDia[core.grupo] = 1;
+          (usadosPorGrupo[core.grupo] = usadosPorGrupo[core.grupo] || {})[core.id] = 1;
+        }
 
         // Material: la invariante que originó todo esto
         if (core) {
@@ -6028,6 +6318,31 @@
       if (mins > minutes + 10) {
         problems.push({ tipo: 'tiempo', msg: day.day + ' dura unos ' + Math.round(mins) + ' min y pediste ' + minutes });
       }
+
+      if (sesion) {
+        // Cobertura: los grupos que definen la sesión tienen que estar. Sin
+        // esto salían días de pierna sin nada de cuádriceps.
+        sesion.required.forEach(function (g) {
+          if (!gruposDelDia[g] && gruposDisponibles[g]) {
+            problems.push({ tipo: 'cobertura', msg: day.day + ' no incluye nada de ' + (GROUP_LABEL_G[g] || g) });
+          }
+        });
+        // Coherencia: nada fuera de lo que ese día debe trabajar. Es lo que
+        // impide que el tríceps (empuje) aparezca en el día de tirón.
+        //
+        // Se compara por PATRÓN y no por grupo exacto, porque el generador
+        // puede sustituir un grupo sin ejercicios disponibles por otro del
+        // mismo tren: quien evita la rodilla se queda sin cuádriceps y recibe
+        // isquios o glúteo en su lugar, que es lo correcto.
+        var permitidos = sesion.required.concat(sesion.optional || []);
+        var patronesOk = {};
+        permitidos.forEach(function (g) { patronesOk[PATTERN_BY_GROUP[g]] = 1; });
+        Object.keys(gruposDelDia).forEach(function (g) {
+          if (permitidos.indexOf(g) === -1 && !patronesOk[PATTERN_BY_GROUP[g]]) {
+            problems.push({ tipo: 'coherencia', msg: (GROUP_LABEL_G[g] || g) + ' no pinta nada en ' + day.day });
+          }
+        });
+      }
     });
 
     // Equilibrio: ningún patrón mayor puede quedarse sin nada
@@ -6038,6 +6353,69 @@
         problems.push({ tipo: 'equilibrio', msg: 'La rutina no entrena nada de ' + p });
       }
     });
+
+    // NO se valida que el volumen llegue al objetivo semanal. Quedarse corto
+    // casi nunca es un fallo del generador: con 3 días de 30 minutos es
+    // físicamente imposible meter 13 series por músculo, y con poco material
+    // tampoco hay ejercicios suficientes. Tratarlo como plan inválido hacía
+    // reintentar cinco veces algo irresoluble y marcaba como rotas
+    // combinaciones perfectamente correctas.
+    //
+    // Lo que sí es un fallo es el desequilibrio: que un grupo grande se lleve
+    // el doble que otro del mismo plan significa que el reparto está mal.
+    //
+    // Y sólo se comprueba cuando el tiempo NO era el cuello de botella: con
+    // sesiones de 3 ejercicios hay 6 huecos para cinco grupos, así que el
+    // desequilibrio es aritmética, no un fallo del reparto.
+    // Y se comparan sólo grupos con la MISMA frecuencia obligatoria en el
+    // programa: si la espalda es required dos días y los isquios uno, que la
+    // espalda tenga el doble es el diseño del split, no un reparto injusto.
+    var diasFuerza = plan.phases[0].days.filter(function (d) { return d.type !== 'running'; });
+    var holgura = diasFuerza.length && diasFuerza.every(function (d) { return d.exercises.length >= 5; });
+
+    if (holgura && splitDef) {
+      var vecesRequerido = {};
+      splitDef.sessions.forEach(function (s) {
+        s.required.forEach(function (g) { vecesRequerido[g] = (vecesRequerido[g] || 0) + 1; });
+      });
+      var porFrecuencia = {};
+      Object.keys(BIG_GROUPS).forEach(function (g) {
+        if (!gruposDisponibles[g]) return;
+        var n = vecesRequerido[g] || 0;
+        if (!n) return;
+        (porFrecuencia[n] = porFrecuencia[n] || []).push(g);
+      });
+      Object.keys(porFrecuencia).forEach(function (n) {
+        var lote = porFrecuencia[n];
+        var mejor = 0;
+        lote.forEach(function (g) { if ((setsByGroup[g] || 0) > mejor) mejor = setsByGroup[g] || 0; });
+        // Umbral deliberadamente laxo: esta comprobación es un detector de
+        // regresiones del reparto, no una medida de calidad del plan. Con
+        // material escaso o varias lesiones marcadas, un desequilibrio
+        // moderado es la única salida posible y no debe marcarse como roto.
+        if (mejor < 9) return;
+        lote.forEach(function (g) {
+          var hechas = setsByGroup[g] || 0;
+          // Un tercio: por debajo de eso el reparto está roto de verdad.
+          // Justo en un tercio (3 series frente a 9) es lo que sale con dos
+          // lesiones marcadas y poco material, y es correcto.
+          if (hechas * 3 >= mejor) return;
+          // Si se usaron todos los ejercicios que había de ese grupo, el
+          // generador hizo lo que pudo: con «evito espalda baja» los isquios
+          // se quedan en un único ejercicio disponible y no hay más que dar.
+          var usados = Object.keys(usadosPorGrupo[g] || {}).length;
+          if (usados >= (disponiblesPorGrupo[g] || 0)) return;
+          problems.push({ tipo: 'volumen', msg: (GROUP_LABEL_G[g] || g) + ' se queda en ' + hechas + ' series mientras otro grupo igual de prioritario llega a ' + mejor });
+        });
+      });
+    }
+
+    // El core dejó de añadirse en cada sesión; si vuelve a dispararse es que
+    // algo lo está metiendo por la puerta de atrás.
+    var coreTarget = volumeTargetFor('core', answers);
+    if ((setsByGroup.core || 0) > coreTarget * 1.6) {
+      problems.push({ tipo: 'volumen', msg: 'Demasiado core: ' + setsByGroup.core + ' series semanales para un objetivo de ' + coreTarget });
+    }
 
     return problems;
   }
@@ -6056,7 +6434,7 @@
     var places = ['gimnasio', 'casa', 'sin_material'];
     var gearSets = [[], ['dumbbell'], ['band'], ['dumbbell', 'band'],
                     ['dumbbell', 'band', 'kettlebell', 'barbell', 'cable', 'machine']];
-    var days = ['2', '3', '4', '5'];
+    var days = ['2', '3', '4', '5', '6'];
     var goals = [['fuerza'], ['hipertrofia'], ['tono'], ['perder_peso'], ['hipertrofia', 'fuerza']];
     var levels = ['principiante', 'intermedio', 'avanzado'];
     var minutesOpts = ['30', '45', '60'];
@@ -6084,25 +6462,32 @@
                   runningOpts.forEach(function (running) {
                     focusOpts.forEach(function (focus) {
                       runningPlanOpts.forEach(function (runningPlan) {
-                        var answers = {
-                          place: place, gear: gear.slice(), days: d, goal: goal.slice(),
-                          level: level, minutes: mins, avoid: avoid.slice(),
-                          running: running, focus: focus, runningPlan: runningPlan
-                        };
-                        runs++;
-                        var plan = null, problems = null;
-                        try {
-                          plan = generateRoutine(answers);
-                          problems = validatePlan(plan, answers);
-                        } catch (e) {
-                          problems = [{ tipo: 'excepcion', msg: String(e && e.message || e) }];
-                        }
-                        if (problems && problems.length) {
-                          failed++;
-                          if (failures.length < 25) {
-                            failures.push({ answers: answers, problems: problems });
+                        // Cada programa posible para esos días, más el caso
+                        // "sin elegir" (planes antiguos y días con una sola
+                        // opción, donde cae en el recomendado).
+                        var splitIds = splitsForDays(d).map(function (s) { return s.id; });
+                        splitIds.concat(['']).forEach(function (splitId) {
+                          var answers = {
+                            place: place, gear: gear.slice(), days: d, goal: goal.slice(),
+                            level: level, minutes: mins, avoid: avoid.slice(),
+                            running: running, focus: focus, runningPlan: runningPlan,
+                            split: splitId
+                          };
+                          runs++;
+                          var plan = null, problems = null;
+                          try {
+                            plan = generateRoutine(answers);
+                            problems = validatePlan(plan, answers);
+                          } catch (e) {
+                            problems = [{ tipo: 'excepcion', msg: String(e && e.message || e) }];
                           }
-                        }
+                          if (problems && problems.length) {
+                            failed++;
+                            if (failures.length < 25) {
+                              failures.push({ answers: answers, problems: problems });
+                            }
+                          }
+                        });
                       });
                     });
                   });
@@ -6272,9 +6657,9 @@
   function needsOnboarding() {
     try {
       if (localStorage.getItem(ONBOARDING_KEY)) return false;
-      if (loadCustomPlan()
-          || localStorage.getItem(ACTIVE_PLAN_KEY)
-          || localStorage.getItem(LEGACY_ACTIVE_KEY)) {
+      // hadPriorSession se calcula al arrancar, antes de que la migración
+      // escriba sus claves; leerlas aquí daría siempre true.
+      if (hadPriorSession) {
         markOnboardingDone();
         return false;
       }
@@ -6321,6 +6706,12 @@
     if (wizardMode === 'edit') {
       // Rehacer un plan parte de sus respuestas: así el cuestionario sale
       // relleno y sólo hay que cambiar lo que se quiera.
+      //
+      // La semilla avanza en cada apertura porque, si no, rehacer el plan con
+      // las mismas respuestas devolvería EXACTAMENTE la misma rutina. Al
+      // haber retirado «Otros ejercicios» del resumen, esta es la única vía
+      // que le queda al usuario para pedir otra propuesta.
+      wizardShuffleSeed++;
       wizardTargetId = opts.planId || activeProfile;
       var entry = getPlanEntry(wizardTargetId);
       // Un plan de plantilla no tiene respuestas que rehacer; al tocarle
@@ -6415,8 +6806,14 @@
 
     // Los pasos con muchas opciones cortas se pintan como pastillas: la
     // descripción pasa al title para no hacer una lista interminable.
+    // Algunos pasos (elegir programa) calculan sus opciones a partir de lo ya
+    // contestado, así que no pueden declararlas de forma fija.
+    var opciones = typeof step.dynamicOptions === 'function'
+      ? step.dynamicOptions(wizardAnswers)
+      : step.options;
+
     html += '<div class="wizard-options' + (step.pills ? ' pills' : '') + '">';
-    step.options.forEach(function (opt) {
+    opciones.forEach(function (opt) {
       var sel = selected.indexOf(opt.value) !== -1;
       html += '<button class="wizard-option' + (sel ? ' selected' : '') + (step.multi ? ' multi' : '') + '"'
         + ' data-value="' + escapeHtml(opt.value) + '"'
@@ -6512,6 +6909,166 @@
     return plan;
   }
 
+  // =============================================
+  // CAPA EXPLICATIVA: ¿POR QUÉ ESTE ENTRENAMIENTO?
+  // =============================================
+  // Una sola pieza de contenido con dos entradas: el resumen al crear el plan
+  // y el modal bajo demanda desde Rutina. El objetivo es que nadie haga los
+  // ejercicios porque sí.
+  //
+  // La unidad es la SEMANA, no la sesión: lo que determina el resultado son
+  // las series semanales por músculo. Por eso la sesión de hoy se presenta
+  // como su aportación al total, y no como un número aislado.
+
+  // Series ya completadas esta semana, por grupo muscular. Se apoya en
+  // state.completions, que está indexado por fecha e id de ejercicio.
+  function weeklyVolumeProgress() {
+    var out = {};
+    try {
+      var hoy = new Date(getTodayKey() + 'T12:00:00');
+      var lunes = getMonday(hoy);
+      for (var i = 0; i < 7; i++) {
+        var d = new Date(lunes);
+        d.setDate(d.getDate() + i);
+        var key = getDateKey(d);
+        var comps = state.completions[key];
+        if (!comps) continue;
+        var day = getDayForDateKey(key);
+        if (!day) continue;
+        day.exercises.forEach(function (ex) {
+          if (!comps[ex.id]) return;
+          var c = ex.coreId ? CORE_BY_ID[ex.coreId] : null;
+          if (!c) return;
+          out[c.grupo] = (out[c.grupo] || 0) + (ex.series || 0);
+        });
+      }
+    } catch (e) {}
+    return out;
+  }
+
+  // `progreso` opcional: si viene, se pintan barras de lo hecho esta semana.
+  function planExplainerHtml(plan, progreso) {
+    if (!plan) return '';
+    var html = '';
+
+    html += '<div class="why-head">';
+    html += '  <div class="why-name">' + escapeHtml(plan.splitName || 'Tu rutina') + '</div>';
+    html += '  <div class="why-sub">' + escapeHtml(plan.daysLabel || '')
+         + (plan.freqLabel ? ' · ' + escapeHtml(plan.freqLabel) : '') + '</div>';
+    html += '</div>';
+
+    if (plan.splitWhy) {
+      html += '<div class="why-block">';
+      html += '  <div class="why-block-title">Por qué este reparto</div>';
+      html += '  <p class="why-text">' + escapeHtml(plan.splitWhy) + '</p>';
+      html += '</div>';
+    }
+
+    // Cada día por GRUPOS musculares, no por nombres de ejercicio.
+    html += '<div class="why-block"><div class="why-block-title">Tu semana</div>';
+    plan.phases[0].days.forEach(function (day) {
+      html += '<div class="why-day">';
+      html += '  <span class="why-day-emoji">' + day.emoji + '</span>';
+      html += '  <span class="why-day-name">' + escapeHtml(day.day) + '</span>';
+      if (day.type === 'running') {
+        html += '  <span class="why-day-groups">Plan de carrera · cambia cada semana</span>';
+      } else {
+        var grupos = [], mins = 0;
+        day.exercises.forEach(function (ex) {
+          if (grupos.indexOf(ex.muscle) === -1) grupos.push(ex.muscle);
+          mins += exerciseMinutes(ex.series || 3, parseRestSeconds(ex.rest) || 60);
+        });
+        html += '  <span class="why-day-groups">' + escapeHtml(grupos.join(' · ')) + '</span>';
+        html += '  <span class="why-day-meta">' + day.exercises.length + ' ej · ~' + Math.round(mins + 6) + ' min</span>';
+      }
+      html += '</div>';
+    });
+    html += '</div>';
+
+    // Objetivo semanal por grupo. Con progreso si lo hay.
+    var vol = plan.volume || {};
+    var grupos = Object.keys(vol).sort(function (a, b) { return vol[b].target - vol[a].target; });
+    if (grupos.length) {
+      html += '<div class="why-block">';
+      html += '  <div class="why-block-title">Tu objetivo semanal'
+           + (progreso ? ' <span class="why-block-note">esta semana</span>' : '') + '</div>';
+      if (progreso) {
+        // Con progreso: una fila por grupo, que las barras necesitan ancho.
+        grupos.forEach(function (g) {
+          var target = vol[g].target;
+          var hechas = progreso[g] || 0;
+          var pct = Math.min(100, Math.round((hechas / target) * 100));
+          html += '<div class="why-vol">';
+          html += '  <span class="why-vol-name">' + escapeHtml(GROUP_LABEL_G[g] || g) + '</span>';
+          html += '  <span class="why-vol-bar"><span class="why-vol-fill' + (pct >= 100 ? ' done' : '') + '" style="width:' + pct + '%"></span></span>';
+          html += '  <span class="why-vol-num">' + hechas + ' / ' + target + (pct >= 100 ? ' ✓' : '') + '</span>';
+          html += '</div>';
+        });
+      } else {
+        // Sin progreso (resumen del asistente): en línea, para que la
+        // pantalla siga cabiendo de un vistazo en un móvil.
+        html += '<p class="why-inline">' + grupos.map(function (g) {
+          return '<span class="why-inline-g">' + escapeHtml(GROUP_LABEL_G[g] || g)
+               + ' <strong>' + vol[g].sets + '</strong></span>';
+        }).join('') + '</p>';
+      }
+      if (plan.volumeWhy) {
+        html += '<p class="why-text why-text-small">' + escapeHtml(plan.volumeWhy) + '</p>';
+      }
+      // Si el tiempo declarado no da para el objetivo, se dice claramente en
+      // vez de callarlo: es información accionable, no un fallo del plan.
+      var cortos = grupos.filter(function (g) { return BIG_GROUPS[g] && vol[g].sets < vol[g].target * 0.7; });
+      if (cortos.length) {
+        html += '<p class="why-text why-text-small why-text-warn">Con ' + escapeHtml(String(plan.answers && plan.answers.minutes || ''))
+             + ' min y ' + escapeHtml(String(plan.answers && plan.answers.days || '')) + ' días no da tiempo a llegar al objetivo en '
+             + escapeHtml(cortos.map(function (g) { return (GROUP_LABEL_G[g] || g).toLowerCase(); }).join(', '))
+             + '. Sigue siendo un buen plan; si puedes añadir días o minutos, crecerás más rápido.</p>';
+      }
+      html += '</div>';
+    }
+
+    // Cómo progresa: es lo que convierte 12 semanas sueltas en un programa.
+    html += '<div class="why-block"><div class="why-block-title">Cómo progresas</div>';
+    plan.phases.forEach(function (ph) {
+      var ej = null;
+      ph.days.some(function (d) { return d.exercises.some(function (x) { if (!x.preventive) { ej = x; return true; } }); });
+      html += '<div class="why-phase"><span class="why-phase-name">' + escapeHtml(ph.name) + '</span>'
+           + (ej ? '<span class="why-phase-meta">' + ej.series + '×' + escapeHtml(ej.reps) + '</span>' : '') + '</div>';
+    });
+    if (plan.deloadWeeks && plan.deloadWeeks.length) {
+      html += '<p class="why-text why-text-small">La semana ' + plan.deloadWeeks.join(', ')
+           + ' bajas series para recuperar: sin descarga, doce semanas seguidas de más carga acaban en estancamiento.</p>';
+    }
+    html += '</div>';
+
+    return html;
+  }
+
+  // Abre el explicador desde la pestaña Rutina, con el progreso de la semana.
+  function openWhyModal() {
+    var plan = loadCustomPlan();
+    var modal = document.getElementById('whyModal');
+    var body = document.getElementById('whyBody');
+    if (!modal || !body) return;
+    if (!plan) { showToast('Este plan no tiene explicación guardada'); return; }
+    body.innerHTML = planExplainerHtml(plan, weeklyVolumeProgress());
+    modal.classList.remove('hidden');
+  }
+
+  function closeWhyModal() {
+    var modal = document.getElementById('whyModal');
+    if (modal) modal.classList.add('hidden');
+  }
+
+  function setupWhyModal() {
+    var o = document.getElementById('whyModalOverlay');
+    var c = document.getElementById('whyClose');
+    var k = document.getElementById('whyOk');
+    if (o) o.addEventListener('click', closeWhyModal);
+    if (c) c.addEventListener('click', closeWhyModal);
+    if (k) k.addEventListener('click', closeWhyModal);
+  }
+
   function renderWizardSummary(el) {
     var plan = generateValidRoutine(wizardAnswers);
     if (!plan) {
@@ -6527,31 +7084,16 @@
     for (var i = 0; i < activeWizardSteps().length; i++) html += '<span class="wizard-dot done"></span>';
     html += '</div>';
 
+    // El resumen explica el PROGRAMA, no lo enumera. Antes volcaba todos los
+    // ejercicios de cada día: costaba de leer, no daba contexto de qué era
+    // cada ejercicio y no ayudaba a decidir lo único que se decide aquí, que
+    // es si aceptas el plan. El detalle bueno (animación, pasos, alternativas)
+    // ya está en la pestaña Rutina.
     html += '<h3 class="wizard-title">Tu rutina está lista 🎉</h3>';
-    html += '<p class="wizard-hint">' + escapeHtml(plan.daysLabel)
-      + ' · 12 semanas en 3 fases. Se guardará como el perfil «Mi plan».</p>';
-
-    // Se muestran los días de la primera fase: las otras dos repiten
-    // ejercicios cambiando series y repeticiones.
-    plan.phases[0].days.forEach(function (day) {
-      html += '<div class="wizard-day">';
-      html += '  <div class="wizard-day-head">' + day.emoji + ' <strong>' + escapeHtml(day.day) + '</strong> · ' + escapeHtml(day.title) + '</div>';
-      if (day.type === 'running') {
-        html += '  <p class="wizard-hint">Sesión del plan de carrera de 12 semanas. Cambia cada semana: verás el detalle exacto en el calendario.</p>';
-      } else {
-        html += '  <ul class="wizard-day-list">';
-        day.exercises.forEach(function (ex) {
-          html += '<li><span class="wizard-ex-name">' + escapeHtml(ex.name) + '</span>'
-            + '<span class="wizard-ex-meta">' + ex.series + '×' + escapeHtml(ex.reps) + ' · ' + escapeHtml(ex.muscle) + '</span></li>';
-        });
-        html += '  </ul>';
-      }
-      html += '</div>';
-    });
+    html += planExplainerHtml(plan, null);
 
     html += '<div class="wizard-nav wizard-nav-final">';
     html += '  <button class="wizard-back" id="wizardBack">← Atrás</button>';
-    html += '  <button class="wizard-regen" id="wizardRegen">🔀 Otros ejercicios</button>';
     html += '  <button class="wizard-save" id="wizardSave">✅ Usar esta rutina</button>';
     html += '</div>';
 
@@ -6559,13 +7101,6 @@
     playWizardEnter(el);
 
     document.getElementById('wizardBack').addEventListener('click', function () { wizardStep--; renderWizard(); });
-
-    // "Otros ejercicios" baraja el orden de los candidatos para proponer
-    // alternativas distintas con las mismas respuestas.
-    document.getElementById('wizardRegen').addEventListener('click', function () {
-      wizardShuffleSeed++;
-      renderWizard();
-    });
 
     document.getElementById("wizardSave").addEventListener("click", function () {
       // Nada se guarda sin pasar el validador: es más barato comprobar
@@ -6919,6 +7454,7 @@
 
     setupServiceWorker();
     setupFeedback();
+    setupWhyModal();
     setupWhatsNew();
     flushFeedbackQueue();
 

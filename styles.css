@@ -3781,6 +3781,150 @@ body.onboarding-lock .feedback-fab { display: none; }
   cursor: default;
 }
 
+/* ===== EXPLICADOR DEL PROGRAMA =====
+   Se usa en dos sitios con el mismo marcado: el resumen del asistente y el
+   modal «¿Por qué este entrenamiento?» de la pestaña Rutina. */
+.why-head { margin-bottom: 14px; }
+
+.why-name {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.why-sub {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+.why-block { margin-bottom: 16px; }
+
+.why-block-title {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--accent-primary);
+  margin-bottom: 7px;
+}
+
+.why-block-note {
+  color: var(--text-muted);
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0;
+  float: right;
+}
+
+.why-text {
+  font-size: 0.85rem;
+  line-height: 1.45;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.why-text-small { font-size: 0.78rem; margin-top: 8px; }
+.why-text-warn { color: var(--accent-yellow); }
+
+.why-day {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+  margin-bottom: 6px;
+  font-size: 0.82rem;
+}
+
+.why-day-emoji { flex-shrink: 0; }
+.why-day-name { font-weight: 700; color: var(--text-primary); flex-shrink: 0; }
+.why-day-groups { color: var(--text-secondary); flex: 1; }
+.why-day-meta { color: var(--text-muted); font-size: 0.72rem; white-space: nowrap; }
+
+.why-inline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+}
+
+.why-inline-g {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  background: var(--bg-input);
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+}
+
+.why-inline-g strong { color: var(--text-primary); }
+
+.why-vol {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.8rem;
+  margin-bottom: 5px;
+}
+
+.why-vol-name { color: var(--text-primary); width: 92px; flex-shrink: 0; }
+
+.why-vol-bar {
+  flex: 1;
+  height: 7px;
+  border-radius: 4px;
+  background: var(--bg-input);
+  overflow: hidden;
+}
+
+.why-vol-fill {
+  display: block;
+  height: 100%;
+  background: var(--accent-primary);
+  border-radius: 4px;
+  transition: width var(--transition);
+}
+
+.why-vol-fill.done { background: var(--accent-green); }
+
+.why-vol-num {
+  color: var(--text-muted);
+  font-size: 0.74rem;
+  white-space: nowrap;
+  min-width: 62px;
+  text-align: right;
+}
+
+.why-phase {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.8rem;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.why-phase:last-of-type { border-bottom: none; }
+.why-phase-name { color: var(--text-secondary); }
+.why-phase-meta { color: var(--text-primary); font-weight: 600; }
+
+/* Botón discreto que abre el modal desde Rutina */
+.why-open-btn {
+  display: block;
+  width: 100%;
+  margin: 4px 0 14px;
+  padding: 10px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: var(--font);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
 /* MODAL: NOVEDADES DE LA VERSIÓN */
 .whatsnew-modal {
   position: fixed;
@@ -3863,6 +4007,13 @@ body.onboarding-lock .feedback-fab { display: none; }
 }
 
 .whatsnew-item-icon { font-size: 1.05rem; flex-shrink: 0; }
+
+/* El modal del «por qué» reutiliza el chasis de novedades, pero su contenido
+   es más largo, así que necesita poder desplazarse. */
+.whatsnew-modal-sheet.why-sheet {
+  max-height: 85vh;
+  overflow-y: auto;
+}
 
 .whatsnew-ok {
   padding: 14px;

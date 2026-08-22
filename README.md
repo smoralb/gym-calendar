@@ -1,20 +1,22 @@
 # 🏋️ Gym Calendar
 
-Aplicación web progresiva (PWA) para seguir una rutina de ejercicios 3 días/semana:
-
-- **Lunes** — Empuje (Pecho, Hombro anterior, Tríceps)
-- **Miércoles** — Tirón (Espalda, Hombro posterior, Bíceps)
-- **Viernes** — Pierna y Core
+Aplicación web progresiva (PWA) que genera y sigue programas de entrenamiento
+de 12 semanas, adaptados al material, los días y el objetivo de cada persona.
 
 ### ✨ Funcionalidades
 
+- 🎯 Asistente que genera un programa de 12 semanas a medida, con objetivos de
+  volumen semanal por músculo
+- 🗂️ **Varios planes a la vez**: crear, renombrar y borrar desde el selector
+- 🧠 **«¿Por qué este entrenamiento?»** — la app explica qué programa sigues,
+  cuántas series necesita cada músculo y cómo progresas
 - ✅ Seguimiento de ejercicios completados con sonido y vibración
 - 🏋️ Registro de pesos utilizados en cada ejercicio
 - 📊 Historial de progreso por ejercicio
 - 🎯 Sugerencias automáticas para subir de peso
 - 🔍 Catálogo de 1.324 ejercicios con animaciones e instrucciones en español
 - 🏷️ Ejercicios categorizados por tags (material, patrón, objetivo y nivel) con filtros combinables
-- 🎯 Tutorial que pregunta objetivo, material, días y nivel, y genera una rutina de 12 semanas a medida
+- 🏃 Plan de vuelta a correr de 12 semanas, combinable con los días de fuerza
 - 🏃 Colección "Recuperación running": 29 ejercicios preventivos para corredores
 - 📱 PWA instalable en móvil (funciona offline)
 - 🌙 Modo oscuro
@@ -47,9 +49,15 @@ Para volver a ver el onboarding de primer arranque hay que borrar las claves
 que lo dan por hecho (DevTools → Console):
 
 ```js
-localStorage.removeItem('gym_onboarding_done');
-localStorage.removeItem('gym_active_profile');
-localStorage.removeItem('gym_custom_plan');
+Object.keys(localStorage)
+  .filter(k => k.startsWith('gym'))
+  .forEach(k => localStorage.removeItem(k));
+```
+
+Y para comprobar que el generador sigue sano tras tocarlo, desde la consola:
+
+```js
+gymSelfTest()   // recorre ~388.000 combinaciones de respuestas y las valida
 ```
 
 ### 📚 Dataset de ejercicios
@@ -95,20 +103,50 @@ familias:
 | Objetivo | `fuerza` · `hipertrofia` · `tono` · `perder_peso` · `movilidad` |
 | Nivel | `principiante` · `intermedio` · `avanzado` |
 
-Sobre esos tags se apoyan dos cosas:
+Los tags sostienen los **filtros del catálogo** (chips acumulables en la pestaña
+Ejercicios) y el **buscador de alternativas**. Ojo: **ya no se usan para generar
+la rutina** — eso lo hace un núcleo curado aparte, ver la sección siguiente.
 
-- **Filtros del catálogo** — chips acumulables en la pestaña Ejercicios; los tres
-  tags más informativos se pintan en cada tarjeta.
-- **Tutorial «Crea tu rutina a medida»** — 5 preguntas (objetivo, dónde entrenas,
-  días por semana, experiencia y zona prioritaria) y con las respuestas
-  `generateRoutine()` arma una rutina de 12 semanas: elige los ejercicios por
-  tags, reparte las sesiones según el split de los días disponibles (2 a 5),
-  evita repetir material dentro de una sesión y aplica series/repeticiones/descanso
-  según el objetivo, subiendo la carga en cada una de las 3 fases.
+### 🧠 Generador de rutinas
 
-La rutina generada se guarda en `localStorage` (`gym_custom_plan`) y se registra
-como un perfil más (**«Mi plan»**), así que hereda el calendario, el registro de
-pesos, el progreso y las estadísticas que ya existían.
+El dataset completo no se usa para programar: el generador elige de
+**`CORE_EXERCISES`**, una lista curada a mano de 79 ejercicios con patrón,
+grupo muscular, material, nivel y lesiones que desaconsejan cada uno. Los datos
+de origen no bastaban —el nivel se adivinaba con expresiones regulares sobre el
+nombre en inglés y el material del dataset a veces miente—, y así se llegó a
+recetar «Flag» y «Ring dips» a un principiante sin material.
+
+El eje del algoritmo son **las series semanales por músculo**, no el número de
+ejercicios:
+
+- **`VOLUME_TARGETS`** — objetivo de series/semana por grupo, según objetivo y
+  nivel (p. ej. 13 para grupos grandes en hipertrofia/intermedio).
+- **`SPLIT_CATALOG`** — 7 programas con nombre (Cuerpo completo, Push · Pull ·
+  Legs, Torso · Pierna, PPL ×2…) para 2 a 6 días. Cada sesión declara los
+  grupos musculares que **debe** cubrir y los opcionales, lo que garantiza que
+  un día de pierna lleve cuádriceps y evita que el tríceps aparezca en el día
+  de tirón.
+- **Relleno por volumen** — se cubren primero los grupos obligatorios y después
+  se añaden ejercicios al grupo más lejos de su objetivo, mientras quepa en el
+  tiempo declarado. Por eso pedir 90 minutos da más trabajo que pedir 45.
+- **Progresión** — 3 fases de 4 semanas. Con material sube la carga; **sin
+  material se cambia a la variante más difícil** de la cadena `facil`/`dificil`
+  (flexiones de rodillas → flexiones → flexiones con pies elevados). Las
+  semanas 4, 8 y 12 son de descarga.
+- **`validatePlan()`** — comprueba invariantes antes de enseñar nada: material,
+  lesiones, duplicados, cobertura, coherencia y tiempo. Si falla, el generador
+  reintenta con otra semilla en vez de mostrar un plan roto.
+- **`gymSelfTest()`** — recorre ~388.000 combinaciones de respuestas y las pasa
+  por el validador. Al añadir una pregunta nueva al asistente hay que añadirla
+  también aquí: los dos fallos que llegaron a producción se colaron por no
+  estar en la matriz.
+
+Cada plan se guarda en el registro `gym_plans` de `localStorage` y se registra
+como un perfil más, así que hereda calendario, pesos, progreso y estadísticas.
+Se pueden tener **varios planes a la vez** y cambiar entre ellos.
+
+📄 Detalle completo del algoritmo en
+[`docs/algoritmo-generacion-rutinas.md`](docs/algoritmo-generacion-rutinas.md).
 
 Para regenerar el índice cuando el dataset se actualice:
 
