@@ -1,23 +1,21 @@
 /* =============================================
    Gym Calendar - App de Rutina de Ejercicios
-   Versión: 4.24.1 — Novedades tras actualizar, y aviso cuando el reto pide un clic
+   Versión: 4.25.0 — Actualización con progreso, y el coach ofrece aplicar los cambios
    ============================================= */
 
 (function () {
   'use strict';
 
-  var APP_VERSION = '4.24.1';
+  var APP_VERSION = '4.25.0';
 
   // Resumen corto de la versión actual para el modal de novedades. Sólo se
   // enseña una vez por versión (localStorage) y nunca durante el onboarding.
   var WHATS_NEW = {
-    // Se sube a 4.24.1 a propósito aunque las novedades sigan siendo las del
-    // coach: en la 4.24.0 el modal salía antes de actualizar, así que quien lo
-    // cerró quedó marcado como «visto» sin haber estrenado nada.
-    version: '4.24.1',
+    version: '4.25.0',
     items: [
       { icon: '🧠', text: 'Nuevo botón de entrenador: pregúntale por qué tu plan es como es, cómo vas de series esta semana o qué hacer con un ejercicio que se te atraganta. Conoce tu plan y tus últimos pesos.' },
-      { icon: '🎯', text: 'Ajusta tu rutina hablando: «me molesta el hombro», «ahora solo tengo 30 minutos». Te enseña qué cambia antes de tocar nada, y sigue siendo el generador de siempre el que arma el plan.' }
+      { icon: '🎯', text: 'Cuéntale que algo ha cambiado —«me molesta el hombro», «ahora solo tengo 30 minutos»— y te ofrece aplicarlo a la rutina. Ves qué cambia antes de tocar nada, y sigue siendo el generador de siempre el que arma el plan.' },
+      { icon: '⬇️', text: 'Al actualizar ya ves cuánto queda, y las novedades se cuentan cuando la app está lista de verdad, no antes.' }
     ]
   };
 
@@ -7427,6 +7425,57 @@
   // leerán después de recargar. Ver setupWhatsNew().
   var whatsNewPendiente = null;
 
+  // Marca puesta justo antes de recargar para actualizar. Al volver a arrancar
+  // es lo único que distingue «te acabas de actualizar» de una carga normal.
+  var UPDATE_FLAG = 'gym_update_recargando';
+
+  // El aviso es un único elemento con tres estados, no tres banners
+  // distintos: descargando → listo → actualizada. Así no se apilan avisos ni
+  // parpadea la pantalla entre uno y otro.
+  var updateBar = null;
+
+  function getUpdateBar() {
+    if (updateBar && updateBar.parentNode) return updateBar;
+    updateBar = document.createElement('div');
+    updateBar.className = 'update-banner';
+    updateBar.id = 'updateBanner';
+    document.body.appendChild(updateBar);
+    return updateBar;
+  }
+
+  function closeUpdateBar() {
+    if (updateBar && updateBar.parentNode) updateBar.remove();
+    updateBar = null;
+  }
+
+  // Progreso real de la descarga del shell, reportado por el service worker.
+  // Antes esto pasaba en silencio: el catálogo son ~900 KB y con datos móviles
+  // la espera se nota, pero no había nada en pantalla hasta el aviso final.
+  function showUpdateProgress(hechos, total) {
+    if (updateBannerShown) return;   // ya está listo, no volvemos atrás
+
+    var bar = getUpdateBar();
+    var pct = total ? Math.round((hechos / total) * 100) : 0;
+
+    var relleno = bar.querySelector('.update-banner-fill');
+    if (!relleno) {
+      bar.className = 'update-banner update-banner-progress';
+      bar.innerHTML = '';
+      var txt = document.createElement('span');
+      txt.className = 'update-banner-text';
+      txt.textContent = '⬇️ Descargando actualización…';
+      bar.appendChild(txt);
+
+      var pista = document.createElement('span');
+      pista.className = 'update-banner-track';
+      relleno = document.createElement('span');
+      relleno.className = 'update-banner-fill';
+      pista.appendChild(relleno);
+      bar.appendChild(pista);
+    }
+    relleno.style.width = pct + '%';
+  }
+
   function showUpdateBanner() {
     if (updateBannerShown) return;
     updateBannerShown = true;
@@ -7435,13 +7484,13 @@
     // luego se cuenta qué hay de nuevo, no al revés.
     whatsNewPendiente = null;
 
-    var bar = document.createElement('div');
-    bar.className = 'update-banner';
-    bar.id = 'updateBanner';
+    var bar = getUpdateBar();
+    bar.className = 'update-banner';   // quita el estado de progreso
+    bar.innerHTML = '';
 
     var txt = document.createElement('span');
     txt.className = 'update-banner-text';
-    txt.textContent = '✨ Nueva versión disponible';
+    txt.textContent = '✨ Nueva versión lista';
     bar.appendChild(txt);
 
     var btn = document.createElement('button');
@@ -7450,6 +7499,9 @@
     btn.addEventListener('click', function () {
       btn.disabled = true;
       btn.textContent = 'Actualizando…';
+      // La marca sobrevive a la recarga y es lo que dispara la confirmación y
+      // las novedades al volver.
+      try { localStorage.setItem(UPDATE_FLAG, '1'); } catch (e) {}
       window.location.reload();
     });
     bar.appendChild(btn);
@@ -7458,10 +7510,38 @@
     close.className = 'update-banner-close';
     close.setAttribute('aria-label', 'Cerrar');
     close.textContent = '✕';
-    close.addEventListener('click', function () { bar.remove(); });
+    close.addEventListener('click', closeUpdateBar);
     bar.appendChild(close);
+  }
 
-    document.body.appendChild(bar);
+  // ¿Venimos de pulsar «Actualizar»? Lo consume init() al arrancar, y lo mira
+  // también setupWhatsNew() para saber si toca esperar o no.
+  var acabamosDeActualizar = false;
+
+  function consumirMarcaActualizacion() {
+    var marca;
+    try { marca = localStorage.getItem(UPDATE_FLAG); } catch (e) { return false; }
+    if (!marca) return false;
+    try { localStorage.removeItem(UPDATE_FLAG); } catch (e) {}
+    updateBannerShown = true;   // no queremos que reaparezca el aviso de versión
+    return true;
+  }
+
+  // Confirmación de que ya está actualizada, en barra.
+  //
+  // Sólo se usa cuando NO va a salir el modal de novedades. Si sale, la
+  // confirmación va dentro del propio modal: el modal ocupa toda la pantalla
+  // con z-index 1150 y el banner está en 1100, así que lo tapaba al segundo de
+  // aparecer y la confirmación no se llegaba a leer.
+  function mostrarBannerActualizada() {
+    var bar = getUpdateBar();
+    bar.className = 'update-banner update-banner-ok';
+    bar.innerHTML = '';
+    var txt = document.createElement('span');
+    txt.className = 'update-banner-text';
+    txt.textContent = '✅ Ya estás en la v' + APP_VERSION;
+    bar.appendChild(txt);
+    setTimeout(closeUpdateBar, 4000);
   }
 
   function setupServiceWorker() {
@@ -7474,6 +7554,16 @@
 
     navigator.serviceWorker.addEventListener('controllerchange', function () {
       if (hadController) showUpdateBanner();
+    });
+
+    // Progreso de la instalación, que manda el propio service worker. En el
+    // primer estreno no se enseña: no hay nada que «actualizar», y una barra
+    // de progreso encima del onboarding sólo confunde.
+    navigator.serviceWorker.addEventListener('message', function (e) {
+      var d = e.data;
+      if (!d || d.tipo !== 'instalando' || !hadController) return;
+      whatsNewPendiente = null;
+      showUpdateProgress(d.hechos, d.total);
     });
 
     function register() {
@@ -7570,10 +7660,16 @@
     if (wizardClose) wizardClose.addEventListener('click', closeRoutineWizard);
 
     setupServiceWorker();
+    // Antes que setupWhatsNew(): decide si toca confirmar la actualización o
+    // esperar por si hay una en camino.
+    acabamosDeActualizar = consumirMarcaActualizacion();
     setupFeedback();
     setupAiCoach();
     setupWhyModal();
-    setupWhatsNew();
+    var habraNovedades = setupWhatsNew();
+    // La confirmación va dentro del modal cuando hay novedades que contar; si
+    // no las hay, se saca en barra para no dejar la actualización sin cerrar.
+    if (acabamosDeActualizar && !habraNovedades) mostrarBannerActualizada();
     flushFeedbackQueue();
 
     var pendingOnboarding = needsOnboarding();
@@ -7662,11 +7758,21 @@
   // modal se disparaba al instante, mientras el service worker seguía
   // instalándose y acababa sacando «Nueva versión disponible». Se leían las
   // novedades de una versión que, según el aviso de al lado, aún no tenías.
+  // Devuelve true si va a enseñar el modal (ya o dentro de un rato). init() lo
+  // necesita para decidir si la confirmación de actualización va dentro del
+  // modal o hace falta sacarla en una barra aparte.
   function setupWhatsNew() {
-    if (!WHATS_NEW.items.length) return;
-    if (needsOnboarding()) return;
+    if (!WHATS_NEW.items.length) return false;
+    if (needsOnboarding()) return false;
     var seen = localStorage.getItem('gym_whatsnew_seen');
-    if (seen === WHATS_NEW.version) return;
+    if (seen === WHATS_NEW.version) return false;
+
+    // Si venimos de pulsar «Actualizar» no hay nada que esperar: la
+    // actualización ya ha terminado y el propio modal da la confirmación.
+    if (acabamosDeActualizar) {
+      setTimeout(mostrarWhatsNew, 500);
+      return true;
+    }
 
     whatsNewPendiente = mostrarWhatsNew;
     setTimeout(function () {
@@ -7675,6 +7781,7 @@
       whatsNewPendiente = null;
       fn();
     }, WHATSNEW_ESPERA);
+    return true;
   }
 
   function mostrarWhatsNew() {
@@ -7686,7 +7793,11 @@
     var list = document.getElementById('whatsNewList');
     if (!modal || !list) return;
 
-    sub.textContent = 'Esto es lo que ha cambiado en la v' + WHATS_NEW.version + ':';
+    // Al venir de actualizar, el propio modal confirma que ya ha terminado.
+    // Es el único sitio donde se lee seguro: cualquier barra queda detrás.
+    sub.textContent = acabamosDeActualizar
+      ? '✅ Ya estás en la v' + WHATS_NEW.version + '. Esto es lo que ha cambiado:'
+      : 'Esto es lo que ha cambiado en la v' + WHATS_NEW.version + ':';
     list.innerHTML = WHATS_NEW.items.map(function (it) {
       return '<li><span class="whatsnew-item-icon">' + it.icon + '</span><span>' + escapeHtml(it.text) + '</span></li>';
     }).join('');
@@ -8158,7 +8269,6 @@
     var log = document.getElementById('coachLog');
     var input = document.getElementById('coachInput');
     var sendBtn = document.getElementById('coachSend');
-    var adjustBtn = document.getElementById('coachAdjust');
     if (!fab || !modal || !log || !input || !sendBtn) return;
 
     // Sin endpoint configurado el coach no existe: mejor eso que un botón que
@@ -8167,7 +8277,6 @@
 
     var messages = [];
     var busy = false;
-    var modo = 'chat';   // 'chat' | 'adjust'
 
     function bubble(role, text) {
       var el = document.createElement('div');
@@ -8184,12 +8293,39 @@
       input.disabled = v;
     }
 
-    function setModo(v) {
-      modo = v;
-      adjustBtn.classList.toggle('active', v === 'adjust');
-      input.placeholder = v === 'adjust'
-        ? 'Cuéntame qué cambiar: «me molesta el hombro», «solo tengo 30 minutos»…'
-        : 'Pregúntame sobre tu rutina…';
+    // ¿Suena a que quiere cambiar el plan, y no a una pregunta? No hace falta
+    // acertar siempre: si no salta, el usuario sigue pudiendo pedirlo con otras
+    // palabras, y el coach mismo se ofrece a aplicarlo en su respuesta.
+    function pareceCambio(texto) {
+      var s = texto.toLowerCase();
+      // Una molestia es motivo de cambio por sí sola, sin más contexto.
+      if (/(molest|duele|dolor|lesi[oó]n|me he hecho)/.test(s)) return true;
+      var tema = /(d[ií]as?|minutos?|tiempo|objetivo|nivel|material|gimnasio|en casa|sin material|correr|mancuern|barra)/.test(s);
+      var cambio = /(cambi|ajust|ahora|ya no|quiero|prefier|me gustar[ií]a|s[oó]lo tengo|solo tengo|pasar a|subir|bajar|quitar|a[ñn]adir)/.test(s);
+      return tema && cambio;
+    }
+
+    // El coach propone aplicar el cambio en vez de esconderlo tras un botón de
+    // modo: aquel cambiaba sólo el placeholder del campo y no había forma de
+    // saber en qué modo estabas.
+    function ofrecerAjuste(texto) {
+      if (!loadCustomPlan()) return;   // las plantillas fijas no se ajustan así
+
+      var wrap = document.createElement('div');
+      wrap.className = 'coach-oferta';
+
+      var btn = document.createElement('button');
+      btn.className = 'coach-oferta-btn';
+      btn.textContent = '🎯 Aplicar a mi rutina';
+      btn.addEventListener('click', function () {
+        if (busy) return;
+        wrap.remove();
+        enviarAjuste(texto);
+      });
+
+      wrap.appendChild(btn);
+      log.appendChild(wrap);
+      log.scrollTop = log.scrollHeight;
     }
 
     function open() {
@@ -8199,7 +8335,8 @@
       if (!messages.length) {
         bubble('assistant', '¡Hola! Soy tu entrenador. Puedo explicarte por qué tu plan es como es, '
           + 'cómo vas de volumen esta semana o qué hacer con un ejercicio que se te atraganta.\n\n'
-          + 'Si lo que quieres es cambiar la rutina, dale a «Ajustar mi rutina».');
+          + 'Y si algo ha cambiado —te molesta un hombro, tienes menos tiempo, ahora entrenas más '
+          + 'días— dímelo y te ofrezco aplicarlo a la rutina.');
       }
       setTimeout(function () { input.focus(); }, 120);
     }
@@ -8222,26 +8359,35 @@
     function enviarChat(texto) {
       messages.push({ role: 'user', content: texto });
       bubble('user', texto);
-      var out = bubble('assistant', '…');
+
+      // Puntos animados, no un «…» quieto: la primera respuesta tarda varios
+      // segundos entre la verificación y el modelo, y un carácter inmóvil se
+      // lee como que la app se ha colgado.
+      var out = bubble('assistant', '');
+      out.classList.add('coach-typing');
+      out.innerHTML = '<span></span><span></span><span></span>';
       var primero = true;
 
       setBusy(true);
       aiChat(messages, function (chunk) {
-        if (primero) { out.textContent = ''; primero = false; }
+        if (primero) { out.classList.remove('coach-typing'); out.textContent = ''; primero = false; }
         out.textContent += chunk;
         log.scrollTop = log.scrollHeight;
       }).then(function (full) {
         if (!full) { out.remove(); throw aiError('No he sabido qué responder.'); }
         messages.push({ role: 'assistant', content: full });
+        if (pareceCambio(texto)) ofrecerAjuste(texto);
       }).catch(function (err) {
         if (primero) out.remove();
         fail(err);
       }).then(function () { setBusy(false); });
     }
 
+    // No repite el mensaje del usuario: ya está más arriba en la conversación,
+    // porque el ajuste se ofrece después de que el coach le haya respondido.
     function enviarAjuste(texto) {
-      bubble('user', texto);
-      var out = bubble('assistant', 'Recalculando tu rutina…');
+      var out = bubble('assistant', 'Recalculando tu rutina');
+      out.classList.add('coach-pensando');
 
       setBusy(true);
       aiAdjustPlan(texto).then(function (r) {
@@ -8315,8 +8461,6 @@
       if (e.key === 'Escape' && !modal.classList.contains('hidden')) close();
     });
 
-    adjustBtn.addEventListener('click', function () { setModo(modo === 'adjust' ? 'chat' : 'adjust'); });
-
     input.addEventListener('input', function () {
       sendBtn.disabled = busy || input.value.trim().length < 2;
     });
@@ -8329,11 +8473,8 @@
       if (texto.length < 2 || busy) return;
       input.value = '';
       sendBtn.disabled = true;
-      if (modo === 'adjust') { enviarAjuste(texto); setModo('chat'); }
-      else enviarChat(texto);
+      enviarChat(texto);
     });
-
-    setModo('chat');
 
     // Sin red el coach no puede hacer nada. Se dice antes de pulsar, no después.
     function refreshOnline() {

@@ -4232,22 +4232,29 @@ body.onboarding-lock .coach-fab { display: none; }
   gap: 10px;
 }
 
-.coach-adjust {
+/* Oferta de aplicar el cambio, dentro de la conversación. Sustituye al antiguo
+   botón de modo «Ajustar mi rutina», que sólo cambiaba el placeholder del
+   campo: no había forma de ver en qué modo estabas. */
+.coach-oferta {
   align-self: flex-start;
-  padding: 7px 12px;
+  max-width: 88%;
+}
+
+.coach-oferta-btn {
+  padding: 10px 16px;
   border-radius: 999px;
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--accent-primary);
   background: transparent;
-  color: var(--text-secondary);
+  color: var(--accent-primary);
   font-family: var(--font);
-  font-size: 0.78rem;
+  font-size: 0.85rem;
+  font-weight: 600;
   cursor: pointer;
   transition: background var(--transition), color var(--transition);
 }
 
-.coach-adjust.active {
+.coach-oferta-btn:active {
   background: var(--accent-primary);
-  border-color: var(--accent-primary);
   color: #fff;
 }
 
@@ -4313,4 +4320,85 @@ body.onboarding-lock .coach-fab { display: none; }
   color: var(--accent-yellow);
   font-size: 0.8rem;
   text-align: center;
+}
+
+/* Progreso de la descarga de la actualización. La barra va a lo ancho, debajo
+   del texto, así que el aviso pasa a columna mientras dura. */
+.update-banner-progress {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  padding: 12px 16px;
+}
+
+.update-banner-track {
+  display: block;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--accent-secondary);
+  overflow: hidden;
+}
+
+.update-banner-fill {
+  display: block;
+  height: 100%;
+  width: 0;
+  border-radius: 999px;
+  background: var(--accent-primary);
+  transition: width 0.3s ease-out;
+}
+
+/* Confirmación de que ya se ha actualizado: en verde, porque no pide nada al
+   usuario, sólo cierra el ciclo antes de enseñar las novedades. */
+.update-banner-ok {
+  border-color: var(--accent-green);
+}
+
+.update-banner-ok .update-banner-text {
+  color: var(--accent-green);
+}
+
+/* «El coach está escribiendo»: tres puntos que rebotan. Sustituye al «…»
+   quieto, que con esperas de varios segundos se leía como app colgada. */
+.coach-typing {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  min-height: 20px;
+}
+
+.coach-typing span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  animation: coach-typing-bounce 1.2s infinite ease-in-out;
+}
+
+.coach-typing span:nth-child(2) { animation-delay: 0.15s; }
+.coach-typing span:nth-child(3) { animation-delay: 0.3s; }
+
+@keyframes coach-typing-bounce {
+  0%, 60%, 100% { opacity: 0.3; transform: translateY(0); }
+  30%           { opacity: 1;   transform: translateY(-4px); }
+}
+
+/* Mientras recalcula la rutina: mismo propósito, pero el texto sí aporta
+   (dice qué está haciendo), así que sólo se le añaden los puntos. */
+.coach-pensando::after {
+  content: '…';
+  animation: coach-pensando-puntos 1.2s infinite steps(4);
+}
+
+@keyframes coach-pensando-puntos {
+  0%   { content: '.'; }
+  33%  { content: '..'; }
+  66%  { content: '…'; }
+}
+
+/* Quien prefiera menos movimiento no debería ver nada rebotando. */
+@media (prefers-reduced-motion: reduce) {
+  .coach-typing span,
+  .coach-pensando::after { animation: none; }
+  .coach-typing span { opacity: 0.6; }
 }

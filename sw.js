@@ -1,4 +1,4 @@
-const CACHE_NAME = 'gym-calendar-v4.24.1';
+const CACHE_NAME = 'gym-calendar-v4.25.0';
 // Media del dataset (jsDelivr). Cache aparte: sobrevive a los deploys de la app.
 const MEDIA_CACHE = 'gym-calendar-exercise-media-v1';
 const MEDIA_ORIGIN = 'https://cdn.jsdelivr.net';
@@ -31,15 +31,45 @@ function isShell(url) {
   return SHELL.indexOf(url.pathname) !== -1;
 }
 
+// Avisa a las pestañas abiertas de por dónde va la instalación. Se usa
+// `includeUncontrolled` porque el worker que instala todavía no controla nada.
+function avisarClientes(msg) {
+  return self.clients.matchAll({ includeUncontrolled: true, type: 'window' })
+    .then(cs => cs.forEach(c => c.postMessage(msg)))
+    .catch(() => {});
+}
+
+// Se descarga fichero a fichero en vez de con `cache.addAll` para poder contar
+// el progreso: el catálogo son ~900 KB y con datos móviles la espera se nota.
+// Sigue siendo en paralelo, y si algo falla se lanza, así que la instalación
+// falla entera igual que antes: una caché a medias es peor que ninguna.
+//
+// `cache: 'reload'` es imprescindible: sin él la descarga pasa por la caché
+// HTTP del navegador y la caché nueva se rellena con los ficheros VIEJOS. Eso
+// dejó la v4.13.1 sirviendo el app.js de la 4.13.0.
+function instalar() {
+  const urls = SHELL.concat(STATIC);
+  const total = urls.length;
+  let hechos = 0;
+
+  return caches.open(CACHE_NAME).then(cache => {
+    avisarClientes({ tipo: 'instalando', hechos: 0, total: total });
+
+    return Promise.all(urls.map(u => {
+      const req = new Request(u, { cache: 'reload' });
+      return fetch(req).then(res => {
+        if (!res || !res.ok) throw new Error('no se pudo descargar ' + u);
+        return cache.put(req, res);
+      }).then(() => {
+        hechos++;
+        avisarClientes({ tipo: 'instalando', hechos: hechos, total: total });
+      });
+    }));
+  });
+}
+
 self.addEventListener('install', (e) => {
-  e.waitUntil(
-    caches.open(CACHE_NAME).then(cache =>
-      // `cache: 'reload'` es imprescindible: sin él addAll descarga a través de
-      // la caché HTTP del navegador y la caché nueva se rellena con los
-      // ficheros VIEJOS. Eso dejó la v4.13.1 sirviendo el app.js de la 4.13.0.
-      cache.addAll(SHELL.concat(STATIC).map(u => new Request(u, { cache: 'reload' })))
-    ).then(() => self.skipWaiting())
-  );
+  e.waitUntil(instalar().then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', (e) => {
