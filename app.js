@@ -1,21 +1,20 @@
 /* =============================================
    Gym Calendar - App de Rutina de Ejercicios
-   Versión: 4.22.0 — Rutinas por volumen semanal, programas con nombre
+   Versión: 4.23.0 — El plan de carrera cabe con cualquier número de días
    ============================================= */
 
 (function () {
   'use strict';
 
-  var APP_VERSION = '4.22.0';
+  var APP_VERSION = '4.23.0';
 
   // Resumen corto de la versión actual para el modal de novedades. Sólo se
   // enseña una vez por versión (localStorage) y nunca durante el onboarding.
   var WHATS_NEW = {
-    version: '4.22.0',
+    version: '4.23.0',
     items: [
-      { icon: '💪', text: 'Las rutinas nuevas se construyen por series semanales de cada músculo, no rellenando huecos: hay bastante más volumen, el día de pierna siempre lleva cuádriceps y el tiempo que declaras cambia de verdad la sesión.' },
-      { icon: '🧠', text: 'Nuevo botón "¿Por qué este entrenamiento?" en Rutina: te explica qué programa sigues, cuántas series necesita cada músculo y cuántas llevas esta semana.' },
-      { icon: '📋', text: 'Puedes elegir tipo de entrenamiento (Push · Pull · Legs, Torso · Pierna, Cuerpo completo…), ya hay opción de 6 días y las semanas 4, 8 y 12 son de descarga.' }
+      { icon: '🏃', text: 'Si dices que corres, ya se te ofrece el plan de vuelta a correr elijas los días que elijas. Antes, con 4 o más días de entrenamiento, ni se te preguntaba ni se te explicaba por qué.' },
+      { icon: '📅', text: 'Cuando el plan de carrera no cabe, tu fuerza se reagrupa en menos sesiones y más largas para dejarle sitio, manteniendo el total de series de la semana. Se te avisa antes de generar la rutina.' }
     ]
   };
 
@@ -5610,13 +5609,26 @@
     {
       // Sólo con 2 o 3 días de fuerza cabe la semana: con 4 o 5 no queda
       // hueco para las 3 sesiones de carrera sin sacrificar el descanso.
+      // Antes sólo se preguntaba con 2 o 3 días: con más no cabían las 3
+      // sesiones de carrera sin dejar la semana sin descanso, así que quien
+      // pedía 4 días y decía que corría no recibía plan de carrera NI aviso
+      // de por qué. Ahora se ofrece siempre, compactando la fuerza.
       key: 'runningPlan', title: '¿Quieres el plan de vuelta a correr?',
       hint: '12 semanas progresivas de carrera (readaptación, base y camino a los 10 km), en días distintos a los de fuerza.',
-      when: function (a) { return a.running === 'si' && (a.days === '2' || a.days === '3'); },
-      options: [
-        { value: '', label: '🚫 No, gracias', desc: 'Sólo el bloque preventivo en pierna' },
-        { value: 'si', label: '🏃 Sí, incluir el plan de carrera', desc: '3 sesiones de carrera a la semana además de tus días de fuerza' }
-      ]
+      when: function (a) { return a.running === 'si'; },
+      dynamicOptions: function (a) {
+        var compacta = compactionFor(a);
+        return [
+          { value: '', label: '🚫 No, gracias', desc: 'Sólo el bloque preventivo en las sesiones de pierna' },
+          { value: 'si', label: '🏃 Sí, incluir el plan de carrera',
+            desc: compacta
+              ? '3 sesiones de carrera a la semana. Tu fuerza se reagrupa en '
+                + compacta.diasFuerza + ' días con sesiones más largas (unos '
+                + compacta.minutosEstimados + ' min) para que quepa todo y te quede un día de descanso.'
+              : '3 sesiones de carrera a la semana, además de tus días de fuerza.' }
+        ];
+      },
+      options: []
     },
 
     {
@@ -5764,6 +5776,47 @@
     return getSplitById(answers.split) || recommendedSplit(answers) || splitsForDays('3')[0];
   }
 
+  // =============================================
+  // COMPACTAR LA FUERZA PARA DEJAR SITIO A LA CARRERA
+  // =============================================
+  // El plan de vuelta a correr son 3 sesiones semanales en días propios. Con 3
+  // días de fuerza sale justo (6 días + 1 de descanso); con 4 o más serían 7 y
+  // te quedarías sin descanso, que es justo lo peor cuando vuelves de una
+  // lesión.
+  //
+  // En vez de negar el plan de carrera, se REAGRUPA la fuerza en 3 días con
+  // sesiones más largas. Como el eje del generador es el volumen SEMANAL, el
+  // total de series se mantiene: sólo cambia el reparto. Lo que sí cambia es
+  // la duración de cada sesión, y por eso se avisa antes de generar nada.
+  var COMPACT_STRENGTH_DAYS = 3;
+
+  function compactionFor(answers) {
+    if (answers.running !== 'si') return null;
+    var pedidos = parseInt(answers.days, 10) || 3;
+    if (pedidos <= COMPACT_STRENGTH_DAYS) return null;
+
+    var factor = pedidos / COMPACT_STRENGTH_DAYS;
+    var goals = answerList(answers, 'goal');
+    var scheme = GOAL_SCHEME[goals[0]] || GOAL_SCHEME.hipertrofia;
+    var restSec = parseRestSeconds(scheme[0].rest) || 60;
+    var perExercise = exerciseMinutes(scheme[0].series, restSec);
+    var minutos = parseInt(answers.minutes, 10) || 45;
+    var base = Math.max(3, Math.min(9, Math.floor(Math.max(minutos - 6, 10) / perExercise)));
+    var ampliado = Math.max(3, Math.min(9, Math.round(base * factor)));
+
+    // El bloque preventivo para corredores suma 2 ejercicios cortos (2 series,
+    // 45 s de descanso) a las sesiones con trabajo de pierna. Si no se cuentan,
+    // la duración anunciada se queda unos 6 minutos corta.
+    var preventivos = 2 * exerciseMinutes(2, 45);
+
+    return {
+      diasPedidos: pedidos,
+      diasFuerza: COMPACT_STRENGTH_DAYS,
+      maxExercises: ampliado,
+      minutosEstimados: Math.round(ampliado * perExercise + preventivos + 6)
+    };
+  }
+
   // Días de la semana por defecto según cuántas sesiones tenga la rutina.
   var DEFAULT_DAYS_BY_COUNT = { 2: [1, 4], 3: [1, 3, 5], 4: [1, 2, 4, 5], 5: [1, 2, 3, 4, 5], 6: [1, 2, 3, 4, 5, 6] };
 
@@ -5890,7 +5943,20 @@
     var pool = coreAvailable(inventory, level, avoid);
     if (!pool.length) return null;
 
-    var splitDef = resolveSplit(answers);
+    // Con el plan de carrera y 4+ días pedidos, la fuerza se reagrupa en 3
+    // días para dejar sitio a las 3 sesiones de carrera (ver compactionFor).
+    var compacta = (answers.running === 'si' && answers.runningPlan === 'si')
+      ? compactionFor(answers) : null;
+
+    // Al compactar se usa Push · Pull · Legs y no el de más frecuencia. Con
+    // cuerpo completo habría pierna en las tres sesiones, y sumado a los tres
+    // días de carrera el tren inferior no descansaría nunca — justo lo que hay
+    // que evitar en una vuelta a correr. PPL concentra la pierna en un día.
+    var splitDef = compacta
+      ? (getSplitById(answers.split) && getSplitById(answers.split).days === COMPACT_STRENGTH_DAYS
+          ? getSplitById(answers.split)
+          : (getSplitById('ppl') || recommendedSplit({ days: String(COMPACT_STRENGTH_DAYS), goal: answers.goal })))
+      : resolveSplit(answers);
     var split = splitDef.sessions;
     var goals = answerList(answers, 'goal');
     if (!goals.length) goals = ['hipertrofia'];
@@ -5936,7 +6002,11 @@
     var usableMinutes = Math.max(minutes - 6, 10);
     // Tope de seguridad: sin él, 90 minutos podrían generar sesiones
     // interminables si el volumen objetivo no se alcanza nunca.
-    var maxExercises = Math.max(3, Math.min(9, Math.floor(usableMinutes / perExercise)));
+    // Al compactar se amplía a propósito por encima del tiempo declarado: son
+    // menos sesiones pero más largas, y se avisa antes de generar.
+    var maxExercises = compacta
+      ? compacta.maxExercises
+      : Math.max(3, Math.min(9, Math.floor(usableMinutes / perExercise)));
 
     // Series acumuladas por grupo en TODA la semana. Es la variable que
     // gobierna el relleno: se prioriza siempre el grupo más lejos de su meta.
@@ -6119,11 +6189,15 @@
     // Combinaciones de fuerza + carrera probadas (mismo patrón que el plan de
     // Sergio): sólo para 2 y 3 días de fuerza, porque con 4 o 5 no queda
     // hueco en la semana para las 3 sesiones de carrera sin quitar descanso.
+    // El reparto se decide por los días de fuerza REALES (ya compactados), no
+    // por los que se pidieron: con 4+ días la fuerza se reagrupa en 3, así que
+    // siempre acaba cayendo en uno de estos dos patrones y queda 1 día libre.
     var RUNNING_COMBOS = {
-      '2': { weekdays: [1, 2, 4, 5, 6], pattern: ['S', 'R', 'R', 'S', 'R'] },
-      '3': { weekdays: [1, 2, 3, 4, 5, 6], pattern: ['S', 'R', 'S', 'R', 'S', 'R'] }
+      2: { weekdays: [1, 2, 4, 5, 6], pattern: ['S', 'R', 'R', 'S', 'R'] },
+      3: { weekdays: [1, 2, 3, 4, 5, 6], pattern: ['S', 'R', 'S', 'R', 'S', 'R'] }
     };
-    var runningCombo = (answers.running === 'si' && answers.runningPlan === 'si') ? RUNNING_COMBOS[answers.days] : null;
+    var runningCombo = (answers.running === 'si' && answers.runningPlan === 'si')
+      ? RUNNING_COMBOS[split.length] : null;
 
     function combineWithRunning(strengthDays) {
       if (!runningCombo) return strengthDays;
@@ -6231,6 +6305,7 @@
       freqLabel: splitDef.freqLabel,
       volume: volumePlan,
       volumeWhy: GOAL_VOLUME_RATIONALE[goals[0]] || GOAL_VOLUME_RATIONALE.hipertrofia,
+      compacted: compacta || null,
       // Última semana de cada fase: se baja el volumen para recuperar. Doce
       // semanas de intensidad creciente sin descarga acaban en estancamiento.
       deloadWeeks: [4, 8, 12],
@@ -6315,8 +6390,12 @@
         mins += exerciseMinutes(ex.series || 3, parseRestSeconds(ex.rest) || 60);
       });
 
-      if (mins > minutes + 10) {
-        problems.push({ tipo: 'tiempo', msg: day.day + ' dura unos ' + Math.round(mins) + ' min y pediste ' + minutes });
+      // Al compactar la fuerza para meter la carrera, las sesiones son más
+      // largas A PROPÓSITO y se avisa antes de generar, así que el presupuesto
+      // pasa a ser el anunciado y no el que se pidió en el asistente.
+      var techoMin = (plan.compacted ? plan.compacted.minutosEstimados : minutes) + 10;
+      if (mins > techoMin) {
+        problems.push({ tipo: 'tiempo', msg: day.day + ' dura unos ' + Math.round(mins) + ' min y el tope era ' + techoMin });
       }
 
       if (sesion) {
@@ -6961,6 +7040,15 @@
       html += '<div class="why-block">';
       html += '  <div class="why-block-title">Por qué este reparto</div>';
       html += '  <p class="why-text">' + escapeHtml(plan.splitWhy) + '</p>';
+      // Si se reagrupó la fuerza para meter la carrera, hay que decirlo: el
+      // usuario pidió X días y recibe otra distribución.
+      if (plan.compacted) {
+        html += '  <p class="why-text why-text-small why-text-warn">Pediste '
+             + plan.compacted.diasPedidos + ' días, pero el plan de carrera necesita 3 días propios. '
+             + 'Tu fuerza se ha reagrupado en ' + plan.compacted.diasFuerza
+             + ' sesiones más largas (unos ' + plan.compacted.minutosEstimados + ' min) para que entre todo '
+             + 'y te quede un día de descanso. El total de series semanales se mantiene.</p>';
+      }
       html += '</div>';
     }
 
@@ -6975,7 +7063,10 @@
       } else {
         var grupos = [], mins = 0;
         day.exercises.forEach(function (ex) {
-          if (grupos.indexOf(ex.muscle) === -1) grupos.push(ex.muscle);
+          // Los preventivos de carrera traen su propia etiqueta de músculo
+          // («Glúteos» frente a «Glúteo»), así que se dejan fuera de la lista
+          // de grupos: son un bloque añadido, no lo que define la sesión.
+          if (!ex.preventive && grupos.indexOf(ex.muscle) === -1) grupos.push(ex.muscle);
           mins += exerciseMinutes(ex.series || 3, parseRestSeconds(ex.rest) || 60);
         });
         html += '  <span class="why-day-groups">' + escapeHtml(grupos.join(' · ')) + '</span>';

@@ -220,9 +220,30 @@ no sustituye. Se excluye lo que ya esté en la sesión comparando **por id del
 dataset**, no sólo por nombre: el núcleo y el bloque preventivo son catálogos
 distintos que a veces apuntan al mismo ejercicio.
 
-**Plan de carrera combinado** (`runningPlan: 'si'`) — sólo con 2 o 3 días de
-fuerza. Intercala 3 sesiones de carrera, que se resuelven en tiempo de
-ejecución contra `RUNNING_PLAN` por número de semana.
+**Plan de carrera combinado** (`runningPlan: 'si'`) — intercala 3 sesiones de
+carrera, que se resuelven en tiempo de ejecución contra `RUNNING_PLAN` por
+número de semana.
+
+Son 3 sesiones **en días propios**, así que con 3 días de fuerza sale justo
+(6 días + 1 de descanso). Con 4 o más serían 7 días sin descanso, que es lo
+peor justo cuando vuelves de una lesión.
+
+Antes eso se resolvía **no ofreciendo el plan** con 4+ días: quien pedía 4 días
+y decía que corría no recibía plan de carrera **ni explicación de por qué**.
+
+Ahora `compactionFor()` **reagrupa la fuerza en 3 días** con sesiones más
+largas. Como el eje del generador es el volumen semanal, el total de series se
+mantiene: sólo cambia el reparto. Lo que sí cambia es la duración de cada
+sesión, y por eso se anuncia **antes de generar** (en el propio paso del
+asistente) y se repite en el resumen.
+
+Dos detalles del diseño:
+
+- Al compactar se usa **Push · Pull · Legs**, no el programa de más frecuencia.
+  Con cuerpo completo habría pierna en las tres sesiones y, sumado a los tres
+  días de carrera, el tren inferior no descansaría nunca.
+- El validador toma como techo de tiempo **el anunciado tras compactar**, no
+  los minutos que se pidieron: alargar es intencionado y ya se avisó.
 
 ---
 
