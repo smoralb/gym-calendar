@@ -19,6 +19,8 @@ de 12 semanas, adaptados al material, los días y el objetivo de cada persona.
 - 🏃 Plan de vuelta a correr de 12 semanas, combinable con los días de fuerza
 - 🏃 Colección "Recuperación running": 29 ejercicios preventivos para corredores
 - 📱 PWA instalable en móvil (funciona offline)
+- 🧠 **Coach IA opcional** — chat que conoce tu plan y tus pesos, y ajuste de la
+  rutina en lenguaje natural (requiere desplegar el Worker, ver más abajo)
 - 🌙 Modo oscuro
 
 ### 🚀 Uso
@@ -153,5 +155,26 @@ Para regenerar el índice cuando el dataset se actualice:
 ```powershell
 powershell -ExecutionPolicy Bypass -File tools\build-exercise-index.ps1
 ```
+
+### 🧠 Coach IA (opcional)
+
+Un chat que conoce tu plan, tus series de la semana y tus últimos pesos, y un
+«Ajustar mi rutina» que traduce texto libre («me molesta el hombro», «esta
+semana sólo tengo 30 minutos») a cambios sobre el plan.
+
+**El modelo no genera rutinas.** Sólo devuelve unas pocas claves de
+configuración; el plan lo sigue construyendo `generateValidRoutine()` y lo sigue
+comprobando `validatePlan()`. Ningún cambio se guarda sin que veas antes el plan
+resultante y lo aceptes.
+
+El Worker ya está desplegado en `https://gym-calendar-ai.smoralber.workers.dev`
+y `AI_ENDPOINT` (en `app.js`) apunta ahí. Hace falta porque Workers AI se
+autentica con credenciales de cuenta y esto es un sitio estático: cualquier
+clave en `app.js` sería pública. Detalles, modelo y coste en
+[`worker/README.md`](worker/README.md).
+
+Con `AI_ENDPOINT` vacío el botón flotante 🧠 no aparece y la app es exactamente
+la de siempre. Lo mismo si el Worker no responde, no hay red o se agota la cuota
+diaria gratuita: el coach avisa y todo lo demás sigue funcionando offline.
 
 Media © [Gym visual](https://gymvisual.com/) — respeta sus términos de uso al redistribuirla.

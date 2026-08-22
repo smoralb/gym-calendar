@@ -1,0 +1,29 @@
+name = "gym-calendar-ai"
+main = "index.js"
+compatibility_date = "2025-01-01"
+
+# Workers AI. No lleva clave: el binding se autentica solo con la cuenta.
+[ai]
+binding = "AI"
+
+# Rate limiting nativo. El endpoint es público (lo llama la web desde el
+# navegador de cualquiera), así que sin esto una sola persona puede agotar la
+# cuota diaria gratuita de Workers AI en una tarde.
+#   limit  peticiones permitidas por IP dentro de `period`
+#   period sólo admite 10 o 60 segundos
+# Contador del gasto diario (ver PRESUPUESTO_GLOBAL en index.js). Es un Durable
+# Object y no KV ni D1 a propósito: necesitamos incrementos exactos, y el DO
+# viaja dentro del propio deploy sin tener que crear ningún recurso aparte.
+[[durable_objects.bindings]]
+name = "CONTADOR"
+class_name = "Contador"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Contador"]
+
+[[unsafe.bindings]]
+name = "RATE_LIMITER"
+type = "ratelimit"
+namespace_id = "1001"
+simple = { limit = 12, period = 60 }

@@ -141,6 +141,36 @@
     </div>
   </div>
 
+  <!-- BOTON FLOTANTE: COACH IA -->
+  <button id="coachFab" class="coach-fab" aria-label="Habla con tu entrenador">
+    <span class="coach-fab-icon">🧠</span>
+  </button>
+
+  <!-- MODAL: COACH IA -->
+  <div id="coachModal" class="coach-modal hidden">
+    <div class="coach-modal-overlay" id="coachModalOverlay"></div>
+    <div class="coach-modal-sheet">
+      <div class="coach-head">
+        <div>
+          <div class="coach-title">🧠 Tu entrenador</div>
+          <div class="coach-sub">Conoce tu plan, tus series y tus pesos</div>
+        </div>
+        <button class="coach-close" id="coachClose" aria-label="Cerrar">✕</button>
+      </div>
+      <div class="coach-log" id="coachLog"></div>
+      <!-- Turnstile en modo 'execute': normalmente invisible, sólo aparece si
+           el tráfico resulta sospechoso. -->
+      <div id="coachTurnstile" class="coach-turnstile"></div>
+      <div class="coach-compose">
+        <button id="coachAdjust" class="coach-adjust">🎯 Ajustar mi rutina</button>
+        <div class="coach-input-row">
+          <textarea id="coachInput" class="coach-input" rows="1" maxlength="2000" placeholder="Pregúntame sobre tu rutina…"></textarea>
+          <button id="coachSend" class="coach-send" disabled aria-label="Enviar">↑</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- BOTON FLOTANTE: REPORTAR IDEA O ERROR -->
   <button id="feedbackFab" class="feedback-fab" aria-label="Reportar una idea o un error">
     <span class="feedback-fab-icon">💬</span>

@@ -1,0 +1,3 @@
+# Caché local de wrangler: guarda el id de cuenta y datos de sesión.
+# Es de esta máquina, no del proyecto.
+.wrangler/

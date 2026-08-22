@@ -4027,3 +4027,279 @@ body.onboarding-lock .feedback-fab { display: none; }
   cursor: pointer;
   margin-top: 4px;
 }
+
+/* =============================================
+   COACH IA
+   ---------------------------------------------
+   Reutiliza el lenguaje de las hojas inferiores (feedback, novedades). El FAB
+   se apila encima del de feedback en vez de competir por la misma esquina.
+   ============================================= */
+.coach-fab {
+  position: fixed;
+  right: 18px;
+  bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  border: 1px solid var(--border-color);
+  background: var(--accent-secondary);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow);
+  cursor: pointer;
+  z-index: 400;
+  transition: transform var(--transition), opacity var(--transition);
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.coach-fab:active { transform: scale(0.92); }
+.coach-fab-icon { font-size: 1.3rem; line-height: 1; }
+
+/* Sin conexión el coach no puede responder: se marca antes de pulsarlo. */
+.coach-fab.offline { opacity: 0.4; }
+
+body.onboarding-lock .coach-fab { display: none; }
+
+.coach-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.coach-modal.hidden { display: none; }
+
+.coach-modal-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+}
+
+.coach-modal-sheet {
+  position: relative;
+  width: 100%;
+  max-width: 480px;
+  /* Alto fijo: el log scrollea por dentro y la caja de escribir no se mueve
+     mientras llega la respuesta en streaming. */
+  height: min(82vh, 720px);
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-bottom: none;
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  display: flex;
+  flex-direction: column;
+  animation: feedbackSlideUp 0.28s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.coach-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 20px 12px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.coach-title { font-size: 1.02rem; font-weight: 700; color: var(--text-primary); }
+.coach-sub { font-size: 0.76rem; color: var(--text-muted); margin-top: 2px; }
+
+.coach-close {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 1.1rem;
+  cursor: pointer;
+  padding: 2px 4px;
+  line-height: 1;
+}
+
+.coach-log {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.coach-msg {
+  max-width: 88%;
+  padding: 10px 13px;
+  border-radius: var(--radius-lg);
+  font-size: 0.88rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.coach-msg-user {
+  align-self: flex-end;
+  background: var(--accent-primary);
+  color: #fff;
+  border-bottom-right-radius: var(--radius-sm);
+}
+
+.coach-msg-assistant {
+  align-self: flex-start;
+  background: var(--bg-input);
+  color: var(--text-primary);
+  border-bottom-left-radius: var(--radius-sm);
+}
+
+/* El coach caído es un estado normal (sin red, cuota agotada), no un fallo de
+   la app: se dice en tono neutro, no en rojo de error. */
+.coach-msg-error {
+  align-self: flex-start;
+  background: transparent;
+  border: 1px dashed var(--border-color);
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+}
+
+/* ---- Propuesta de cambio de rutina ---- */
+.coach-proposal {
+  border: 1px solid var(--accent-secondary);
+  border-radius: var(--radius-lg);
+  padding: 14px;
+  background: var(--bg-secondary);
+}
+
+.coach-proposal-why {
+  font-size: 0.86rem;
+  color: var(--text-primary);
+  line-height: 1.5;
+  margin-bottom: 10px;
+}
+
+.coach-proposal-diff {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.coach-proposal-chip {
+  font-size: 0.74rem;
+  color: var(--text-secondary);
+  background: var(--bg-input);
+  border-radius: var(--radius-sm);
+  padding: 4px 8px;
+}
+
+.coach-proposal-chip strong { color: var(--accent-green); font-weight: 600; }
+
+.coach-proposal-nav {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.coach-proposal-cancel,
+.coach-proposal-ok {
+  flex: 1;
+  padding: 12px;
+  border-radius: var(--radius-md);
+  font-family: var(--font);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.coach-proposal-cancel {
+  border: 1px solid var(--border-color);
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+.coach-proposal-ok {
+  border: none;
+  background: var(--accent-primary);
+  color: #fff;
+}
+
+/* ---- Caja de escritura ---- */
+.coach-compose {
+  border-top: 1px solid var(--border-color);
+  padding: 12px 16px calc(14px + env(safe-area-inset-bottom, 0px));
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.coach-adjust {
+  align-self: flex-start;
+  padding: 7px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: var(--font);
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: background var(--transition), color var(--transition);
+}
+
+.coach-adjust.active {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+  color: #fff;
+}
+
+.coach-input-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.coach-input {
+  flex: 1;
+  resize: none;
+  max-height: 120px;
+  padding: 11px 14px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-color);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-family: var(--font);
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.coach-input:focus { outline: none; border-color: var(--accent-primary); }
+.coach-input::placeholder { color: var(--text-muted); }
+.coach-input:disabled { opacity: 0.5; }
+
+.coach-send {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: none;
+  background: var(--accent-primary);
+  color: #fff;
+  font-size: 1.05rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity var(--transition);
+}
+
+.coach-send:disabled { opacity: 0.35; cursor: default; }
+
+/* El diff del coach enseña antes → después: tachado el valor viejo, para que
+   un cambio que quita algo (una molestia que desaparece de la lista) no pase
+   desapercibido. */
+.coach-proposal-chip s { color: var(--text-muted); text-decoration-thickness: 1px; }
+
+/* Turnstile en modo 'interaction-only': el contenedor no ocupa nada mientras
+   no haya reto que enseñar, para que no abra un hueco en la hoja del coach. */
+.coach-turnstile:not(:empty) {
+  padding: 10px 16px 0;
+  display: flex;
+  justify-content: center;
+}

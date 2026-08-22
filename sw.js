@@ -1,7 +1,11 @@
-const CACHE_NAME = 'gym-calendar-v4.23.0';
+const CACHE_NAME = 'gym-calendar-v4.24.0';
 // Media del dataset (jsDelivr). Cache aparte: sobrevive a los deploys de la app.
 const MEDIA_CACHE = 'gym-calendar-exercise-media-v1';
 const MEDIA_ORIGIN = 'https://cdn.jsdelivr.net';
+// Turnstile (verificación del coach). Nunca pasa por caché: un script de retos
+// servido desde caché está roto por definición, y sus tokens son de un solo
+// uso. Sin esta excepción caería en la regla cache-first del final.
+const TURNSTILE_ORIGIN = 'https://challenges.cloudflare.com';
 
 const BASE = '/gym-calendar/';
 
@@ -54,6 +58,9 @@ self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return;
 
   const url = new URL(e.request.url);
+
+  // Turnstile: se deja pasar a la red sin tocarlo (ver TURNSTILE_ORIGIN).
+  if (url.origin === TURNSTILE_ORIGIN) return;
 
   // GIFs y miniaturas del dataset: cache-first y se guardan al vuelo,
   // así los ejercicios ya vistos siguen disponibles sin conexión.

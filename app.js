@@ -1,20 +1,20 @@
 /* =============================================
    Gym Calendar - App de Rutina de Ejercicios
-   Versión: 4.23.0 — El plan de carrera cabe con cualquier número de días
+   Versión: 4.24.0 — Coach IA: chat sobre tu plan y ajustes en lenguaje natural
    ============================================= */
 
 (function () {
   'use strict';
 
-  var APP_VERSION = '4.23.0';
+  var APP_VERSION = '4.24.0';
 
   // Resumen corto de la versión actual para el modal de novedades. Sólo se
   // enseña una vez por versión (localStorage) y nunca durante el onboarding.
   var WHATS_NEW = {
-    version: '4.23.0',
+    version: '4.24.0',
     items: [
-      { icon: '🏃', text: 'Si dices que corres, ya se te ofrece el plan de vuelta a correr elijas los días que elijas. Antes, con 4 o más días de entrenamiento, ni se te preguntaba ni se te explicaba por qué.' },
-      { icon: '📅', text: 'Cuando el plan de carrera no cabe, tu fuerza se reagrupa en menos sesiones y más largas para dejarle sitio, manteniendo el total de series de la semana. Se te avisa antes de generar la rutina.' }
+      { icon: '🧠', text: 'Nuevo botón de entrenador: pregúntale por qué tu plan es como es, cómo vas de series esta semana o qué hacer con un ejercicio que se te atraganta. Conoce tu plan y tus últimos pesos.' },
+      { icon: '🎯', text: 'Ajusta tu rutina hablando: «me molesta el hombro», «ahora solo tengo 30 minutos». Te enseña qué cambia antes de tocar nada, y sigue siendo el generador de siempre el que arma el plan.' }
     ]
   };
 
@@ -7545,6 +7545,7 @@
 
     setupServiceWorker();
     setupFeedback();
+    setupAiCoach();
     setupWhyModal();
     setupWhatsNew();
     flushFeedbackQueue();
@@ -7732,6 +7733,531 @@
       });
     });
   }
+
+  // =============================================
+  // COACH IA
+  // ---------------------------------------------
+  // Capa opcional sobre el motor determinista. Dos cosas y ninguna más:
+  //
+  //   1. Un chat que responde sobre TU plan. El contexto se cocina aquí
+  //      (buildAiContext) y viaja como texto plano; el modelo no ve
+  //      localStorage ni nada que no le pasemos.
+  //   2. «Ajustar mi rutina»: texto libre → cambios sobre las respuestas del
+  //      asistente. El modelo NO genera la rutina. Devuelve como mucho un
+  //      puñado de claves de configuración, y el plan lo sigue construyendo
+  //      generateValidRoutine() con su validatePlan(). Así el modelo no puede
+  //      recetar un ejercicio imposible para el material o las molestias
+  //      declaradas, que es exactamente el fallo que motivó CORE_EXERCISES.
+  //
+  // El endpoint es un Worker de Cloudflare (ver worker/README.md). Hace falta
+  // porque Workers AI se autentica con credenciales de cuenta y esto es un
+  // sitio estático: cualquier clave metida aquí sería pública.
+  //
+  // Si el Worker no responde —sin red, cuota diaria agotada, no desplegado— el
+  // coach se apaga y la app funciona exactamente igual que sin él. Por eso no
+  // hay cola de reintento como en el feedback: una respuesta que llega mañana
+  // no le sirve a nadie.
+  // =============================================
+  var AI_ENDPOINT = 'https://gym-calendar-ai.smoralber.workers.dev';
+  var AI_TIMEOUT = 30000;
+
+  // Clave PÚBLICA de Turnstile: está pensada para ir en el cliente, a
+  // diferencia del secreto, que vive sólo en el Worker. Demuestra que hay un
+  // navegador real detrás de cada petición.
+  var AI_SITEKEY = '0x4AAAAAAEYqlgJQcicfEhxk';
+  var TURNSTILE_TIMEOUT = 25000;
+
+  function aiEnabled() { return !!AI_ENDPOINT; }
+
+  // Error con mensaje pensado para el usuario. Todo lo demás que se escape
+  // («Failed to fetch», un TypeError del stream) se enseña como un genérico:
+  // el texto en inglés del navegador no le dice nada a nadie.
+  function aiError(msg) {
+    var e = new Error(msg);
+    e.friendly = true;
+    return e;
+  }
+
+  // Traduce una respuesta fallida del Worker a algo accionable. El Worker
+  // distingue entre «vas muy rápido», «has gastado tu parte de hoy» y «se ha
+  // agotado la cuota de todos», así que se prefiere su mensaje al genérico.
+  function aiHttpError(res) {
+    return res.json().catch(function () { return null; }).then(function (body) {
+      if (body && typeof body.error === 'string' && body.error) return aiError(body.error);
+      if (res.status === 429) return aiError('Vas muy rápido. Espera un minuto y sigue.');
+      return aiError('El coach no está disponible ahora mismo.');
+    });
+  }
+
+  // Resumen en texto plano de lo que el modelo necesita saber. Deliberadamente
+  // corto: cabe en el tope de 8 KB del Worker y evita que el modelo se pierda.
+  // No incluye nada identificativo — ni nombre de plan libre, ni user agent.
+  function buildAiContext() {
+    var lines = [];
+    var plan = loadCustomPlan();
+    var hoy = getTodayKey();
+
+    if (plan) {
+      lines.push('Programa: ' + (plan.splitName || 'rutina a medida'));
+      if (plan.daysLabel) lines.push('Frecuencia: ' + plan.daysLabel + (plan.freqLabel ? ' · ' + plan.freqLabel : ''));
+      var a = plan.answers || {};
+      lines.push('Objetivo: ' + (answerList(a, 'goal').join(', ') || 'sin especificar'));
+      lines.push('Nivel: ' + (a.level || 'sin especificar'));
+      lines.push('Material: ' + (answerList(a, 'gear').join(', ') || 'sólo peso corporal'));
+      lines.push('Minutos por sesión: ' + (a.minutes || '?'));
+      var avoid = answerList(a, 'avoid');
+      if (avoid.length) lines.push('Zonas que le molestan: ' + avoid.join(', '));
+      if (a.running === 'si') lines.push('Corre, con trabajo preventivo en las sesiones de pierna.');
+    } else {
+      lines.push('Programa: plantilla fija (no generada por el asistente).');
+    }
+
+    var semana = getWeekNumber(hoy);
+    var fase = getPhase(hoy);
+    lines.push('Semana ' + semana + ' de 12' + (fase ? ', fase «' + fase.name + '»' : ''));
+    if (plan && plan.deloadWeeks && plan.deloadWeeks.indexOf(semana) !== -1) {
+      lines.push('Esta semana es de descarga: se bajan series a propósito.');
+    }
+
+    // Volumen semanal: objetivo contra lo hecho. Es la unidad en la que razona
+    // el generador, así que es la que debe ver el modelo.
+    if (plan && plan.volume) {
+      var hecho = weeklyVolumeProgress();
+      var vol = Object.keys(plan.volume).map(function (g) {
+        return (GROUP_LABEL_G[g] || g) + ' ' + (hecho[g] || 0) + '/' + plan.volume[g].target;
+      });
+      if (vol.length) lines.push('Series esta semana (hechas/objetivo): ' + vol.join(', '));
+    }
+
+    // Últimos pesos, sólo de lo que tiene historial y ordenado por lo más
+    // reciente. Un tope de 15 para no inflar el contexto en planes largos.
+    var pesos = [];
+    Object.keys(state.progress || {}).forEach(function (id) {
+      var hist = state.progress[id];
+      if (!hist || !hist.length) return;
+      var ex = findExercise(id);
+      if (!ex) return;
+      var last = hist[hist.length - 1];
+      pesos.push({ date: last.date, txt: ex.name + ': ' + last.weight + ' kg (' + hist.length + ' registros)' });
+    });
+    if (pesos.length) {
+      pesos.sort(function (x, y) { return x.date < y.date ? 1 : -1; });
+      lines.push('Últimos pesos registrados:');
+      pesos.slice(0, 15).forEach(function (p) { lines.push('  - ' + p.txt); });
+    }
+
+    return lines.join('\n');
+  }
+
+  // ---- Turnstile ----
+  // El script se carga la primera vez que se usa el coach, no al arrancar la
+  // app: quien no lo abra nunca no paga la descarga, y offline no se intenta.
+  var turnstileCargando = null;
+  var turnstileWidget = null;
+  var turnstilePendiente = null;   // { resolve, reject } del token en curso
+
+  function cargarTurnstile() {
+    if (window.turnstile) return Promise.resolve();
+    if (turnstileCargando) return turnstileCargando;
+
+    turnstileCargando = new Promise(function (resolve, reject) {
+      var s = document.createElement('script');
+      s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+      s.async = true;
+      s.defer = true;
+      s.onload = function () { resolve(); };
+      s.onerror = function () {
+        // Se olvida el intento fallido para que un segundo intento pueda
+        // funcionar: si no, un corte de red deja el coach muerto para siempre.
+        turnstileCargando = null;
+        reject(aiError('No he podido cargar la verificación de seguridad. ¿Tienes algún bloqueador activo?'));
+      };
+      document.head.appendChild(s);
+    });
+    return turnstileCargando;
+  }
+
+  // Un token por petición: son de un solo uso.
+  function aiToken() {
+    if (!AI_SITEKEY) return Promise.resolve('');
+
+    return cargarTurnstile().then(function () {
+      return new Promise(function (resolve, reject) {
+        var cerrado = false;
+        function acabar(fn, arg) {
+          if (cerrado) return;
+          cerrado = true;
+          turnstilePendiente = null;
+          fn(arg);
+        }
+
+        // Un reto que se queda colgado no puede dejar el chat esperando: sin
+        // esto, el AbortController del fetch no llega a entrar en juego porque
+        // la petición ni siquiera ha salido.
+        var reloj = setTimeout(function () {
+          acabar(reject, aiError('La verificación de seguridad ha tardado demasiado. Inténtalo otra vez.'));
+        }, TURNSTILE_TIMEOUT);
+
+        turnstilePendiente = {
+          resolve: function (t) { clearTimeout(reloj); acabar(resolve, t); },
+          reject: function (e) { clearTimeout(reloj); acabar(reject, e); }
+        };
+
+        try {
+          if (turnstileWidget === null) {
+            // Los callbacks se fijan al renderizar y se reutilizan en cada
+            // reset, por eso delegan en `turnstilePendiente` en vez de cerrar
+            // sobre el resolve de esta llamada concreta.
+            turnstileWidget = window.turnstile.render('#coachTurnstile', {
+              sitekey: AI_SITEKEY,
+              execution: 'execute',
+              appearance: 'interaction-only',
+              callback: function (t) { if (turnstilePendiente) turnstilePendiente.resolve(t); },
+              'error-callback': function () {
+                if (turnstilePendiente) turnstilePendiente.reject(aiError('No he podido verificar el navegador. Inténtalo otra vez.'));
+              },
+              'expired-callback': function () {
+                if (turnstilePendiente) turnstilePendiente.reject(aiError('La verificación ha caducado. Inténtalo otra vez.'));
+              }
+            });
+          } else {
+            window.turnstile.reset(turnstileWidget);
+          }
+          window.turnstile.execute(turnstileWidget);
+        } catch (e) {
+          turnstilePendiente = null;
+          clearTimeout(reloj);
+          reject(aiError('No he podido verificar el navegador. Recarga la página e inténtalo otra vez.'));
+        }
+      });
+    });
+  }
+
+  function aiFetch(path, body) {
+    return aiToken().then(function (token) {
+      body.turnstile = token;
+      return aiFetchConToken(path, body);
+    });
+  }
+
+  function aiFetchConToken(path, body) {
+    var ctrl = new AbortController();
+    var timer = setTimeout(function () { ctrl.abort(); }, AI_TIMEOUT);
+    return fetch(AI_ENDPOINT + path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: ctrl.signal
+    }).then(function (res) {
+      clearTimeout(timer);
+      return res;
+    }, function (err) {
+      clearTimeout(timer);
+      throw err;
+    });
+  }
+
+  // Lee el stream SSE del Worker y va llamando a onChunk con cada trozo de
+  // texto. Se resuelve con la respuesta completa.
+  function aiChat(messages, onChunk) {
+    return aiFetch('/chat', { messages: messages, context: buildAiContext() }).then(function (res) {
+      if (!res.ok || !res.body) return aiHttpError(res).then(function (e) { throw e; });
+
+      var reader = res.body.getReader();
+      var decoder = new TextDecoder();
+      var buffer = '';
+      var full = '';
+
+      function pump() {
+        return reader.read().then(function (r) {
+          if (r.done) return full;
+          buffer += decoder.decode(r.value, { stream: true });
+
+          // Los eventos vienen separados por línea. El último trozo del buffer
+          // puede estar cortado a medias, así que se guarda para la vuelta
+          // siguiente en vez de intentar parsearlo.
+          var parts = buffer.split('\n');
+          buffer = parts.pop();
+
+          parts.forEach(function (line) {
+            if (line.indexOf('data:') !== 0) return;
+            var data = line.slice(5).trim();
+            if (!data || data === '[DONE]') return;
+            try {
+              var obj = JSON.parse(data);
+              // Workers AI emite chunks con forma OpenAI: el texto va en
+              // choices[0].delta.content. El campo `response` existe pero
+              // llega vacío, así que sólo sirve de reserva.
+              var trozo = '';
+              if (obj.choices && obj.choices[0] && obj.choices[0].delta
+                  && typeof obj.choices[0].delta.content === 'string') {
+                trozo = obj.choices[0].delta.content;
+              } else if (typeof obj.response === 'string') {
+                trozo = obj.response;
+              }
+              if (trozo) { full += trozo; onChunk(trozo); }
+            } catch (e) { /* evento parcial o de control: se ignora */ }
+          });
+
+          return pump();
+        });
+      }
+
+      return pump();
+    });
+  }
+
+  // Texto libre → respuestas del asistente → rutina validada. Devuelve
+  // { plan, answers, motivo } o lanza si no hay nada aplicable.
+  function aiAdjustPlan(texto) {
+    var plan = loadCustomPlan();
+    if (!plan || !plan.answers) {
+      return Promise.reject(aiError('Este plan no lo generó el asistente, así que no se puede ajustar así.'));
+    }
+
+    // Al ajustar se manda además la configuración exacta en JSON. El resumen en
+    // prosa no basta: el modelo tiene que ver las listas tal cual están para
+    // poder devolverlas completas en vez de pisarlas.
+    var contexto = buildAiContext()
+      + '\n\nConfiguración actual, en las mismas claves que debes devolver:\n'
+      + JSON.stringify(plan.answers);
+
+    return aiFetch('/adjust', {
+      messages: [{ role: 'user', content: texto }],
+      context: contexto
+    }).then(function (res) {
+      if (!res.ok) return aiHttpError(res).then(function (e) { throw e; });
+      return res.json();
+    }).then(function (data) {
+      var cambios = data && data.answers ? data.answers : {};
+      if (!Object.keys(cambios).length) {
+        // No se enseña el `motivo` aquí: cuando no hay cambios el modelo a
+        // veces afirma igualmente haberlos hecho, y ese texto como mensaje de
+        // error se contradice con que no haya pasado nada.
+        if (data && data.motivo) console.warn('Coach IA: ajuste vacío con motivo:', data.motivo);
+        throw aiError('No he sabido qué cambiar con eso. Dímelo de otra forma: «entreno 5 días», '
+          + '«me molesta el hombro», «solo tengo 30 minutos».');
+      }
+
+      // Mezcla sobre una copia: si el plan resultante no vale, el actual no se
+      // ha tocado.
+      var answers = normalizeAnswers(JSON.parse(JSON.stringify(plan.answers)));
+      Object.keys(cambios).forEach(function (k) { answers[k] = cambios[k]; });
+
+      var nuevo = generateValidRoutine(answers);
+      if (!nuevo) throw aiError('Con esos cambios no salen suficientes ejercicios. Prueba con algo menos restrictivo.');
+
+      var problems = validatePlan(nuevo, answers);
+      if (problems.length) throw aiError(problems[0].msg);
+
+      // Diff explícito antes/después. Sin él, que el modelo devuelva
+      // avoid:["hombro"] sobre un avoid:["rodilla"] borra la rodilla y el
+      // usuario no se entera: el chip enseñaría sólo el valor nuevo.
+      var diff = Object.keys(cambios).map(function (k) {
+        return { clave: k, antes: aiValorLegible(plan.answers[k]), despues: aiValorLegible(answers[k]) };
+      }).filter(function (d) { return d.antes !== d.despues; });
+
+      if (!diff.length) throw aiError('Eso ya es lo que tienes configurado.');
+
+      return { plan: nuevo, answers: answers, diff: diff, motivo: data.motivo || '' };
+    });
+  }
+
+  // ---- UI del coach ----
+
+  function setupAiCoach() {
+    var fab = document.getElementById('coachFab');
+    var modal = document.getElementById('coachModal');
+    var overlay = document.getElementById('coachModalOverlay');
+    var closeBtn = document.getElementById('coachClose');
+    var log = document.getElementById('coachLog');
+    var input = document.getElementById('coachInput');
+    var sendBtn = document.getElementById('coachSend');
+    var adjustBtn = document.getElementById('coachAdjust');
+    if (!fab || !modal || !log || !input || !sendBtn) return;
+
+    // Sin endpoint configurado el coach no existe: mejor eso que un botón que
+    // sólo sabe dar error.
+    if (!aiEnabled()) { fab.style.display = 'none'; return; }
+
+    var messages = [];
+    var busy = false;
+    var modo = 'chat';   // 'chat' | 'adjust'
+
+    function bubble(role, text) {
+      var el = document.createElement('div');
+      el.className = 'coach-msg coach-msg-' + role;
+      el.textContent = text;
+      log.appendChild(el);
+      log.scrollTop = log.scrollHeight;
+      return el;
+    }
+
+    function setBusy(v) {
+      busy = v;
+      sendBtn.disabled = v || input.value.trim().length < 2;
+      input.disabled = v;
+    }
+
+    function setModo(v) {
+      modo = v;
+      adjustBtn.classList.toggle('active', v === 'adjust');
+      input.placeholder = v === 'adjust'
+        ? 'Cuéntame qué cambiar: «me molesta el hombro», «solo tengo 30 minutos»…'
+        : 'Pregúntame sobre tu rutina…';
+    }
+
+    function open() {
+      if (!navigator.onLine) { showToast('El coach necesita conexión'); return; }
+      modal.classList.remove('hidden');
+      fab.style.display = 'none';
+      if (!messages.length) {
+        bubble('assistant', '¡Hola! Soy tu entrenador. Puedo explicarte por qué tu plan es como es, '
+          + 'cómo vas de volumen esta semana o qué hacer con un ejercicio que se te atraganta.\n\n'
+          + 'Si lo que quieres es cambiar la rutina, dale a «Ajustar mi rutina».');
+      }
+      setTimeout(function () { input.focus(); }, 120);
+    }
+
+    function close() {
+      modal.classList.add('hidden');
+      fab.style.display = '';
+    }
+
+    function fail(err) {
+      var msg;
+      if (err && err.name === 'AbortError') msg = 'He tardado demasiado. Inténtalo otra vez.';
+      else if (err && err.friendly) msg = err.message;
+      else if (!navigator.onLine) msg = 'Te has quedado sin conexión.';
+      else msg = 'El coach no está disponible ahora mismo.';
+      bubble('error', msg);
+      if (err && !err.friendly) console.warn('Coach IA:', err);
+    }
+
+    function enviarChat(texto) {
+      messages.push({ role: 'user', content: texto });
+      bubble('user', texto);
+      var out = bubble('assistant', '…');
+      var primero = true;
+
+      setBusy(true);
+      aiChat(messages, function (chunk) {
+        if (primero) { out.textContent = ''; primero = false; }
+        out.textContent += chunk;
+        log.scrollTop = log.scrollHeight;
+      }).then(function (full) {
+        if (!full) { out.remove(); throw aiError('No he sabido qué responder.'); }
+        messages.push({ role: 'assistant', content: full });
+      }).catch(function (err) {
+        if (primero) out.remove();
+        fail(err);
+      }).then(function () { setBusy(false); });
+    }
+
+    function enviarAjuste(texto) {
+      bubble('user', texto);
+      var out = bubble('assistant', 'Recalculando tu rutina…');
+
+      setBusy(true);
+      aiAdjustPlan(texto).then(function (r) {
+        out.remove();
+        proponerCambio(r);
+      }).catch(function (err) {
+        out.remove();
+        fail(err);
+      }).then(function () { setBusy(false); });
+    }
+
+    // El plan NO se guarda solo. Se enseña qué cambia y el usuario decide: un
+    // plan es tres meses de trabajo, no algo que se pise en silencio.
+    function proponerCambio(r) {
+      var wrap = document.createElement('div');
+      wrap.className = 'coach-proposal';
+
+      var html = '';
+      if (r.motivo) html += '<p class="coach-proposal-why">' + escapeHtml(r.motivo) + '</p>';
+      html += '<div class="coach-proposal-diff">' + r.diff.map(function (d) {
+        return '<span class="coach-proposal-chip">' + escapeHtml(AI_ANSWER_LABEL[d.clave] || d.clave) + ': '
+          + '<s>' + escapeHtml(d.antes) + '</s> → <strong>' + escapeHtml(d.despues) + '</strong></span>';
+      }).join('') + '</div>';
+      html += planExplainerHtml(r.plan, null);
+      html += '<div class="coach-proposal-nav">'
+        + '<button class="coach-proposal-cancel">Dejarlo como está</button>'
+        + '<button class="coach-proposal-ok">✅ Usar esta rutina</button>'
+        + '</div>';
+      wrap.innerHTML = html;
+      log.appendChild(wrap);
+      log.scrollTop = log.scrollHeight;
+
+      wrap.querySelector('.coach-proposal-cancel').addEventListener('click', function () {
+        wrap.remove();
+        bubble('assistant', 'Vale, no toco nada.');
+      });
+
+      wrap.querySelector('.coach-proposal-ok').addEventListener('click', function () {
+        // Conserva el id del plan activo, así el historial de pesos y el
+        // progreso siguen siendo suyos.
+        var planId = upsertGeneratedPlan(r.plan, { id: activeProfile });
+        if (!planId) { showToast('⚠ No se ha podido guardar el plan'); return; }
+        renderPlanOptions();
+        switchProfile(planId);
+        switchTab('rutina');
+        close();
+        showToast('Rutina actualizada 🎉');
+      });
+    }
+
+    fab.addEventListener('click', open);
+    closeBtn.addEventListener('click', close);
+    overlay.addEventListener('click', close);
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && !modal.classList.contains('hidden')) close();
+    });
+
+    adjustBtn.addEventListener('click', function () { setModo(modo === 'adjust' ? 'chat' : 'adjust'); });
+
+    input.addEventListener('input', function () {
+      sendBtn.disabled = busy || input.value.trim().length < 2;
+    });
+    input.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendBtn.click(); }
+    });
+
+    sendBtn.addEventListener('click', function () {
+      var texto = input.value.trim();
+      if (texto.length < 2 || busy) return;
+      input.value = '';
+      sendBtn.disabled = true;
+      if (modo === 'adjust') { enviarAjuste(texto); setModo('chat'); }
+      else enviarChat(texto);
+    });
+
+    setModo('chat');
+
+    // Sin red el coach no puede hacer nada. Se dice antes de pulsar, no después.
+    function refreshOnline() {
+      fab.classList.toggle('offline', !navigator.onLine);
+      fab.title = navigator.onLine ? 'Habla con tu entrenador' : 'El coach necesita conexión';
+    }
+    window.addEventListener('online', refreshOnline);
+    window.addEventListener('offline', refreshOnline);
+    refreshOnline();
+  }
+
+  // Un valor del asistente en texto, para el diff. Las listas vacías tienen que
+  // decir «ninguna» y no quedarse en blanco: un hueco no se lee como un cambio.
+  function aiValorLegible(v) {
+    if (Array.isArray(v)) return v.length ? v.join(', ') : 'ninguna';
+    if (v === '' || v === undefined || v === null) return 'no';
+    return String(v);
+  }
+
+  // Etiquetas legibles de las claves del asistente, para el resumen de cambios.
+  var AI_ANSWER_LABEL = {
+    goal: 'Objetivo', place: 'Dónde entrenas', days: 'Días por semana',
+    minutes: 'Minutos por sesión', level: 'Nivel', avoid: 'Zonas a evitar',
+    running: 'Corres'
+  };
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
   else init();
