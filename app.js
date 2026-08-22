@@ -1,17 +1,20 @@
 /* =============================================
    Gym Calendar - App de Rutina de Ejercicios
-   Versión: 4.24.0 — Coach IA: chat sobre tu plan y ajustes en lenguaje natural
+   Versión: 4.24.1 — Novedades tras actualizar, y aviso cuando el reto pide un clic
    ============================================= */
 
 (function () {
   'use strict';
 
-  var APP_VERSION = '4.24.0';
+  var APP_VERSION = '4.24.1';
 
   // Resumen corto de la versión actual para el modal de novedades. Sólo se
   // enseña una vez por versión (localStorage) y nunca durante el onboarding.
   var WHATS_NEW = {
-    version: '4.24.0',
+    // Se sube a 4.24.1 a propósito aunque las novedades sigan siendo las del
+    // coach: en la 4.24.0 el modal salía antes de actualizar, así que quien lo
+    // cerró quedó marcado como «visto» sin haber estrenado nada.
+    version: '4.24.1',
     items: [
       { icon: '🧠', text: 'Nuevo botón de entrenador: pregúntale por qué tu plan es como es, cómo vas de series esta semana o qué hacer con un ejercicio que se te atraganta. Conoce tu plan y tus últimos pesos.' },
       { icon: '🎯', text: 'Ajusta tu rutina hablando: «me molesta el hombro», «ahora solo tengo 30 minutos». Te enseña qué cambia antes de tocar nada, y sigue siendo el generador de siempre el que arma el plan.' }
@@ -7420,9 +7423,17 @@
   // cuando el service worker nuevo toma el control se ofrece recargar.
   var updateBannerShown = false;
 
+  // Si hay actualización pendiente, las novedades no se enseñan todavía: se
+  // leerán después de recargar. Ver setupWhatsNew().
+  var whatsNewPendiente = null;
+
   function showUpdateBanner() {
     if (updateBannerShown) return;
     updateBannerShown = true;
+
+    // Cancela las novedades que estuvieran esperando: primero se actualiza y
+    // luego se cuenta qué hay de nuevo, no al revés.
+    whatsNewPendiente = null;
 
     var bar = document.createElement('div');
     bar.className = 'update-banner';
@@ -7467,9 +7478,24 @@
 
     function register() {
       navigator.serviceWorker.register('sw.js').then(function (reg) {
+        // Si al registrar ya hay uno instalándose o esperando, la
+        // actualización está en marcha desde antes de este arranque.
+        // Ojo con `hadController`: en la PRIMERA instalación también hay un
+        // worker instalándose y no es ninguna actualización. Sin esa
+        // condición se cancelaban las novedades en cada estreno y el modal
+        // no salía nunca.
+        if (hadController && (reg.installing || reg.waiting)) whatsNewPendiente = null;
+
         reg.addEventListener('updatefound', function () {
           var nw = reg.installing;
           if (!nw) return;
+
+          // Las novedades se cancelan aquí y no al llegar a 'installed':
+          // instalar descarga el shell entero (el catálogo son ~900 KB), así
+          // que puede tardar bastante más que la espera de WHATSNEW_ESPERA y
+          // el modal ya habría salido.
+          if (hadController) whatsNewPendiente = null;
+
           nw.addEventListener('statechange', function () {
             if (nw.state === 'installed' && navigator.serviceWorker.controller) {
               showUpdateBanner();
@@ -7621,16 +7647,37 @@
     });
   }
 
+  // Cuánto se espera antes de enseñar las novedades, para dar tiempo a que el
+  // service worker diga si hay actualización pendiente. Si la hay,
+  // showUpdateBanner() cancela la espera y las novedades no llegan a salir.
+  var WHATSNEW_ESPERA = 2500;
+
   // Enseña el resumen de la versión actual una sola vez, comparando con la
   // última versión vista en localStorage. Nunca se enseña en onboarding (el
   // usuario nuevo no tiene nada previo con lo que comparar) ni si no hay
   // novedades que contar.
+  //
+  // Tampoco se enseña si hay una versión nueva esperando. El shell va a red
+  // primero, así que la pestaña ya está ejecutando el código nuevo y este
+  // modal se disparaba al instante, mientras el service worker seguía
+  // instalándose y acababa sacando «Nueva versión disponible». Se leían las
+  // novedades de una versión que, según el aviso de al lado, aún no tenías.
   function setupWhatsNew() {
     if (!WHATS_NEW.items.length) return;
     if (needsOnboarding()) return;
     var seen = localStorage.getItem('gym_whatsnew_seen');
     if (seen === WHATS_NEW.version) return;
 
+    whatsNewPendiente = mostrarWhatsNew;
+    setTimeout(function () {
+      if (!whatsNewPendiente) return;   // cancelado por showUpdateBanner()
+      var fn = whatsNewPendiente;
+      whatsNewPendiente = null;
+      fn();
+    }, WHATSNEW_ESPERA);
+  }
+
+  function mostrarWhatsNew() {
     var modal = document.getElementById('whatsNewModal');
     var overlay = document.getElementById('whatsNewModalOverlay');
     var closeBtn = document.getElementById('whatsNewClose');
@@ -7854,7 +7901,9 @@
   // app: quien no lo abra nunca no paga la descarga, y offline no se intenta.
   var turnstileCargando = null;
   var turnstileWidget = null;
-  var turnstilePendiente = null;   // { resolve, reject } del token en curso
+  var turnstilePendiente = null;   // control del token en curso
+  // Lo pone setupAiCoach(): avisa en el chat cuando el reto pide un clic.
+  var aiAvisoDesafio = null;
 
   function cargarTurnstile() {
     if (window.turnstile) return Promise.resolve();
@@ -7894,13 +7943,23 @@
         // Un reto que se queda colgado no puede dejar el chat esperando: sin
         // esto, el AbortController del fetch no llega a entrar en juego porque
         // la petición ni siquiera ha salido.
-        var reloj = setTimeout(function () {
-          acabar(reject, aiError('La verificación de seguridad ha tardado demasiado. Inténtalo otra vez.'));
-        }, TURNSTILE_TIMEOUT);
+        var reloj = null;
+        function pararReloj() { if (reloj) { clearTimeout(reloj); reloj = null; } }
+        function armarReloj() {
+          pararReloj();
+          reloj = setTimeout(function () {
+            acabar(reject, aiError('La verificación de seguridad ha tardado demasiado. Inténtalo otra vez.'));
+          }, TURNSTILE_TIMEOUT);
+        }
+        armarReloj();
 
         turnstilePendiente = {
-          resolve: function (t) { clearTimeout(reloj); acabar(resolve, t); },
-          reject: function (e) { clearTimeout(reloj); acabar(reject, e); }
+          resolve: function (t) { pararReloj(); acabar(resolve, t); },
+          reject: function (e) { pararReloj(); acabar(reject, e); },
+          // Mientras el reto exige un clic, el reloj no puede seguir corriendo:
+          // estaría midiendo a una persona, no a la red.
+          pausar: pararReloj,
+          reanudar: armarReloj
         };
 
         try {
@@ -7912,11 +7971,36 @@
               sitekey: AI_SITEKEY,
               execution: 'execute',
               appearance: 'interaction-only',
-              callback: function (t) { if (turnstilePendiente) turnstilePendiente.resolve(t); },
+              callback: function (t) {
+                if (aiAvisoDesafio) aiAvisoDesafio(false);
+                if (turnstilePendiente) turnstilePendiente.resolve(t);
+              },
+              // Cloudflare ha decidido pedir un clic. Sin avisar, el chat se
+              // queda callado y el widget sale en un sitio donde nadie está
+              // mirando: se agotaba el tiempo sin que el usuario supiera que
+              // le tocaba hacer algo.
+              'before-interactive-callback': function () {
+                if (turnstilePendiente) turnstilePendiente.pausar();
+                if (aiAvisoDesafio) aiAvisoDesafio(true);
+              },
+              'after-interactive-callback': function () {
+                if (aiAvisoDesafio) aiAvisoDesafio(false);
+                if (turnstilePendiente) turnstilePendiente.reanudar();
+              },
+              'timeout-callback': function () {
+                if (aiAvisoDesafio) aiAvisoDesafio(false);
+                if (turnstilePendiente) turnstilePendiente.reject(aiError('La verificación ha caducado sin completarse. Inténtalo otra vez.'));
+              },
+              'unsupported-callback': function () {
+                if (aiAvisoDesafio) aiAvisoDesafio(false);
+                if (turnstilePendiente) turnstilePendiente.reject(aiError('Tu navegador no admite la verificación de seguridad que necesita el coach.'));
+              },
               'error-callback': function () {
+                if (aiAvisoDesafio) aiAvisoDesafio(false);
                 if (turnstilePendiente) turnstilePendiente.reject(aiError('No he podido verificar el navegador. Inténtalo otra vez.'));
               },
               'expired-callback': function () {
+                if (aiAvisoDesafio) aiAvisoDesafio(false);
                 if (turnstilePendiente) turnstilePendiente.reject(aiError('La verificación ha caducado. Inténtalo otra vez.'));
               }
             });
@@ -7926,7 +8010,8 @@
           window.turnstile.execute(turnstileWidget);
         } catch (e) {
           turnstilePendiente = null;
-          clearTimeout(reloj);
+          pararReloj();
+          if (aiAvisoDesafio) aiAvisoDesafio(false);
           reject(aiError('No he podido verificar el navegador. Recarga la página e inténtalo otra vez.'));
         }
       });
@@ -8206,6 +8291,22 @@
         showToast('Rutina actualizada 🎉');
       });
     }
+
+    // Cuando Turnstile pide un clic hay que decirlo: el widget aparece abajo,
+    // pequeño y sin contexto, y la gente se queda mirando el chat en silencio
+    // hasta que se agota el tiempo.
+    var avisoEl = null;
+    aiAvisoDesafio = function (activo) {
+      if (activo) {
+        if (avisoEl) return;
+        avisoEl = bubble('aviso', '🛡️ Confirma ahí abajo que no eres un robot y sigo.');
+        var caja = document.getElementById('coachTurnstile');
+        if (caja && caja.scrollIntoView) caja.scrollIntoView({ block: 'nearest' });
+      } else if (avisoEl) {
+        avisoEl.remove();
+        avisoEl = null;
+      }
+    };
 
     fab.addEventListener('click', open);
     closeBtn.addEventListener('click', close);

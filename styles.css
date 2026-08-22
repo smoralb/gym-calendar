@@ -4303,3 +4303,14 @@ body.onboarding-lock .coach-fab { display: none; }
   display: flex;
   justify-content: center;
 }
+
+/* Aviso de reto de seguridad: no es un error ni una respuesta del coach, es
+   una instrucción de «te toca a ti». */
+.coach-msg-aviso {
+  align-self: center;
+  background: transparent;
+  border: 1px solid var(--accent-yellow);
+  color: var(--accent-yellow);
+  font-size: 0.8rem;
+  text-align: center;
+}

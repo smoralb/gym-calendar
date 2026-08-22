@@ -1,7 +1,7 @@
 {
   "name": "Gym Calendar - Rutina de Ejercicios",
   "short_name": "Gym Calendar",
-  "version": "4.24.0",
+  "version": "4.24.1",
   "description": "Genera y sigue tu programa de entrenamiento de 12 semanas, adaptado a tu material, tus días y tu objetivo",
   "start_url": "/gym-calendar/",
   "scope": "/gym-calendar/",
