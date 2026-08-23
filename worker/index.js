@@ -308,9 +308,15 @@ export class Suscripciones {
       ' offset INTEGER NOT NULL,' +   // getTimezoneOffset() del cliente
       ' hechoEl TEXT,' +              // día (local) en que reportó entreno
       ' avisadoEl TEXT,' +            // día (local) del último aviso
-      ' avisos INTEGER NOT NULL DEFAULT 0' +
+      ' avisos INTEGER NOT NULL DEFAULT 0,' +
+      ' racha INTEGER NOT NULL DEFAULT 0' +   // sesiones seguidas, para el texto
       ')'
     );
+    // La columna `racha` se añadió después: en bases ya creadas no existe y
+    // cualquier SELECT * la echaría en falta. Con IF NOT EXISTS en la tabla no
+    // basta, hay que añadirla aparte.
+    try { this.sql.exec('ALTER TABLE subs ADD COLUMN racha INTEGER NOT NULL DEFAULT 0'); }
+    catch (e) { /* ya existía */ }
   }
 
   async fetch(request) {
@@ -318,12 +324,12 @@ export class Suscripciones {
 
     if (accion === 'guardar') {
       this.sql.exec(
-        'INSERT INTO subs (endpoint, auth, p256dh, dias, nombres, hora, offset) ' +
-        'VALUES (?, ?, ?, ?, ?, ?, ?) ' +
+        'INSERT INTO subs (endpoint, auth, p256dh, dias, nombres, hora, offset, racha) ' +
+        'VALUES (?, ?, ?, ?, ?, ?, ?, ?) ' +
         'ON CONFLICT(endpoint) DO UPDATE SET auth = ?, p256dh = ?, dias = ?, ' +
-        'nombres = ?, hora = ?, offset = ?',
-        datos.endpoint, datos.auth, datos.p256dh, datos.dias, datos.nombres, datos.hora, datos.offset,
-        datos.auth, datos.p256dh, datos.dias, datos.nombres, datos.hora, datos.offset
+        'nombres = ?, hora = ?, offset = ?, racha = ?',
+        datos.endpoint, datos.auth, datos.p256dh, datos.dias, datos.nombres, datos.hora, datos.offset, datos.racha,
+        datos.auth, datos.p256dh, datos.dias, datos.nombres, datos.hora, datos.offset, datos.racha
       );
       return Response.json({ ok: true });
     }
@@ -334,7 +340,8 @@ export class Suscripciones {
     }
 
     if (accion === 'hecho') {
-      this.sql.exec('UPDATE subs SET hechoEl = ? WHERE endpoint = ?', datos.dia, datos.endpoint);
+      this.sql.exec('UPDATE subs SET hechoEl = ?, racha = ? WHERE endpoint = ?',
+        datos.dia, datos.racha, datos.endpoint);
       return Response.json({ ok: true });
     }
 
@@ -393,7 +400,8 @@ export class Suscripciones {
         p256dh: f.p256dh,
         dia: dia,
         avisos: avisosHoy + 1,
-        sesion: nombres[String(diaSemana)] || ''
+        sesion: nombres[String(diaSemana)] || '',
+        racha: f.racha || 0
       });
 
       if (salida.length >= MAX_ENVIOS_POR_TICK) break;
@@ -415,9 +423,22 @@ function llamarSubs(env, accion, datos) {
 
 // Envía un aviso. Devuelve 'ok', 'caducada' o 'error'.
 async function enviarAviso(env, sub) {
-  const cuerpo = sub.sesion
-    ? 'Hoy toca ' + sub.sesion + '. Vamos allá 💪'
-    : 'Hoy toca entrenar. Vamos allá 💪';
+  // La racha sólo se nombra a partir de 2: con 1 no hay «racha» que perder y
+  // decirlo suena a relleno. El dato puede venir algo desfasado (el cliente lo
+  // refresca al abrir la app y al terminar una sesión), así que se usa para
+  // motivar, nunca como cifra exacta.
+  const racha = sub.racha || 0;
+  const queToca = sub.sesion ? 'Hoy toca ' + sub.sesion : 'Hoy toca entrenar';
+
+  let cuerpo;
+  if (racha >= 2 && sub.avisos >= 2) {
+    // Segundo aviso del día: es el que de verdad se juega la racha.
+    cuerpo = 'Tu racha de ' + racha + ' sesiones se acaba hoy. Aún estás a tiempo 🔥';
+  } else if (racha >= 2) {
+    cuerpo = queToca + '. Llevas ' + racha + ' seguidas, no la rompas 🔥';
+  } else {
+    cuerpo = queToca + '. Vamos allá 💪';
+  }
 
   try {
     // Devuelve false cuando el servicio push dice que la suscripción ya no
@@ -468,6 +489,7 @@ function limpiarSuscripcion(p) {
 
   const hora = Number.isInteger(p.hora) && p.hora >= 0 && p.hora <= 23 ? p.hora : 18;
   const offset = Number.isInteger(p.offset) && Math.abs(p.offset) <= 900 ? p.offset : 0;
+  const racha = Number.isInteger(p.racha) && p.racha >= 0 && p.racha < 10000 ? p.racha : 0;
 
   // Sólo se guardan nombres de sesión de días válidos, y recortados.
   const nombres = {};
@@ -485,7 +507,8 @@ function limpiarSuscripcion(p) {
     dias: JSON.stringify(dias),
     nombres: JSON.stringify(nombres),
     hora: hora,
-    offset: offset
+    offset: offset,
+    racha: racha
   };
 }
 
@@ -700,7 +723,8 @@ export default {
         if (typeof ep !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(String(dia))) {
           return json({ error: 'datos no válidos' }, 400, origin);
         }
-        await llamarSubs(env, 'hecho', { endpoint: ep, dia: dia });
+        const r = Number.isInteger(payload.racha) && payload.racha >= 0 && payload.racha < 10000 ? payload.racha : 0;
+        await llamarSubs(env, 'hecho', { endpoint: ep, dia: dia, racha: r });
         return json({ ok: true }, 200, origin);
       }
 

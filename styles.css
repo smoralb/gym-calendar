@@ -4698,3 +4698,63 @@ body.onboarding-lock .coach-fab { display: none; }
   padding-top: 0;
   border-top: none;
 }
+
+/* =============================================
+   RACHA
+   ---------------------------------------------
+   Cuenta sesiones planificadas seguidas, no días naturales. La tarjeta cambia
+   de color cuando está en riesgo: es la única señal que de verdad mueve a
+   entrenar hoy, y en gris se perdería entre las demás.
+   ============================================= */
+.streak-card.viva .stat-number { color: var(--accent-primary); }
+
+.streak-card.en-riesgo {
+  border-color: var(--accent-yellow);
+  background: linear-gradient(135deg, rgba(224, 166, 60, 0.14), rgba(224, 166, 60, 0.04));
+}
+
+.streak-card.en-riesgo .stat-number,
+.streak-card.en-riesgo .stat-sub { color: var(--accent-yellow); }
+
+/* El icono late sólo cuando hay algo que perder. Sin esto la animación sería
+   permanente y dejaría de significar nada. */
+.streak-card.en-riesgo .stat-icon {
+  animation: racha-latido 1.6s ease-in-out infinite;
+}
+
+@keyframes racha-latido {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.14); }
+}
+
+/* Banda en la pestaña Rutina, justo bajo «hoy toca». */
+.racha-aviso {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0 0;
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.racha-aviso strong { color: var(--text-primary); }
+
+.racha-aviso.en-riesgo {
+  border-color: var(--accent-yellow);
+  background: linear-gradient(135deg, rgba(224, 166, 60, 0.12), rgba(224, 166, 60, 0.03));
+  color: var(--text-primary);
+}
+
+.racha-aviso.en-riesgo strong { color: var(--accent-yellow); }
+
+.racha-aviso-icon { font-size: 1.1rem; flex-shrink: 0; }
+.racha-aviso-text { min-width: 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  .streak-card.en-riesgo .stat-icon { animation: none; }
+}

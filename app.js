@@ -1,12 +1,12 @@
 /* =============================================
    Gym Calendar - App de Rutina de Ejercicios
-   Versión: 4.29.0 — «Stats» pasa a ser «Perfil» y recoge tus ajustes
+   Versión: 4.30.0 — Racha por sesiones seguidas, con aviso antes de perderla
    ============================================= */
 
 (function () {
   'use strict';
 
-  var APP_VERSION = '4.29.0';
+  var APP_VERSION = '4.30.0';
 
   // Histórico de novedades, de la más reciente a la más antigua.
   //
@@ -17,6 +17,12 @@
   //
   // Sólo entran cambios que el usuario nota. Los arreglos internos no van aquí.
   var CHANGELOG = [
+    {
+      version: '4.30.0',
+      items: [
+        { icon: '🔥', text: 'Nueva racha: cuenta las sesiones que llevas seguidas sin fallar ninguna de las que te tocaban. Los días de descanso no la rompen, que para eso están. Si hoy toca y aún no has entrenado, te avisa antes de que la pierdas.' }
+      ]
+    },
     {
       version: '4.29.0',
       items: [
@@ -3230,6 +3236,7 @@
         rHtml += '  <div class="routine-status-kcal">🔥 ~' + kcalRun + ' kcal estimadas</div>';
       }
       rHtml += '</div>';
+      rHtml += rachaAvisoHtml();
       container.innerHTML = rHtml;
       return;
     }
@@ -3299,6 +3306,12 @@
         html += '<div class="skipped-notice"><div class="skipped-notice-icon">📋</div><div class="skipped-notice-body"><div class="skipped-notice-title">El <strong>' + skipLabel + '</strong> (' + skipped.emoji + ' ' + skipped.routineName + ') te faltó:</div><div class="skipped-notice-list">' + skipped.missed.join(', ') + '</div><div class="skipped-notice-note">No pasa nada, hoy a darle a tu rutina 💪</div></div></div>';
       }
     }
+
+    // Va fuera de las ramas para que salga también en día de descanso. Ahí
+    // dice que la racha NO se pierde, y eso importa: es lo que evita que
+    // alguien entrene en su día de descanso sólo por no romperla, que es
+    // exactamente el fallo que arruina las rachas en una app de gimnasio.
+    html += rachaAvisoHtml();
 
     container.innerHTML = html;
   }
@@ -5037,20 +5050,94 @@
     return total;
   }
 
+  // =============================================
+  // RACHA
+  // ---------------------------------------------
+  // Cuenta SESIONES PLANIFICADAS seguidas, no días naturales seguidos. Antes
+  // era lo segundo, y en una app de gimnasio eso no mide nada: los días de
+  // descanso forman parte del plan, así que quien entrena tres días por semana
+  // rompía la racha cada martes y no pasaba nunca de 1. Marcaba 0 casi siempre.
+  //
+  // Reglas, caminando hacia atrás desde hoy:
+  //   - día que no toca entrenar  → se salta, no cuenta ni rompe
+  //   - día que toca y está hecho → suma
+  //   - HOY sin hacer             → se salta: aún estás a tiempo
+  //   - día que tocaba y no está  → rompe
+  function diaEntrenado(key) {
+    var comps = state.completions && state.completions[key];
+    if (comps) { for (var k in comps) return true; }
+    return !!(state.finished && state.finished[key]);
+  }
+
   function getCurrentStreak() {
-    var dates = getWorkoutDates();
-    if (dates.length === 0) return 0;
     var streak = 0;
-    var dateSet = {};
-    dates.forEach(function (d) { dateSet[d] = true; });
-    var checkDate = new Date(); checkDate.setHours(0, 0, 0, 0);
-    var maxLookback = 365;
-    while (maxLookback > 0) {
-      var key = getDateKey(checkDate);
-      if (dateSet[key]) { streak++; checkDate.setDate(checkDate.getDate() - 1); maxLookback--; }
-      else break;
+    var hoy = getTodayKey();
+    var d = new Date(hoy + 'T12:00:00');
+
+    // Un año hacia atrás es de sobra y evita un bucle infinito si alguien se
+    // queda sin ningún día de entreno marcado.
+    for (var i = 0; i < 365; i++) {
+      var key = getDateKey(d);
+      if (isTrainingDay(key)) {
+        if (diaEntrenado(key)) streak++;
+        else if (key !== hoy) break;   // hoy todavía cuenta como pendiente
+      }
+      d.setDate(d.getDate() - 1);
     }
     return streak;
+  }
+
+  // La mejor racha histórica. Es la referencia que hace que perder la actual
+  // escueza: no es sólo volver a cero, es alejarse de tu récord.
+  function getBestStreak() {
+    var fechas = getWorkoutDates();
+    if (!fechas.length) return 0;
+
+    var mejor = 0;
+    var actual = 0;
+    var d = new Date(fechas[0] + 'T12:00:00');
+    var fin = new Date(getTodayKey() + 'T12:00:00');
+
+    while (d <= fin) {
+      var key = getDateKey(d);
+      if (isTrainingDay(key)) {
+        if (diaEntrenado(key)) {
+          actual++;
+          if (actual > mejor) mejor = actual;
+        } else if (key !== getTodayKey()) {
+          actual = 0;
+        }
+      }
+      d.setDate(d.getDate() + 1);
+    }
+    return mejor;
+  }
+
+  // ¿Hoy toca, no está hecho y hay racha que perder? Es el único momento en
+  // que tiene sentido avisar de nada.
+  function rachaEnRiesgo() {
+    var hoy = getTodayKey();
+    return isTrainingDay(hoy) && !diaEntrenado(hoy) && getCurrentStreak() > 0;
+  }
+
+  // Banda de racha en la pestaña Rutina, que es donde se decide entrenar.
+  // Sólo aparece si hay racha: con 0 no hay nada que perder y sería ruido.
+  function rachaAvisoHtml() {
+    var racha = getCurrentStreak();
+    if (racha < 1) return '';
+
+    var riesgo = rachaEnRiesgo();
+    var hoyHecho = diaEntrenado(getTodayKey());
+
+    var texto;
+    if (riesgo) texto = 'Llevas <strong>' + racha + '</strong> ' + (racha === 1 ? 'sesión' : 'sesiones') + ' seguidas. Hoy toca: si lo dejas, vuelve a cero.';
+    else if (hoyHecho) texto = 'Racha de <strong>' + racha + '</strong> ' + (racha === 1 ? 'sesión' : 'sesiones') + '. Hoy ya está hecho 💪';
+    else texto = 'Racha de <strong>' + racha + '</strong> ' + (racha === 1 ? 'sesión' : 'sesiones') + '. Hoy descansas, no se pierde.';
+
+    return '<div class="racha-aviso' + (riesgo ? ' en-riesgo' : '') + '">'
+         + '<span class="racha-aviso-icon">🔥</span>'
+         + '<span class="racha-aviso-text">' + texto + '</span>'
+         + '</div>';
   }
 
   function getWeeklyConsistency() {
@@ -5153,9 +5240,23 @@
 
     var html = '<div class="phase-banner"><span class="phase-banner-icon">📌</span><span class="phase-banner-text">' + phase.name + '</span><span class="phase-banner-week">Semana ' + weekNum + '/12</span></div>';
 
+    // La racha pasa a ser la tarjeta principal. En riesgo cambia de color y lo
+    // dice: es el único aviso que de verdad mueve a entrenar hoy.
+    var mejorRacha = getBestStreak();
+    var enRiesgo = rachaEnRiesgo();
+    var subRacha = '';
+    if (enRiesgo) subRacha = 'Hoy toca · no la pierdas';
+    else if (streak > 0 && streak >= mejorRacha) subRacha = '¡Tu mejor racha!';
+    else if (mejorRacha > 0) subRacha = 'Tu récord: ' + mejorRacha;
+
     html += '<div class="stats-grid">';
-    html += '<div class="stat-card highlight"><div class="stat-icon">📅</div><div class="stat-number">' + totalDays + '</div><div class="stat-label">Días de gym</div></div>';
-    html += '<div class="stat-card"><div class="stat-icon">🔥</div><div class="stat-number">' + streak + '</div><div class="stat-label">Racha</div>' + (streak > 0 ? '<div class="stat-sub">días</div>' : '') + '</div>';
+    html += '<div class="stat-card highlight streak-card' + (enRiesgo ? ' en-riesgo' : '') + (streak > 0 ? ' viva' : '') + '">'
+         + '<div class="stat-icon">' + (streak > 0 ? '🔥' : '🌱') + '</div>'
+         + '<div class="stat-number">' + streak + '</div>'
+         + '<div class="stat-label">Días de racha</div>'
+         + (subRacha ? '<div class="stat-sub">' + subRacha + '</div>' : '')
+         + '</div>';
+    html += '<div class="stat-card"><div class="stat-icon">📅</div><div class="stat-number">' + totalDays + '</div><div class="stat-label">Días de gym</div></div>';
     html += '<div class="stat-card"><div class="stat-icon">✅</div><div class="stat-number">' + totalExercises + '</div><div class="stat-label">Ejercicios</div></div>';
     html += '<div class="stat-card"><div class="stat-icon">📊</div><div class="stat-number">' + weeklyPct + '%</div><div class="stat-label">Consistencia</div><div class="stat-sub">' + weeklyData.length + ' semanas</div></div>';
     html += '</div>';
@@ -7331,7 +7432,11 @@
       dias: dias,
       nombres: nombres,
       hora: pushHora(),
-      offset: new Date().getTimezoneOffset()
+      offset: new Date().getTimezoneOffset(),
+      // La racha va al Worker para poder nombrarla en el aviso. Se refresca al
+      // abrir la app y al terminar una sesión; entre medias puede quedar algo
+      // desfasada, y por eso el Worker sólo la usa si es de 2 o más.
+      racha: getCurrentStreak()
     };
   }
 
@@ -7392,7 +7497,11 @@
     if (!pushSoportado() || !pushActivado()) return;
     getSuscripcion().then(function (sub) {
       if (!sub) return;
-      pushFetch('done', { endpoint: sub.endpoint, dia: getTodayKey() }).catch(function () {});
+      pushFetch('done', {
+        endpoint: sub.endpoint,
+        dia: getTodayKey(),
+        racha: getCurrentStreak()
+      }).catch(function () {});
     }).catch(function () {});
   }
 
