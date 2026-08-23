@@ -4680,3 +4680,21 @@ body.onboarding-lock .coach-fab { display: none; }
   outline: none;
   border-color: var(--accent-primary);
 }
+
+/* Tarjeta de ajustes dentro de Perfil. Antes estos dos bloques vivían dentro
+   de .schedule-settings en Inicio y heredaban su fondo; aquí necesitan el
+   suyo. El primero no lleva la línea separadora de arriba porque ya la pone
+   el título de sección. */
+.ajustes-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.weight-setting-primero {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}

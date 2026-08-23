@@ -1,12 +1,12 @@
 /* =============================================
    Gym Calendar - App de Rutina de Ejercicios
-   Versión: 4.28.0 — Recordatorios de entrenamiento por notificación
+   Versión: 4.29.0 — «Stats» pasa a ser «Perfil» y recoge tus ajustes
    ============================================= */
 
 (function () {
   'use strict';
 
-  var APP_VERSION = '4.28.0';
+  var APP_VERSION = '4.29.0';
 
   // Histórico de novedades, de la más reciente a la más antigua.
   //
@@ -18,9 +18,15 @@
   // Sólo entran cambios que el usuario nota. Los arreglos internos no van aquí.
   var CHANGELOG = [
     {
+      version: '4.29.0',
+      items: [
+        { icon: '👤', text: 'La pestaña «Stats» ahora se llama «Perfil»: además de tu progreso, es donde están tus ajustes. Tu peso y los recordatorios se han mudado ahí desde Inicio.' }
+      ]
+    },
+    {
       version: '4.28.0',
       items: [
-        { icon: '🔔', text: 'Recordatorios los días que te toca entrenar, a la hora que tú elijas. Si ya has entrenado, no te molesto. Se activan y desactivan desde Inicio. En iPhone hay que tener la app añadida a la pantalla de inicio.' }
+        { icon: '🔔', text: 'Recordatorios los días que te toca entrenar, a la hora que tú elijas. Si ya has entrenado, no te molesto. Se activan y desactivan desde Perfil. En iPhone hay que tener la app añadida a la pantalla de inicio.' }
       ]
     },
     {
@@ -32,7 +38,7 @@
     {
       version: '4.26.0',
       items: [
-        { icon: '🔥', text: 'Calorías estimadas de cada sesión y del total de la semana. Añade tu peso en Inicio para activarlas: sin él no se pueden calcular. Es una orientación, no una medida exacta.' }
+        { icon: '🔥', text: 'Calorías estimadas de cada sesión y del total de la semana. Añade tu peso en Perfil para activarlas: sin él no se pueden calcular. Es una orientación, no una medida exacta.' }
       ]
     },
     {
@@ -4389,61 +4395,6 @@
     html += '  </div>';
     html += '  <div class="schedule-settings-hint">Recomendado: ' + PROFILES[activeProfile].daysLabel + '</div>';
 
-    // Peso corporal. Va aquí y no en el asistente a propósito: cambia con el
-    // tiempo y no debe obligar a rehacer la rutina para actualizarlo. Es lo
-    // único que falta para poder estimar calorías.
-    var pesoActual = getBodyWeight();
-    html += '  <div class="weight-setting">';
-    html += '    <label class="weight-setting-label" for="bodyWeightInput">⚖️ Tu peso</label>';
-    html += '    <div class="weight-setting-row">';
-    html += '      <input id="bodyWeightInput" class="weight-setting-input" type="number" inputmode="decimal" '
-         + 'min="30" max="250" step="0.5" placeholder="—" value="' + (pesoActual || '') + '">';
-    html += '      <span class="weight-setting-unit">kg</span>';
-    html += '    </div>';
-    html += '    <div class="schedule-settings-hint">'
-         + (pesoActual
-             ? 'Se usa para estimar las calorías de cada sesión.'
-             : 'Añádelo y verás las calorías estimadas de cada sesión.')
-         + '</div>';
-    html += '  </div>';
-
-    // Recordatorios. Sólo se pinta si el navegador los admite: en una pestaña
-    // de Safari en iPhone no existe PushManager, y un switch muerto sólo
-    // generaría preguntas.
-    if (pushSoportado()) {
-      var denegado = Notification.permission === 'denied';
-      var notifActivo = pushActivado() && !denegado;
-      html += '  <div class="notif-setting">';
-      html += '    <div class="notif-setting-row">';
-      html += '      <div class="notif-setting-texto">';
-      html += '        <div class="notif-setting-label">🔔 Recordatorios</div>';
-      html += '        <div class="schedule-settings-hint">'
-           + (denegado
-               ? 'Los has bloqueado en el navegador. Se reactivan desde los ajustes del sitio.'
-               : (notifActivo
-                   ? 'Te aviso a las ' + pushHora() + ':00 los días que te toque entrenar.'
-                   : 'Desactivados. No te avisaré de nada.'))
-           + '</div>';
-      html += '      </div>';
-      html += '      <button class="notif-switch' + (notifActivo ? ' active' : '') + '" id="notifSwitch"'
-           + (denegado ? ' disabled' : '') + ' role="switch" aria-checked="' + (notifActivo ? 'true' : 'false')
-           + '" aria-label="Recordatorios de entrenamiento"><span class="notif-switch-knob"></span></button>';
-      html += '    </div>';
-
-      if (notifActivo) {
-        html += '    <div class="notif-hora-row">';
-        html += '      <label class="notif-hora-label" for="notifHora">A qué hora</label>';
-        html += '      <select id="notifHora" class="notif-hora-select">';
-        for (var nh = 6; nh <= 22; nh++) {
-          html += '<option value="' + nh + '"' + (nh === pushHora() ? ' selected' : '') + '>'
-               + (nh < 10 ? '0' : '') + nh + ':00</option>';
-        }
-        html += '      </select>';
-        html += '    </div>';
-      }
-      html += '  </div>';
-    }
-
     // En los planes que incluyen carrera, recordar por qué semana se va
     if (profileHasRunning()) {
       var curWeek = getWeekNumber(getTodayKey());
@@ -4587,73 +4538,6 @@
         var newContainer = document.getElementById('homeContent');
         if (newContainer && selDate) newContainer.dataset.selectedDate = selDate;
       });
-    });
-
-    // Se guarda al salir del campo y no en cada tecla: escribir «75» pasa por
-    // «7», y guardar eso dejaría un peso absurdo si se cierra a medias.
-    var pesoInput = document.getElementById('bodyWeightInput');
-    if (pesoInput) {
-      var guardarPeso = function () {
-        var v = parseFloat(pesoInput.value.replace(',', '.'));
-        if (pesoInput.value.trim() === '') { setBodyWeight(null); return; }
-        if (isNaN(v) || v < 30 || v > 250) {
-          showToast('Pon un peso entre 30 y 250 kg');
-          pesoInput.value = getBodyWeight() || '';
-          return;
-        }
-        var previo = getBodyWeight();
-        setBodyWeight(v);
-        if (previo !== v) showToast('✓ Peso guardado: ' + v + ' kg');
-      };
-      pesoInput.addEventListener('blur', guardarPeso);
-      pesoInput.addEventListener('keydown', function (e) {
-        if (e.key === 'Enter') { e.preventDefault(); pesoInput.blur(); }
-      });
-    }
-
-    var notifSwitch = document.getElementById('notifSwitch');
-    if (notifSwitch) notifSwitch.addEventListener('click', function () {
-      if (notifSwitch.disabled) return;
-
-      if (pushActivado()) {
-        setPushActivado(false);
-        desuscribirPush();
-        showToast('Recordatorios desactivados');
-        renderHome();
-        return;
-      }
-
-      setPushActivado(true);
-      if (Notification.permission === 'granted') {
-        suscribirPush().then(function (ok) {
-          showToast(ok ? '🔔 Te avisaré los días que toque' : 'No se pudo activar el aviso');
-          renderHome();
-        });
-        return;
-      }
-      // Aún sin permiso: el diálogo nativo sale desde este mismo gesto.
-      Notification.requestPermission().then(function (p) {
-        if (p !== 'granted') {
-          setPushActivado(false);
-          showToast('El navegador no ha dado permiso');
-          renderHome();
-          return;
-        }
-        suscribirPush().then(function (ok) {
-          showToast(ok ? '🔔 Te avisaré los días que toque' : 'No se pudo activar el aviso');
-          renderHome();
-        });
-      });
-    });
-
-    var notifHora = document.getElementById('notifHora');
-    if (notifHora) notifHora.addEventListener('change', function () {
-      var h = parseInt(notifHora.value, 10);
-      if (isNaN(h)) return;
-      setPushHora(h);
-      resyncPush();
-      showToast('✓ Te avisaré a las ' + h + ':00');
-      renderHome();
     });
 
     var homeWizardBtn = document.getElementById('homeWizardBtn');
@@ -5320,6 +5204,10 @@
     }
     html += '</div>';
 
+    // Los ajustes van al final: se consultan de vez en cuando, mientras que el
+    // progreso es lo que se viene a mirar.
+    html += ajustesPersonalesHtml();
+
     container.innerHTML = html;
 
     if (exWithData.length > 0) {
@@ -5327,6 +5215,8 @@
       setupChart(select.value);
       select.addEventListener('change', function () { setupChart(select.value); });
     }
+
+    setupAjustesPersonales();
   }
 
   function setupChart(exerciseId) {
@@ -7576,6 +7466,144 @@
   }
 
   // =============================================
+  // AJUSTES PERSONALES (pestaña Perfil)
+  // ---------------------------------------------
+  // Peso y recordatorios. Viven aquí y no en el asistente porque cambian con
+  // el tiempo y no deben obligar a rehacer la rutina para actualizarlos.
+  // =============================================
+  function ajustesPersonalesHtml() {
+    var html = '';
+    html += '<div class="stats-section-title">⚙️ Ajustes <span class="line"></span></div>';
+    html += '<div class="ajustes-card">';
+
+    var pesoActual = getBodyWeight();
+    html += '  <div class="weight-setting weight-setting-primero">';
+    html += '    <label class="weight-setting-label" for="bodyWeightInput">⚖️ Tu peso</label>';
+    html += '    <div class="weight-setting-row">';
+    html += '      <input id="bodyWeightInput" class="weight-setting-input" type="number" inputmode="decimal" '
+         + 'min="30" max="250" step="0.5" placeholder="—" value="' + (pesoActual || '') + '">';
+    html += '      <span class="weight-setting-unit">kg</span>';
+    html += '    </div>';
+    html += '    <div class="schedule-settings-hint">'
+         + (pesoActual
+             ? 'Se usa para estimar las calorías de cada sesión.'
+             : 'Añádelo y verás las calorías estimadas de cada sesión.')
+         + '</div>';
+    html += '  </div>';
+
+    // Recordatorios. Sólo se pinta si el navegador los admite: en una pestaña
+    // de Safari en iPhone no existe PushManager, y un switch muerto sólo
+    // generaría preguntas.
+    if (pushSoportado()) {
+      var denegado = Notification.permission === 'denied';
+      var notifActivo = pushActivado() && !denegado;
+      html += '  <div class="notif-setting">';
+      html += '    <div class="notif-setting-row">';
+      html += '      <div class="notif-setting-texto">';
+      html += '        <div class="notif-setting-label">🔔 Recordatorios</div>';
+      html += '        <div class="schedule-settings-hint">'
+           + (denegado
+               ? 'Los has bloqueado en el navegador. Se reactivan desde los ajustes del sitio.'
+               : (notifActivo
+                   ? 'Te aviso a las ' + pushHora() + ':00 los días que te toque entrenar.'
+                   : 'Desactivados. No te avisaré de nada.'))
+           + '</div>';
+      html += '      </div>';
+      html += '      <button class="notif-switch' + (notifActivo ? ' active' : '') + '" id="notifSwitch"'
+           + (denegado ? ' disabled' : '') + ' role="switch" aria-checked="' + (notifActivo ? 'true' : 'false')
+           + '" aria-label="Recordatorios de entrenamiento"><span class="notif-switch-knob"></span></button>';
+      html += '    </div>';
+
+      if (notifActivo) {
+        html += '    <div class="notif-hora-row">';
+        html += '      <label class="notif-hora-label" for="notifHora">A qué hora</label>';
+        html += '      <select id="notifHora" class="notif-hora-select">';
+        for (var nh = 6; nh <= 22; nh++) {
+          html += '<option value="' + nh + '"' + (nh === pushHora() ? ' selected' : '') + '>'
+               + (nh < 10 ? '0' : '') + nh + ':00</option>';
+        }
+        html += '      </select>';
+        html += '    </div>';
+      }
+      html += '  </div>';
+    }
+
+    html += '</div>';
+    return html;
+  }
+
+  // Los listeners van aparte del HTML porque el bloque se repinta entero cada
+  // vez que cambia algo (renderStats), y hay que volver a engancharlos.
+  function setupAjustesPersonales() {
+    // El peso se guarda al salir del campo y no en cada tecla: escribir «75»
+    // pasa por «7», y guardar eso dejaría un peso absurdo a medio teclear.
+    var pesoInput = document.getElementById('bodyWeightInput');
+    if (pesoInput) {
+      var guardarPeso = function () {
+        if (pesoInput.value.trim() === '') { setBodyWeight(null); return; }
+        var v = parseFloat(pesoInput.value.replace(',', '.'));
+        if (isNaN(v) || v < 30 || v > 250) {
+          showToast('Pon un peso entre 30 y 250 kg');
+          pesoInput.value = getBodyWeight() || '';
+          return;
+        }
+        var previo = getBodyWeight();
+        setBodyWeight(v);
+        if (previo !== v) showToast('✓ Peso guardado: ' + v + ' kg');
+      };
+      pesoInput.addEventListener('blur', guardarPeso);
+      pesoInput.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') { e.preventDefault(); pesoInput.blur(); }
+      });
+    }
+
+    var notifSwitch = document.getElementById('notifSwitch');
+    if (notifSwitch) notifSwitch.addEventListener('click', function () {
+      if (notifSwitch.disabled) return;
+
+      if (pushActivado()) {
+        setPushActivado(false);
+        desuscribirPush();
+        showToast('Recordatorios desactivados');
+        renderStats();
+        return;
+      }
+
+      setPushActivado(true);
+      if (Notification.permission === 'granted') {
+        suscribirPush().then(function (ok) {
+          showToast(ok ? '🔔 Te avisaré los días que toque' : 'No se pudo activar el aviso');
+          renderStats();
+        });
+        return;
+      }
+      // Aún sin permiso: el diálogo nativo sale desde este mismo gesto.
+      Notification.requestPermission().then(function (p) {
+        if (p !== 'granted') {
+          setPushActivado(false);
+          showToast('El navegador no ha dado permiso');
+          renderStats();
+          return;
+        }
+        suscribirPush().then(function (ok) {
+          showToast(ok ? '🔔 Te avisaré los días que toque' : 'No se pudo activar el aviso');
+          renderStats();
+        });
+      });
+    });
+
+    var notifHora = document.getElementById('notifHora');
+    if (notifHora) notifHora.addEventListener('change', function () {
+      var h = parseInt(notifHora.value, 10);
+      if (isNaN(h)) return;
+      setPushHora(h);
+      resyncPush();
+      showToast('✓ Te avisaré a las ' + h + ':00');
+      renderStats();
+    });
+  }
+
+  // =============================================
   // AVISO DEL PESO CORPORAL
   // ---------------------------------------------
   // Quien ya tenía una rutina antes de la v4.26.0 nunca ve el campo de
@@ -7756,7 +7784,7 @@
       html += '</div>';
     } else if (!getBodyWeight()) {
       html += '<div class="why-block">';
-      html += '  <p class="why-text why-text-small">⚖️ Añade tu peso en Inicio y te digo también '
+      html += '  <p class="why-text why-text-small">⚖️ Añade tu peso en Perfil y te digo también '
            + 'las calorías estimadas de cada sesión.</p>';
       html += '</div>';
     }

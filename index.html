@@ -77,9 +77,13 @@
           <span class="tab-icon">🔍</span>
           <span class="tab-label">Ejercicios</span>
         </button>
+        <!-- El id interno sigue siendo 'stats' a propósito: renombrarlo
+             obligaría a tocar switchTab, currentTab y renderStats sin ganar
+             nada. Lo que cambia es lo que ve el usuario, que ahora también
+             encuentra aquí sus ajustes. -->
         <button class="tab-btn" data-tab="stats">
-          <span class="tab-icon">📊</span>
-          <span class="tab-label">Stats</span>
+          <span class="tab-icon">👤</span>
+          <span class="tab-label">Perfil</span>
         </button>
       </div>
     </header>
@@ -222,7 +226,7 @@
       </p>
       <button id="pushPromptYes" class="whatsnew-ok">Sí, avísame</button>
       <button id="pushPromptNo" class="weight-prompt-later">No, gracias</button>
-      <p class="weight-prompt-note">Puedes cambiarlo cuando quieras desde Inicio.</p>
+      <p class="weight-prompt-note">Puedes cambiarlo cuando quieras desde Perfil.</p>
     </div>
   </div>
 
@@ -242,7 +246,7 @@
       </div>
       <button id="weightPromptSave" class="whatsnew-ok">Guardar</button>
       <button id="weightPromptLater" class="weight-prompt-later">Ahora no</button>
-      <p class="weight-prompt-note">Se puede cambiar cuando quieras desde Inicio.</p>
+      <p class="weight-prompt-note">Se puede cambiar cuando quieras desde Perfil.</p>
     </div>
   </div>
 
