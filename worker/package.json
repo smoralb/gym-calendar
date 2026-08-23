@@ -1,0 +1,8 @@
+{
+  "name": "gym-calendar-ai",
+  "private": true,
+  "description": "Proxy de IA y envio de notificaciones push de Gym Calendar",
+  "dependencies": {
+    "@mmmike/web-push": "^1.3.0"
+  }
+}

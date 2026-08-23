@@ -21,6 +21,8 @@ de 12 semanas, adaptados al material, los días y el objetivo de cada persona.
 - 📱 PWA instalable en móvil (funciona offline)
 - 🧠 **Coach IA opcional** — chat que conoce tu plan y tus pesos, y ajuste de la
   rutina en lenguaje natural (requiere desplegar el Worker, ver más abajo)
+- 🔔 **Recordatorios** los días que toca entrenar, a la hora que elijas
+  (en iPhone hace falta añadir la app a la pantalla de inicio)
 - 🌙 Modo oscuro
 
 ### 🚀 Uso

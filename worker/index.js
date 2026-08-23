@@ -21,7 +21,54 @@
 // todo con 503, lo primero que hay que mirar es el catálogo de modelos.
 // Si hiciera falta abaratar, @cf/meta/llama-3.2-3b-instruct también devuelve el
 // JSON de /adjust correctamente, con peor prosa. Coste medido: ver PRESUPUESTO.
+// Se usa esta librería y no otras por el esquema de cifrado: manda `aes128gcm`
+// (RFC 8291), que es el vigente. Varias alternativas siguen emitiendo el
+// `aesgcm` antiguo, y el endpoint de Apple —o sea todos los iPhone, que es
+// justo donde más se usa esta app— responde 403 a eso. Además va con WebCrypto
+// puro, sin `node:crypto`.
+import { sendPushNotification } from '@mmmike/web-push/send';
+
 const MODEL = '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
+
+// =============================================
+// NOTIFICACIONES PUSH
+// ---------------------------------------------
+// Recordatorio de que hoy toca entrenar. Hace falta servidor por narices: una
+// web no puede programarse una notificacion local para dentro de unas horas
+// (la API que lo permitia nunca llego a lanzarse), asi que la unica via es
+// Web Push, y eso lo manda alguien desde fuera. Ese alguien es este cron.
+//
+// La clave privada VAPID va como secreto, nunca en el repo:
+//   npx wrangler secret put VAPID_PRIVATE_KEY
+//
+// El `subject` es la URL del sitio y no un mailto a proposito: el subject
+// viaja a los servicios push de Google y Apple, y no hay razon para mandarles
+// el correo de nadie.
+const VAPID_SUBJECT = 'https://smoralb.github.io/gym-calendar';
+const VAPID_PUBLIC = 'BDmdYcdktK_30nKHZ-95A9eORHXPaKQTpRh8N6quMmgNe4kQCVtGrtfma7lOXpMCX7eQVDvAnug5eyQI-d6dDx4';
+
+// Segundo toque, en horas, si a esas alturas no consta que haya entrenado.
+// Dos avisos al dia como maximo: la via rapida para que alguien desactive las
+// notificaciones (o desinstale) es pasarse de insistente.
+const HORAS_SEGUNDO_AVISO = 3;
+
+// Tope de envios por ejecucion del cron. El plan free permite 50 subrequests
+// por invocacion, y cada notificacion es una. Si algun dia hay mas gente, hay
+// que trocear esto en varias pasadas.
+const MAX_ENVIOS_POR_TICK = 40;
+
+// El secreto se recorta siempre. Al instalarlo por tuberia (PowerShell, `cat`,
+// un copiar-pegar con espacio de mas) es facil que se cuele un salto de linea
+// al final, y entonces la clave EC deja de ser valida con un error opaco
+// —«missing or invalid private key component (d)»— que solo se ve cuando ya
+// no llega ninguna notificacion.
+function vapidKeys(env) {
+  return {
+    subject: VAPID_SUBJECT,
+    publicKey: VAPID_PUBLIC,
+    privateKey: String(env.VAPID_PRIVATE_KEY || '').trim()
+  };
+}
 
 // =============================================
 // PRESUPUESTO DIARIO
@@ -243,6 +290,205 @@ export class Contador {
   }
 }
 
+// Suscripciones a push. Se guarda lo mínimo para poder mandar el aviso:
+// el endpoint y las claves que da el navegador, qué días entrena, a qué hora
+// local quiere el recordatorio y cómo se llama la sesión de cada día. Nada
+// que identifique a nadie: ni nombre, ni correo, ni pesos, ni progreso.
+export class Suscripciones {
+  constructor(state) {
+    this.sql = state.storage.sql;
+    this.sql.exec(
+      'CREATE TABLE IF NOT EXISTS subs (' +
+      ' endpoint TEXT PRIMARY KEY,' +
+      ' auth TEXT NOT NULL,' +
+      ' p256dh TEXT NOT NULL,' +
+      ' dias TEXT NOT NULL,' +        // JSON: [0..6] con getDay() del cliente
+      ' nombres TEXT NOT NULL,' +     // JSON: { "1": "Empuje", ... }
+      ' hora INTEGER NOT NULL,' +     // hora local preferida, 0-23
+      ' offset INTEGER NOT NULL,' +   // getTimezoneOffset() del cliente
+      ' hechoEl TEXT,' +              // día (local) en que reportó entreno
+      ' avisadoEl TEXT,' +            // día (local) del último aviso
+      ' avisos INTEGER NOT NULL DEFAULT 0' +
+      ')'
+    );
+  }
+
+  async fetch(request) {
+    const { accion, datos } = await request.json();
+
+    if (accion === 'guardar') {
+      this.sql.exec(
+        'INSERT INTO subs (endpoint, auth, p256dh, dias, nombres, hora, offset) ' +
+        'VALUES (?, ?, ?, ?, ?, ?, ?) ' +
+        'ON CONFLICT(endpoint) DO UPDATE SET auth = ?, p256dh = ?, dias = ?, ' +
+        'nombres = ?, hora = ?, offset = ?',
+        datos.endpoint, datos.auth, datos.p256dh, datos.dias, datos.nombres, datos.hora, datos.offset,
+        datos.auth, datos.p256dh, datos.dias, datos.nombres, datos.hora, datos.offset
+      );
+      return Response.json({ ok: true });
+    }
+
+    if (accion === 'borrar') {
+      this.sql.exec('DELETE FROM subs WHERE endpoint = ?', datos.endpoint);
+      return Response.json({ ok: true });
+    }
+
+    if (accion === 'hecho') {
+      this.sql.exec('UPDATE subs SET hechoEl = ? WHERE endpoint = ?', datos.dia, datos.endpoint);
+      return Response.json({ ok: true });
+    }
+
+    if (accion === 'pendientes') {
+      return Response.json({ subs: this.pendientes(datos.ahora) });
+    }
+
+    if (accion === 'marcar') {
+      this.sql.exec('UPDATE subs SET avisadoEl = ?, avisos = ? WHERE endpoint = ?',
+        datos.dia, datos.avisos, datos.endpoint);
+      return Response.json({ ok: true });
+    }
+
+    // Una suscripción caducada o revocada (404/410 del servicio push) no se
+    // recupera nunca: se borra para no reintentarla en cada tick.
+    if (accion === 'caducada') {
+      this.sql.exec('DELETE FROM subs WHERE endpoint = ?', datos.endpoint);
+      return Response.json({ ok: true });
+    }
+
+    return Response.json({ error: 'accion desconocida' }, { status: 400 });
+  }
+
+  // Decide a quién le toca aviso AHORA, según su hora local.
+  pendientes(ahoraMs) {
+    const filas = this.sql.exec('SELECT * FROM subs').toArray();
+    const salida = [];
+
+    for (const f of filas) {
+      // getTimezoneOffset() es minutos que hay que SUMAR a la hora local para
+      // llegar a UTC, y es positivo al oeste. Por eso se resta aquí.
+      const local = new Date(ahoraMs - f.offset * 60000);
+      const dia = local.toISOString().slice(0, 10);
+      const horaLocal = local.getUTCHours();
+      const diaSemana = local.getUTCDay();
+
+      let dias;
+      try { dias = JSON.parse(f.dias); } catch (e) { continue; }
+      if (!Array.isArray(dias) || dias.indexOf(diaSemana) === -1) continue;
+
+      // Ya entrenó hoy: no hay nada que recordar.
+      if (f.hechoEl === dia) continue;
+
+      const avisosHoy = f.avisadoEl === dia ? f.avisos : 0;
+      let toca = false;
+      if (avisosHoy === 0 && horaLocal === f.hora) toca = true;
+      else if (avisosHoy === 1 && horaLocal === (f.hora + HORAS_SEGUNDO_AVISO) % 24) toca = true;
+      if (!toca) continue;
+
+      let nombres = {};
+      try { nombres = JSON.parse(f.nombres) || {}; } catch (e) { /* sin nombre */ }
+
+      salida.push({
+        endpoint: f.endpoint,
+        auth: f.auth,
+        p256dh: f.p256dh,
+        dia: dia,
+        avisos: avisosHoy + 1,
+        sesion: nombres[String(diaSemana)] || ''
+      });
+
+      if (salida.length >= MAX_ENVIOS_POR_TICK) break;
+    }
+    return salida;
+  }
+}
+
+function suscripcionesDO(env) {
+  return env.SUSCRIPCIONES.get(env.SUSCRIPCIONES.idFromName('global'));
+}
+
+function llamarSubs(env, accion, datos) {
+  return suscripcionesDO(env).fetch('https://subs/', {
+    method: 'POST',
+    body: JSON.stringify({ accion: accion, datos: datos || {} })
+  }).then(r => r.json());
+}
+
+// Envía un aviso. Devuelve 'ok', 'caducada' o 'error'.
+async function enviarAviso(env, sub) {
+  const cuerpo = sub.sesion
+    ? 'Hoy toca ' + sub.sesion + '. Vamos allá 💪'
+    : 'Hoy toca entrenar. Vamos allá 💪';
+
+  try {
+    // Devuelve false cuando el servicio push dice que la suscripción ya no
+    // existe (404/410); eso no es un fallo, es que hay que borrarla.
+    const entregado = await sendPushNotification(
+      { endpoint: sub.endpoint, keys: { auth: sub.auth, p256dh: sub.p256dh } },
+      { title: '🏋️ Gym Calendar', body: cuerpo, url: '/gym-calendar/', tag: 'gym-entreno' },
+      vapidKeys(env),
+      { ttl: 3 * 60 * 60, urgency: 'normal' }
+    );
+    return entregado ? 'ok' : 'caducada';
+  } catch (e) {
+    // Rate limit u otro error del servicio: no se marca, se reintenta luego.
+    console.error('push fallido:', e && e.message);
+    return 'error';
+  }
+}
+
+async function enviarRecordatorios(env) {
+  if (!env.VAPID_PRIVATE_KEY || !env.SUSCRIPCIONES) return;
+
+  const { subs } = await llamarSubs(env, 'pendientes', { ahora: Date.now() });
+  if (!subs || !subs.length) return;
+
+  for (const sub of subs) {
+    const r = await enviarAviso(env, sub);
+    if (r === 'caducada') {
+      await llamarSubs(env, 'caducada', { endpoint: sub.endpoint });
+    } else if (r === 'ok') {
+      await llamarSubs(env, 'marcar', { endpoint: sub.endpoint, dia: sub.dia, avisos: sub.avisos });
+    }
+    // En 'error' no se marca: se reintentará en el siguiente tick.
+  }
+}
+
+// Valida lo que manda el cliente al suscribirse. Devuelve null si no vale.
+function limpiarSuscripcion(p) {
+  if (!p || typeof p !== 'object') return null;
+  const s = p.subscription;
+  if (!s || typeof s.endpoint !== 'string' || !s.keys) return null;
+  if (!/^https:\/\//.test(s.endpoint) || s.endpoint.length > 1024) return null;
+  if (typeof s.keys.auth !== 'string' || typeof s.keys.p256dh !== 'string') return null;
+
+  const dias = Array.isArray(p.dias)
+    ? p.dias.filter(d => Number.isInteger(d) && d >= 0 && d <= 6)
+    : [];
+  if (!dias.length) return null;
+
+  const hora = Number.isInteger(p.hora) && p.hora >= 0 && p.hora <= 23 ? p.hora : 18;
+  const offset = Number.isInteger(p.offset) && Math.abs(p.offset) <= 900 ? p.offset : 0;
+
+  // Sólo se guardan nombres de sesión de días válidos, y recortados.
+  const nombres = {};
+  if (p.nombres && typeof p.nombres === 'object') {
+    dias.forEach(d => {
+      const n = p.nombres[String(d)];
+      if (typeof n === 'string' && n) nombres[String(d)] = n.slice(0, 40);
+    });
+  }
+
+  return {
+    endpoint: s.endpoint,
+    auth: s.keys.auth.slice(0, 200),
+    p256dh: s.keys.p256dh.slice(0, 200),
+    dias: JSON.stringify(dias),
+    nombres: JSON.stringify(nombres),
+    hora: hora,
+    offset: offset
+  };
+}
+
 // SHA-256 de la IP, no la IP. Sirve igual para contar y así el Worker no
 // almacena de quién es cada petición.
 async function claveDe(ip) {
@@ -397,6 +643,13 @@ async function handleAdjust(env, clean, origin) {
 }
 
 export default {
+  // Cron horario: reparte los recordatorios de entrenamiento.
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(enviarRecordatorios(env).catch(e => {
+      console.error('fallo enviando recordatorios:', e && e.message);
+    }));
+  },
+
   async fetch(request, env) {
     const origin = request.headers.get('Origin') || '';
     const url = new URL(request.url);
@@ -417,6 +670,42 @@ export default {
     let payload;
     try { payload = await request.json(); }
     catch (e) { return json({ error: 'JSON no válido' }, 400, origin); }
+
+    // Las rutas de push van antes de sanitize(), que exige `messages` y es
+    // cosa del coach. No pasan por Turnstile ni por el presupuesto: no gastan
+    // cuota de IA y bloquearlas tras un reto rompería el alta desde el ajuste.
+    if (url.pathname.indexOf('/push/') === 0) {
+      if (!env.SUSCRIPCIONES) return json({ error: 'notificaciones no disponibles' }, 503, origin);
+
+      if (url.pathname === '/push/subscribe') {
+        const limpia = limpiarSuscripcion(payload);
+        if (!limpia) return json({ error: 'suscripción no válida' }, 400, origin);
+        await llamarSubs(env, 'guardar', limpia);
+        return json({ ok: true }, 200, origin);
+      }
+
+      if (url.pathname === '/push/unsubscribe') {
+        const ep = payload && payload.endpoint;
+        if (typeof ep !== 'string') return json({ error: 'falta endpoint' }, 400, origin);
+        await llamarSubs(env, 'borrar', { endpoint: ep });
+        return json({ ok: true }, 200, origin);
+      }
+
+      // El cliente avisa de que ya ha entrenado, para que no llegue el segundo
+      // recordatorio. `dia` es la fecha LOCAL del cliente, que es con la que
+      // razona el cron.
+      if (url.pathname === '/push/done') {
+        const ep = payload && payload.endpoint;
+        const dia = payload && payload.dia;
+        if (typeof ep !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(String(dia))) {
+          return json({ error: 'datos no válidos' }, 400, origin);
+        }
+        await llamarSubs(env, 'hecho', { endpoint: ep, dia: dia });
+        return json({ ok: true }, 200, origin);
+      }
+
+      return json({ error: 'ruta desconocida' }, 404, origin);
+    }
 
     const clean = sanitize(payload);
     if (typeof clean === 'string') return json({ error: clean }, 400, origin);

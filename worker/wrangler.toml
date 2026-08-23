@@ -18,9 +18,25 @@ binding = "AI"
 name = "CONTADOR"
 class_name = "Contador"
 
+# Suscripciones a notificaciones push. Clase aparte y no una tabla mas dentro
+# de Contador: son cosas distintas y mezclarlas haria ilegible el fichero.
+[[durable_objects.bindings]]
+name = "SUSCRIPCIONES"
+class_name = "Suscripciones"
+
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["Contador"]
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["Suscripciones"]
+
+# Recordatorios de entrenamiento. Se dispara cada hora en punto (UTC) y dentro
+# se mira a quien le toca segun SU hora local: los usuarios estan en zonas
+# distintas, asi que un cron por hora concreta no serviria.
+[triggers]
+crons = ["0 * * * *"]
 
 [[unsafe.bindings]]
 name = "RATE_LIMITER"

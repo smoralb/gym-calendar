@@ -4591,3 +4591,92 @@ body.onboarding-lock .coach-fab { display: none; }
 }
 
 .app-version:active { opacity: 1; }
+
+/* Recordatorios, en el bloque de ajustes de Inicio. Separado por una línea,
+   igual que el peso: son ajustes distintos apilados en la misma tarjeta. */
+.notif-setting {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-color);
+}
+
+.notif-setting-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.notif-setting-texto { min-width: 0; }
+
+.notif-setting-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+/* Interruptor. Es un <button role="switch"> y no un checkbox porque el resto
+   de controles de la app también son botones y así hereda los mismos estilos
+   de foco y de toque. */
+.notif-switch {
+  flex-shrink: 0;
+  width: 46px;
+  height: 27px;
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-input);
+  padding: 2px;
+  cursor: pointer;
+  transition: background var(--transition), border-color var(--transition);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.notif-switch-knob {
+  display: block;
+  width: 21px;
+  height: 21px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  transition: transform var(--transition), background var(--transition);
+}
+
+.notif-switch.active {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+}
+
+.notif-switch.active .notif-switch-knob {
+  transform: translateX(19px);
+  background: #fff;
+}
+
+.notif-switch:disabled { opacity: 0.4; cursor: default; }
+
+.notif-hora-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.notif-hora-label {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.notif-hora-select {
+  padding: 8px 10px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-family: var(--font);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.notif-hora-select:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+}

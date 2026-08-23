@@ -1,4 +1,4 @@
-const CACHE_NAME = 'gym-calendar-v4.27.0';
+const CACHE_NAME = 'gym-calendar-v4.28.0';
 // Media del dataset (jsDelivr). Cache aparte: sobrevive a los deploys de la app.
 const MEDIA_CACHE = 'gym-calendar-exercise-media-v1';
 const MEDIA_ORIGIN = 'https://cdn.jsdelivr.net';
@@ -140,5 +140,54 @@ self.addEventListener('fetch', (e) => {
         return res;
       }).catch(() => new Response('Offline', { status: 503 }))
     )
+  );
+});
+
+// =============================================
+// NOTIFICACIONES PUSH
+// ---------------------------------------------
+// El aviso lo manda el Worker desde un cron (ver worker/index.js): una web no
+// puede programarse notificaciones locales a futuro, asi que el reparto tiene
+// que venir de fuera.
+//
+// Aqui SIEMPRE se muestra lo que llega. Si el service worker recibe un push y
+// no enseña nada, el navegador acaba sacando por su cuenta un aviso generico
+// de "este sitio se ha actualizado en segundo plano", que es peor que el
+// recordatorio. Filtrar "ya he entrenado" se hace en el servidor, que para eso
+// el cliente le avisa al terminar la sesion.
+self.addEventListener('push', (e) => {
+  let datos = {};
+  try { datos = e.data ? e.data.json() : {}; } catch (err) { /* payload raro */ }
+
+  const titulo = datos.titulo || '🏋️ Gym Calendar';
+  const cuerpo = datos.cuerpo || 'Hoy toca entrenar.';
+
+  e.waitUntil(
+    self.registration.showNotification(titulo, {
+      body: cuerpo,
+      icon: BASE + 'icons/icon-192.svg',
+      badge: BASE + 'icons/icon-192.svg',
+      // Mismo tag para que un segundo aviso reemplace al primero en vez de
+      // apilarse: dos recordatorios del mismo dia son ruido, no urgencia.
+      tag: 'gym-entreno',
+      renotify: true,
+      data: { url: datos.url || BASE }
+    })
+  );
+});
+
+self.addEventListener('notificationclick', (e) => {
+  e.notification.close();
+  const destino = (e.notification.data && e.notification.data.url) || BASE;
+
+  // Si ya hay una pestaña de la app abierta se reutiliza, en vez de abrir otra
+  // encima de la que el usuario ya tenia.
+  e.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((cs) => {
+      for (const c of cs) {
+        if (c.url.indexOf(destino) !== -1 && 'focus' in c) return c.focus();
+      }
+      if (self.clients.openWindow) return self.clients.openWindow(destino);
+    })
   );
 });

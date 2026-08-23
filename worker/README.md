@@ -5,7 +5,8 @@ decorativa: Workers AI se autentica con credenciales de cuenta, y la app es un
 sitio estático en GitHub Pages donde cualquier cosa que vaya en `app.js` la lee
 quien abra DevTools. El Worker guarda esa credencial del lado servidor.
 
-Es un fichero. No hay `package.json`, ni build, ni dependencias.
+Una dependencia (`@mmmike/web-push`, para el cifrado de las notificaciones).
+`wrangler` la empaqueta al desplegar; en una máquina nueva, `npm install`.
 
 ## Desplegar
 
@@ -47,6 +48,12 @@ conversaciones a propósito.
 | --- | --- | --- |
 | `POST /chat` | Coach conversacional con el contexto del plan | Stream SSE |
 | `POST /adjust` | Texto libre → cambios sobre las respuestas del asistente | JSON |
+| `POST /push/subscribe` | Alta o actualización del recordatorio | JSON |
+| `POST /push/unsubscribe` | Baja | JSON |
+| `POST /push/done` | «Ya he entrenado hoy», para callar el segundo aviso | JSON |
+
+Este Worker ya no es sólo un proxy de IA: también **envía** las notificaciones
+de entrenamiento desde un Cron Trigger. Ver más abajo.
 
 Cuerpo en las dos: `{ "messages": [{role, content}], "context": "<texto>" }`.
 
@@ -118,6 +125,66 @@ no debe tumbar el coach.
 
 El límite de 12/minuto del `wrangler.toml` sigue ahí, pero sólo frena ráfagas.
 No protege la cuota: 12/min son 17.280 peticiones al día desde una sola IP.
+
+## Notificaciones push
+
+El recordatorio de entrenamiento lo manda **este Worker**, desde un Cron
+Trigger horario. No hay alternativa: una web no puede programarse una
+notificación local a futuro (la API que lo permitía nunca llegó a lanzarse),
+así que el aviso tiene que venir de fuera.
+
+### Claves
+
+- **Pública** (`VAPID_PUBLIC` aquí, `PUSH_PUBLIC_KEY` en `app.js`): va en el
+  cliente, que es su sitio.
+- **Privada**: secreto, nunca en el repo.
+
+```powershell
+npx wrangler secret put VAPID_PRIVATE_KEY
+```
+
+`vapidKeys()` hace `.trim()` del secreto a propósito. Al instalarlo por
+tubería es facilísimo colar un salto de línea al final, y entonces la clave EC
+deja de valer con un error opaco —«missing or invalid private key component
+(d)»— que sólo se manifiesta como que no llega ninguna notificación. Pasó.
+
+### El esquema de cifrado importa
+
+Se usa `@mmmike/web-push` porque emite **`aes128gcm`** (RFC 8291). Varias
+librerías populares para edge siguen emitiendo el `aesgcm` antiguo, y el
+endpoint de Apple responde `403` a eso: no funcionaría en ningún iPhone, que
+es donde más se usa esta app. Si algún día se cambia de librería, esto es lo
+primero que hay que comprobar.
+
+### Cómo decide a quién avisar
+
+`Suscripciones` (Durable Object) guarda por endpoint: los días de entreno, el
+nombre de la sesión de cada día, la hora local preferida y el desfase horario.
+Nada identificativo: ni nombre, ni correo, ni pesos, ni progreso.
+
+El cron corre cada hora en UTC y, para cada suscripción, calcula **su** hora
+local: los usuarios están en zonas distintas, así que un cron a una hora fija
+no serviría.
+
+- Primer aviso a la hora elegida.
+- Segundo aviso `HORAS_SEGUNDO_AVISO` después, y **sólo** si no consta que haya
+  entrenado — el cliente lo reporta con `/push/done` al terminar la sesión.
+- Dos al día como máximo. Insistir más es la vía rápida a que alguien
+  desactive las notificaciones o desinstale.
+
+Las suscripciones que el servicio push da por muertas (404/410) se borran
+solas: no se recuperan nunca y reintentarlas gasta subrequests en cada tick.
+
+`MAX_ENVIOS_POR_TICK` está en 40 porque el plan free permite **50 subrequests
+por invocación** y cada notificación es una. Con más gente habría que trocear
+los envíos.
+
+### iOS
+
+En iPhone las notificaciones **sólo funcionan si la app está añadida a la
+pantalla de inicio**. En una pestaña de Safari no existe siquiera
+`PushManager`, y no hay forma de arreglarlo desde el código. Por eso el ajuste
+sólo se pinta cuando `pushSoportado()` es cierto.
 
 ## Turnstile
 

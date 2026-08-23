@@ -1,12 +1,12 @@
 /* =============================================
    Gym Calendar - App de Rutina de Ejercicios
-   Versión: 4.27.0 — Histórico de novedades: resumen de todo lo que te perdiste
+   Versión: 4.28.0 — Recordatorios de entrenamiento por notificación
    ============================================= */
 
 (function () {
   'use strict';
 
-  var APP_VERSION = '4.27.0';
+  var APP_VERSION = '4.28.0';
 
   // Histórico de novedades, de la más reciente a la más antigua.
   //
@@ -17,6 +17,12 @@
   //
   // Sólo entran cambios que el usuario nota. Los arreglos internos no van aquí.
   var CHANGELOG = [
+    {
+      version: '4.28.0',
+      items: [
+        { icon: '🔔', text: 'Recordatorios los días que te toca entrenar, a la hora que tú elijas. Si ya has entrenado, no te molesto. Se activan y desactivan desde Inicio. En iPhone hay que tener la app añadida a la pantalla de inicio.' }
+      ]
+    },
     {
       version: '4.27.0',
       items: [
@@ -2315,6 +2321,8 @@
     state.finished[key] = new Date().toISOString();
     saveState();
     renderCurrentDay();
+    // Para que no llegue el segundo recordatorio del día habiendo entrenado ya.
+    reportarEntrenoHecho();
     showToast('✓ Entrenamiento guardado');
   }
   function reopenWorkout() {
@@ -2898,7 +2906,7 @@
     document.getElementById('statsView').style.display = tab === 'stats' ? '' : 'none';
     var dbView = document.getElementById('dbView');
     if (dbView) dbView.style.display = tab === 'db' ? '' : 'none';
-    if (tab === 'rutina') { renderCurrentDay(); updateAll(); maybePromptBodyWeight(); }
+    if (tab === 'rutina') { renderCurrentDay(); updateAll(); maybePromptBodyWeight(); maybePromptPush(); }
     if (tab === 'home') renderHome();
     if (tab === 'stats') renderStats();
     if (tab === 'db') renderExerciseBrowser();
@@ -4399,6 +4407,43 @@
          + '</div>';
     html += '  </div>';
 
+    // Recordatorios. Sólo se pinta si el navegador los admite: en una pestaña
+    // de Safari en iPhone no existe PushManager, y un switch muerto sólo
+    // generaría preguntas.
+    if (pushSoportado()) {
+      var denegado = Notification.permission === 'denied';
+      var notifActivo = pushActivado() && !denegado;
+      html += '  <div class="notif-setting">';
+      html += '    <div class="notif-setting-row">';
+      html += '      <div class="notif-setting-texto">';
+      html += '        <div class="notif-setting-label">🔔 Recordatorios</div>';
+      html += '        <div class="schedule-settings-hint">'
+           + (denegado
+               ? 'Los has bloqueado en el navegador. Se reactivan desde los ajustes del sitio.'
+               : (notifActivo
+                   ? 'Te aviso a las ' + pushHora() + ':00 los días que te toque entrenar.'
+                   : 'Desactivados. No te avisaré de nada.'))
+           + '</div>';
+      html += '      </div>';
+      html += '      <button class="notif-switch' + (notifActivo ? ' active' : '') + '" id="notifSwitch"'
+           + (denegado ? ' disabled' : '') + ' role="switch" aria-checked="' + (notifActivo ? 'true' : 'false')
+           + '" aria-label="Recordatorios de entrenamiento"><span class="notif-switch-knob"></span></button>';
+      html += '    </div>';
+
+      if (notifActivo) {
+        html += '    <div class="notif-hora-row">';
+        html += '      <label class="notif-hora-label" for="notifHora">A qué hora</label>';
+        html += '      <select id="notifHora" class="notif-hora-select">';
+        for (var nh = 6; nh <= 22; nh++) {
+          html += '<option value="' + nh + '"' + (nh === pushHora() ? ' selected' : '') + '>'
+               + (nh < 10 ? '0' : '') + nh + ':00</option>';
+        }
+        html += '      </select>';
+        html += '    </div>';
+      }
+      html += '  </div>';
+    }
+
     // En los planes que incluyen carrera, recordar por qué semana se va
     if (profileHasRunning()) {
       var curWeek = getWeekNumber(getTodayKey());
@@ -4532,6 +4577,9 @@
         }
         state.settings.trainingDays = days;
         saveState();
+        // El Worker guarda los días de entreno: si no se le avisa, seguiría
+        // recordando los viejos.
+        resyncPush();
         // Preserve selected date
         var selDate = container.dataset.selectedDate;
         renderHome();
@@ -4562,6 +4610,51 @@
         if (e.key === 'Enter') { e.preventDefault(); pesoInput.blur(); }
       });
     }
+
+    var notifSwitch = document.getElementById('notifSwitch');
+    if (notifSwitch) notifSwitch.addEventListener('click', function () {
+      if (notifSwitch.disabled) return;
+
+      if (pushActivado()) {
+        setPushActivado(false);
+        desuscribirPush();
+        showToast('Recordatorios desactivados');
+        renderHome();
+        return;
+      }
+
+      setPushActivado(true);
+      if (Notification.permission === 'granted') {
+        suscribirPush().then(function (ok) {
+          showToast(ok ? '🔔 Te avisaré los días que toque' : 'No se pudo activar el aviso');
+          renderHome();
+        });
+        return;
+      }
+      // Aún sin permiso: el diálogo nativo sale desde este mismo gesto.
+      Notification.requestPermission().then(function (p) {
+        if (p !== 'granted') {
+          setPushActivado(false);
+          showToast('El navegador no ha dado permiso');
+          renderHome();
+          return;
+        }
+        suscribirPush().then(function (ok) {
+          showToast(ok ? '🔔 Te avisaré los días que toque' : 'No se pudo activar el aviso');
+          renderHome();
+        });
+      });
+    });
+
+    var notifHora = document.getElementById('notifHora');
+    if (notifHora) notifHora.addEventListener('change', function () {
+      var h = parseInt(notifHora.value, 10);
+      if (isNaN(h)) return;
+      setPushHora(h);
+      resyncPush();
+      showToast('✓ Te avisaré a las ' + h + ':00');
+      renderHome();
+    });
 
     var homeWizardBtn = document.getElementById('homeWizardBtn');
     if (homeWizardBtn) homeWizardBtn.addEventListener('click', function () { openRoutineWizard(false); });
@@ -7276,6 +7369,213 @@
   }
 
   // =============================================
+  // NOTIFICACIONES DE ENTRENAMIENTO
+  // ---------------------------------------------
+  // Recordatorio los días que toca entrenar. Lo manda el Worker desde un cron
+  // (ver worker/index.js): una web no puede programarse notificaciones locales
+  // a futuro, así que el aviso tiene que llegar de fuera.
+  //
+  // Ojo con «activado por defecto»: el permiso del navegador NO se puede dar
+  // por concedido, hace falta un gesto del usuario y un diálogo nativo. Lo que
+  // nace activado es el ajuste de la app; el permiso se pide una vez, con
+  // contexto delante, y si dice que no no se vuelve a insistir. Lanzar el
+  // diálogo nativo a bocajarro al cargar es la mejor forma de que lo denieguen
+  // por reflejo, y un «no» del navegador es casi irreversible.
+  var PUSH_PUBLIC_KEY = 'BDmdYcdktK_30nKHZ-95A9eORHXPaKQTpRh8N6quMmgNe4kQCVtGrtfma7lOXpMCX7eQVDvAnug5eyQI-d6dDx4';
+  var PUSH_HORA_DEFECTO = 18;
+  var PUSH_PREGUNTADO_KEY = 'gym_push_preguntado';
+
+  function pushSoportado() {
+    return !!AI_ENDPOINT && 'serviceWorker' in navigator &&
+           'PushManager' in window && 'Notification' in window;
+  }
+
+  // El ajuste de la app, que no es lo mismo que el permiso del navegador.
+  // Nace activado: si el usuario concede el permiso, funciona sin más pasos.
+  function pushActivado() {
+    if (!state.settings || state.settings.push === undefined) return true;
+    return !!state.settings.push;
+  }
+
+  function setPushActivado(v) {
+    if (!state.settings) state.settings = {};
+    state.settings.push = !!v;
+    saveState();
+  }
+
+  function pushHora() {
+    var h = state.settings && state.settings.pushHora;
+    return (typeof h === 'number' && h >= 0 && h <= 23) ? h : PUSH_HORA_DEFECTO;
+  }
+
+  function setPushHora(h) {
+    if (!state.settings) state.settings = {};
+    state.settings.pushHora = h;
+    saveState();
+  }
+
+  function urlBase64ToUint8Array(base64) {
+    var padding = '='.repeat((4 - base64.length % 4) % 4);
+    var b64 = (base64 + padding).replace(/-/g, '+').replace(/_/g, '/');
+    var raw = atob(b64);
+    var out = new Uint8Array(raw.length);
+    for (var i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+    return out;
+  }
+
+  // Qué se le manda al Worker: los días que entrena, el nombre de la sesión de
+  // cada día, la hora local preferida y el desfase horario. Nada más: ni
+  // nombre, ni pesos, ni progreso.
+  function datosDeAgenda() {
+    var dias = getTrainingDays();
+    var nombres = {};
+    try {
+      var fase = PHASES[0];
+      dias.forEach(function (d, i) {
+        var day = fase && fase.days[i];
+        if (day && day.day) nombres[String(d)] = day.day;
+      });
+    } catch (e) { /* sin nombres: el aviso será genérico */ }
+
+    return {
+      dias: dias,
+      nombres: nombres,
+      hora: pushHora(),
+      offset: new Date().getTimezoneOffset()
+    };
+  }
+
+  function pushFetch(ruta, cuerpo) {
+    return fetch(AI_ENDPOINT + '/push/' + ruta, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(cuerpo)
+    });
+  }
+
+  function getSuscripcion() {
+    if (!pushSoportado()) return Promise.resolve(null);
+    return navigator.serviceWorker.ready
+      .then(function (reg) { return reg.pushManager.getSubscription(); })
+      .catch(function () { return null; });
+  }
+
+  // Da de alta (o actualiza) la suscripción. Devuelve true si quedó activa.
+  function suscribirPush() {
+    if (!pushSoportado()) return Promise.resolve(false);
+    if (Notification.permission !== 'granted') return Promise.resolve(false);
+
+    return navigator.serviceWorker.ready.then(function (reg) {
+      return reg.pushManager.getSubscription().then(function (sub) {
+        if (sub) return sub;
+        return reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(PUSH_PUBLIC_KEY)
+        });
+      });
+    }).then(function (sub) {
+      var agenda = datosDeAgenda();
+      agenda.subscription = sub.toJSON();
+      return pushFetch('subscribe', agenda);
+    }).then(function (res) {
+      return !!(res && res.ok);
+    }).catch(function (e) {
+      console.warn('No se pudo activar el recordatorio:', e);
+      return false;
+    });
+  }
+
+  function desuscribirPush() {
+    return getSuscripcion().then(function (sub) {
+      if (!sub) return true;
+      var endpoint = sub.endpoint;
+      return sub.unsubscribe().then(function () {
+        return pushFetch('unsubscribe', { endpoint: endpoint });
+      }).then(function () { return true; });
+    }).catch(function () { return false; });
+  }
+
+  // Se llama al terminar una sesión para que no llegue el segundo recordatorio
+  // del día. Es best-effort: si falla (sin red al acabar en el gimnasio), como
+  // mucho llega un aviso de más.
+  function reportarEntrenoHecho() {
+    if (!pushSoportado() || !pushActivado()) return;
+    getSuscripcion().then(function (sub) {
+      if (!sub) return;
+      pushFetch('done', { endpoint: sub.endpoint, dia: getTodayKey() }).catch(function () {});
+    }).catch(function () {});
+  }
+
+  // Resincroniza la agenda cuando cambian los días o el plan. Sin esto, el
+  // Worker seguiría avisando los días viejos.
+  function resyncPush() {
+    if (!pushSoportado() || !pushActivado()) return;
+    if (Notification.permission !== 'granted') return;
+    getSuscripcion().then(function (sub) {
+      if (sub) suscribirPush();
+    }).catch(function () {});
+  }
+
+  // Petición previa, con contexto, antes del diálogo nativo. Se enseña una vez
+  // por dispositivo: `gym_push_preguntado` no se borra ni al decir que no.
+  function maybePromptPush() {
+    if (!pushSoportado()) return;
+    if (!pushActivado()) return;
+    if (needsOnboarding()) return;
+    if (Notification.permission !== 'default') return;   // ya concedido o denegado
+    try { if (localStorage.getItem(PUSH_PREGUNTADO_KEY)) return; } catch (e) { return; }
+
+    var modal = document.getElementById('pushPromptModal');
+    if (!modal || !modal.classList.contains('hidden')) return;
+
+    // No se apila sobre otro modal a pantalla completa.
+    var otros = ['whatsNewModal', 'weightPromptModal', 'wizardModal'];
+    for (var i = 0; i < otros.length; i++) {
+      var el = document.getElementById(otros[i]);
+      if (el && !el.classList.contains('hidden')) return;
+    }
+
+    try { localStorage.setItem(PUSH_PREGUNTADO_KEY, '1'); } catch (e) {}
+    mostrarPushPrompt();
+  }
+
+  function mostrarPushPrompt() {
+    var modal = document.getElementById('pushPromptModal');
+    var overlay = document.getElementById('pushPromptOverlay');
+    var si = document.getElementById('pushPromptYes');
+    var no = document.getElementById('pushPromptNo');
+    if (!modal || !si) return;
+
+    modal.classList.remove('hidden');
+
+    function close() { modal.classList.add('hidden'); }
+
+    si.addEventListener('click', function () {
+      close();
+      // El diálogo nativo TIENE que salir desde el gesto del usuario.
+      Notification.requestPermission().then(function (p) {
+        if (p !== 'granted') {
+          setPushActivado(false);
+          showToast('Sin problema, no te avisaré');
+          if (currentTab === 'home') renderHome();
+          return;
+        }
+        suscribirPush().then(function (ok) {
+          showToast(ok ? '🔔 Te avisaré los días que toque' : 'No se pudo activar el aviso');
+          if (currentTab === 'home') renderHome();
+        });
+      });
+    });
+
+    no.addEventListener('click', function () {
+      setPushActivado(false);
+      close();
+      if (currentTab === 'home') renderHome();
+    });
+    if (overlay) overlay.addEventListener('click', close);
+  }
+
+  // =============================================
   // AVISO DEL PESO CORPORAL
   // ---------------------------------------------
   // Quien ya tenía una rutina antes de la v4.26.0 nunca ve el campo de
@@ -8019,6 +8319,15 @@
     // modal de novedades (WHATSNEW_ESPERA, 2,5 s) si va a aparecer: si sigue
     // abierto al disparar esto, se reintenta desde su propio close().
     setTimeout(maybePromptBodyWeight, 3200);
+
+    // El aviso de notificaciones va detrás del del peso: dos peticiones
+    // seguidas nada más abrir se leen como acoso. Si el del peso está en
+    // pantalla, éste se retrae y saldrá en la próxima visita a Rutina.
+    setTimeout(maybePromptPush, 5000);
+
+    // Si ya estaba concedido de una sesión anterior, se refresca la agenda por
+    // si cambiaron los días o el plan estando la app cerrada.
+    setTimeout(resyncPush, 6000);
 
     var pendingOnboarding = needsOnboarding();
     // Bloquea la app desde el primer frame para que no se vea el fondo

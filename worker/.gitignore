@@ -1,3 +1,7 @@
-# Caché local de wrangler: guarda el id de cuenta y datos de sesión.
-# Es de esta máquina, no del proyecto.
+# Cache local de wrangler: guarda el id de cuenta y datos de sesion.
+# Es de esta maquina, no del proyecto.
 .wrangler/
+
+# Dependencias del Worker (solo el cifrado de Web Push). wrangler las empaqueta
+# al desplegar; se reinstalan con `npm install`.
+node_modules/
