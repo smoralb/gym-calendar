@@ -1,12 +1,12 @@
 /* =============================================
    Gym Calendar - App de Rutina de Ejercicios
-   Versión: 4.25.0 — Actualización con progreso, y el coach ofrece aplicar los cambios
+   Versión: 4.25.1 — Saludo del coach más corto, con ejemplos que se pulsan
    ============================================= */
 
 (function () {
   'use strict';
 
-  var APP_VERSION = '4.25.0';
+  var APP_VERSION = '4.25.1';
 
   // Resumen corto de la versión actual para el modal de novedades. Sólo se
   // enseña una vez por versión (localStorage) y nunca durante el onboarding.
@@ -8328,15 +8328,49 @@
       log.scrollTop = log.scrollHeight;
     }
 
+    // Ejemplos de arranque. Se pulsan, así que valen a la vez de muestra de lo
+    // que entiende y de atajo: en un chat vacío lo caro es el primer mensaje.
+    // El tercero es a propósito un cambio de plan, para que se descubra que el
+    // coach no sólo explica, también ajusta la rutina.
+    var COACH_EJEMPLOS = [
+      '¿Por qué mi rutina es así?',
+      '¿Cómo voy de series esta semana?',
+      'Me molesta el hombro'
+    ];
+
+    function quitarSugerencias() {
+      var s = log.querySelector('.coach-sugerencias');
+      if (s) s.remove();
+    }
+
+    function mostrarSugerencias() {
+      var wrap = document.createElement('div');
+      wrap.className = 'coach-sugerencias';
+
+      COACH_EJEMPLOS.forEach(function (texto) {
+        var b = document.createElement('button');
+        b.className = 'coach-sugerencia';
+        b.textContent = texto;
+        b.addEventListener('click', function () {
+          if (busy) return;
+          quitarSugerencias();
+          enviarChat(texto);
+        });
+        wrap.appendChild(b);
+      });
+
+      log.appendChild(wrap);
+      log.scrollTop = log.scrollHeight;
+    }
+
     function open() {
       if (!navigator.onLine) { showToast('El coach necesita conexión'); return; }
       modal.classList.remove('hidden');
       fab.style.display = 'none';
       if (!messages.length) {
-        bubble('assistant', '¡Hola! Soy tu entrenador. Puedo explicarte por qué tu plan es como es, '
-          + 'cómo vas de volumen esta semana o qué hacer con un ejercicio que se te atraganta.\n\n'
-          + 'Y si algo ha cambiado —te molesta un hombro, tienes menos tiempo, ahora entrenas más '
-          + 'días— dímelo y te ofrezco aplicarlo a la rutina.');
+        bubble('assistant', '¡Hola! Soy tu entrenador. Conozco tu plan, tus series de esta semana '
+          + 'y los pesos que vas registrando.\n\nPregúntame lo que quieras:');
+        mostrarSugerencias();
       }
       setTimeout(function () { input.focus(); }, 120);
     }
@@ -8473,6 +8507,7 @@
       if (texto.length < 2 || busy) return;
       input.value = '';
       sendBtn.disabled = true;
+      quitarSugerencias();   // ya sabe qué preguntar: sobran los ejemplos
       enviarChat(texto);
     });
 
