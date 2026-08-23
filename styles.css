@@ -4431,3 +4431,61 @@ body.onboarding-lock .coach-fab { display: none; }
   border-style: solid;
   color: var(--text-primary);
 }
+
+/* Peso corporal, dentro del bloque de ajustes de Inicio. Separado por una
+   línea porque es otro ajuste distinto de los días de entrenamiento. */
+.weight-setting {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-color);
+}
+
+.weight-setting-label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 10px;
+}
+
+.weight-setting-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.weight-setting-input {
+  width: 96px;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-family: var(--font);
+  font-size: 0.95rem;
+  font-weight: 600;
+  text-align: center;
+}
+
+.weight-setting-input:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+}
+
+.weight-setting-unit {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.weight-setting .schedule-settings-hint { margin-top: 8px; }
+
+/* Gasto estimado de la sesión de hoy, bajo la fase. Mismo sangrado que
+   .routine-status-phase para que las dos líneas de contexto se alineen. */
+.routine-status-kcal {
+  font-size: 0.65rem;
+  color: var(--accent-yellow);
+  margin-top: 4px;
+  margin-left: 34px;
+  font-weight: 500;
+  opacity: 0.85;
+}

@@ -1,18 +1,19 @@
 /* =============================================
    Gym Calendar - App de Rutina de Ejercicios
-   Versión: 4.25.1 — Saludo del coach más corto, con ejemplos que se pulsan
+   Versión: 4.26.0 — Calorías estimadas por sesión y por semana
    ============================================= */
 
 (function () {
   'use strict';
 
-  var APP_VERSION = '4.25.1';
+  var APP_VERSION = '4.26.0';
 
   // Resumen corto de la versión actual para el modal de novedades. Sólo se
   // enseña una vez por versión (localStorage) y nunca durante el onboarding.
   var WHATS_NEW = {
-    version: '4.25.0',
+    version: '4.26.0',
     items: [
+      { icon: '🔥', text: 'Calorías estimadas de cada sesión y del total de la semana. Añade tu peso en Inicio para activarlas: sin él no se pueden calcular. Es una orientación, no una medida exacta.' },
       { icon: '🧠', text: 'Nuevo botón de entrenador: pregúntale por qué tu plan es como es, cómo vas de series esta semana o qué hacer con un ejercicio que se te atraganta. Conoce tu plan y tus últimos pesos.' },
       { icon: '🎯', text: 'Cuéntale que algo ha cambiado —«me molesta el hombro», «ahora solo tengo 30 minutos»— y te ofrece aplicarlo a la rutina. Ves qué cambia antes de tocar nada, y sigue siendo el generador de siempre el que arma el plan.' },
       { icon: '⬇️', text: 'Al actualizar ya ves cuánto queda, y las novedades se cuentan cuando la app está lista de verdad, no antes.' }
@@ -3145,6 +3146,12 @@
       rHtml += '  <div class="routine-status-sub">' + escapeHtml(runningSessionSummary(rs)) + ' · ~' + rs.totalMin + ' min</div>';
       rHtml += '  <div class="routine-status-phase">' + (rPhase ? escapeHtml(rPhase.name) + ' · ' : '')
             + 'Semana ' + todayRun.week + ' de ' + RUNNING_TOTAL_WEEKS + '</div>';
+      // Los días de carrera tienen tarjeta propia y salen antes que la de
+      // fuerza, así que el gasto hay que ponerlo también aquí.
+      var kcalRun = caloriasCarrera(rs, getBodyWeight());
+      if (kcalRun) {
+        rHtml += '  <div class="routine-status-kcal">🔥 ~' + kcalRun + ' kcal estimadas</div>';
+      }
       rHtml += '</div>';
       container.innerHTML = rHtml;
       return;
@@ -3200,6 +3207,12 @@
       html += '  <div class="routine-status-top"><div class="routine-status-emoji">' + day.emoji + '</div><div class="routine-status-text">Hoy toca: <strong>' + day.day + '</strong></div>' + (hasDoneAny ? '<div class="routine-status-badge">En progreso</div>' : '') + '</div>';
       html += '  <div class="routine-status-sub">' + day.title + '</div>';
       html += '  <div class="routine-status-phase">' + phase.name + ' · Semana ' + getWeekNumber(today) + '</div>';
+      // Gasto estimado de la sesión de hoy. Aquí el plan sí está guardado, así
+      // que la carrera se resuelve por calendario con caloriasDeSesion().
+      var kcalHoy = caloriasDeSesion(day, loadCustomPlan(), today);
+      if (kcalHoy) {
+        html += '  <div class="routine-status-kcal">🔥 ~' + kcalHoy + ' kcal estimadas</div>';
+      }
       html += '</div>';
 
       var skipped = getSkippedExercisesFromLastSession();
@@ -4305,6 +4318,24 @@
     html += '  </div>';
     html += '  <div class="schedule-settings-hint">Recomendado: ' + PROFILES[activeProfile].daysLabel + '</div>';
 
+    // Peso corporal. Va aquí y no en el asistente a propósito: cambia con el
+    // tiempo y no debe obligar a rehacer la rutina para actualizarlo. Es lo
+    // único que falta para poder estimar calorías.
+    var pesoActual = getBodyWeight();
+    html += '  <div class="weight-setting">';
+    html += '    <label class="weight-setting-label" for="bodyWeightInput">⚖️ Tu peso</label>';
+    html += '    <div class="weight-setting-row">';
+    html += '      <input id="bodyWeightInput" class="weight-setting-input" type="number" inputmode="decimal" '
+         + 'min="30" max="250" step="0.5" placeholder="—" value="' + (pesoActual || '') + '">';
+    html += '      <span class="weight-setting-unit">kg</span>';
+    html += '    </div>';
+    html += '    <div class="schedule-settings-hint">'
+         + (pesoActual
+             ? 'Se usa para estimar las calorías de cada sesión.'
+             : 'Añádelo y verás las calorías estimadas de cada sesión.')
+         + '</div>';
+    html += '  </div>';
+
     // En los planes que incluyen carrera, recordar por qué semana se va
     if (profileHasRunning()) {
       var curWeek = getWeekNumber(getTodayKey());
@@ -4446,6 +4477,28 @@
         if (newContainer && selDate) newContainer.dataset.selectedDate = selDate;
       });
     });
+
+    // Se guarda al salir del campo y no en cada tecla: escribir «75» pasa por
+    // «7», y guardar eso dejaría un peso absurdo si se cierra a medias.
+    var pesoInput = document.getElementById('bodyWeightInput');
+    if (pesoInput) {
+      var guardarPeso = function () {
+        var v = parseFloat(pesoInput.value.replace(',', '.'));
+        if (pesoInput.value.trim() === '') { setBodyWeight(null); return; }
+        if (isNaN(v) || v < 30 || v > 250) {
+          showToast('Pon un peso entre 30 y 250 kg');
+          pesoInput.value = getBodyWeight() || '';
+          return;
+        }
+        var previo = getBodyWeight();
+        setBodyWeight(v);
+        if (previo !== v) showToast('✓ Peso guardado: ' + v + ' kg');
+      };
+      pesoInput.addEventListener('blur', guardarPeso);
+      pesoInput.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') { e.preventDefault(); pesoInput.blur(); }
+      });
+    }
 
     var homeWizardBtn = document.getElementById('homeWizardBtn');
     if (homeWizardBtn) homeWizardBtn.addEventListener('click', function () { openRoutineWizard(false); });
@@ -7026,6 +7079,139 @@
     return out;
   }
 
+  // =============================================
+  // CALORÍAS ESTIMADAS
+  // ---------------------------------------------
+  // kcal = MET × peso_kg × horas. Los MET salen del Compendium of Physical
+  // Activities, que para fuerza sólo distingue por ESFUERZO, no por ejercicio:
+  // no existe un valor de «curl de bíceps» distinto del de «remo». Por eso
+  // esto se enseña por sesión y por semana, y nunca debajo de cada ejercicio;
+  // un número ahí sería precisión inventada.
+  //
+  // Para fuerza el error real ronda el ±30% y no cuenta el gasto posterior a
+  // la sesión. Es una orientación, no una medida, y así se etiqueta.
+  //
+  // Sin peso corporal no se enseña nada: las calorías escalan linealmente con
+  // él, así que la misma sesión son ~250 kcal a 60 kg y ~370 a 90. Un número
+  // sin ese dato no significaría nada.
+  var MET_POR_OBJETIVO = {
+    fuerza: 5.0,        // cargas altas y descansos largos: mucha pausa
+    hipertrofia: 6.0,   // series de 8-15 con esfuerzo alto
+    tono: 5.5,
+    perder_peso: 7.0,   // circuitos y descanso corto
+    movilidad: 3.0
+  };
+  var MET_FUERZA_DEFECTO = 5.0;
+
+  // Carrera. El plan pide ritmo conversacional, así que nada de valores de
+  // competición. La caminata de los intervalos cuenta aparte: en la fase 1 es
+  // más de la mitad de la sesión y meterla como carrera inflaría el total.
+  var MET_CAMINAR = 3.5;
+  var MET_TROTE = 7.0;
+  var MET_CARRERA_CONTINUA = 8.5;
+
+  function getBodyWeight() {
+    var w = state.settings && state.settings.bodyWeight;
+    return (typeof w === 'number' && w > 0) ? w : null;
+  }
+
+  function setBodyWeight(kg) {
+    if (!state.settings) state.settings = {};
+    state.settings.bodyWeight = (typeof kg === 'number' && kg > 0) ? kg : null;
+    saveState();
+  }
+
+  function metDelPlan(plan) {
+    var objetivos = plan && plan.answers ? answerList(plan.answers, 'goal') : [];
+    var vals = [];
+    objetivos.forEach(function (g) {
+      if (typeof MET_POR_OBJETIVO[g] === 'number') vals.push(MET_POR_OBJETIVO[g]);
+    });
+    if (!vals.length) return MET_FUERZA_DEFECTO;
+    // Con varios objetivos el generador mezcla estilos, así que se promedia.
+    var suma = 0;
+    vals.forEach(function (v) { suma += v; });
+    return suma / vals.length;
+  }
+
+  // Los 6 minutos extra son calentamiento y transiciones, el mismo margen que
+  // ya usa el explicador para decir «~45 min».
+  function minutosDeSesion(day) {
+    if (!day || !day.exercises) return 0;
+    var min = 0;
+    day.exercises.forEach(function (ex) {
+      min += exerciseMinutes(ex.series || 3, parseRestSeconds(ex.rest) || 60);
+    });
+    return min + 6;
+  }
+
+  // Carrera: se separa trote de caminata en vez de aplicar un MET único.
+  function caloriasCarrera(sesion, peso) {
+    if (!sesion || !peso) return null;
+
+    if (sesion.kind === 'intervals') {
+      var caminar = 10;   // 5 de calentamiento + 5 de vuelta a la calma
+      var trote = 0;
+      (sesion.blocks || []).forEach(function (b) {
+        if (b.type === 'set') {
+          trote += (b.reps || 0) * (b.jog || 0);
+          caminar += (b.reps || 0) * (b.walk || 0);
+        }
+      });
+      return Math.round(peso * ((MET_TROTE * trote + MET_CAMINAR * caminar) / 60));
+    }
+
+    var min = sesion.totalMin || 0;
+    if (!min) return null;   // sin duración no hay nada que estimar
+    return Math.round(MET_CARRERA_CONTINUA * peso * (min / 60));
+  }
+
+  // Devuelve null si no se sabe el peso o no hay sesión. `dateKey` sólo hace
+  // falta en los días de carrera, que cambian cada semana.
+  function caloriasDeSesion(day, plan, dateKey) {
+    var peso = getBodyWeight();
+    if (!peso || !day) return null;
+
+    if (day.type === 'running') {
+      // getRunningSession() devuelve un envoltorio { session, week, index,
+      // total }, no la sesión: hay que desenvolverlo o el cálculo sale 0.
+      var rs = getRunningSession(dateKey || getTodayKey());
+      return caloriasCarrera(rs && rs.session, peso);
+    }
+    return Math.round(metDelPlan(plan) * peso * (minutosDeSesion(day) / 60));
+  }
+
+  // Array paralelo a plan.phases[0].days con las kcal de cada día, o null.
+  //
+  // Los días de carrera se resuelven contra RUNNING_PLAN de la semana en curso
+  // y NO contra el calendario guardado: en el resumen del asistente el plan
+  // todavía no está guardado, así que getRunningSession() no encuentra nada y
+  // la carrera contaba cero.
+  function caloriasPorDia(plan) {
+    var peso = getBodyWeight();
+    if (!peso || !plan || !plan.phases || !plan.phases[0]) return null;
+
+    var semana = getWeekNumber(getTodayKey()) || 1;
+    var sesiones = RUNNING_PLAN[semana] || RUNNING_PLAN[1] || [];
+    var met = metDelPlan(plan);
+    var iCarrera = 0;
+
+    return plan.phases[0].days.map(function (day) {
+      if (day.type === 'running') return caloriasCarrera(sesiones[iCarrera++], peso);
+      return Math.round(met * peso * (minutosDeSesion(day) / 60));
+    });
+  }
+
+  // Total de la semana según lo PLANIFICADO, no lo hecho: acompaña al objetivo
+  // de series en el explicador, que también es un objetivo.
+  function caloriasSemana(plan) {
+    var porDia = caloriasPorDia(plan);
+    if (!porDia) return null;
+    var total = 0;
+    porDia.forEach(function (c) { if (c) total += c; });
+    return total || null;
+  }
+
   // `progreso` opcional: si viene, se pintan barras de lo hecho esta semana.
   function planExplainerHtml(plan, progreso) {
     if (!plan) return '';
@@ -7055,12 +7241,16 @@
 
     // Cada día por GRUPOS musculares, no por nombres de ejercicio.
     html += '<div class="why-block"><div class="why-block-title">Tu semana</div>';
-    plan.phases[0].days.forEach(function (day) {
+    var kcalDias = caloriasPorDia(plan) || [];
+    plan.phases[0].days.forEach(function (day, iDia) {
       html += '<div class="why-day">';
       html += '  <span class="why-day-emoji">' + day.emoji + '</span>';
       html += '  <span class="why-day-name">' + escapeHtml(day.day) + '</span>';
       if (day.type === 'running') {
         html += '  <span class="why-day-groups">Plan de carrera · cambia cada semana</span>';
+        if (kcalDias[iDia]) {
+          html += '  <span class="why-day-meta">~' + kcalDias[iDia] + ' kcal</span>';
+        }
       } else {
         var grupos = [], mins = 0;
         day.exercises.forEach(function (ex) {
@@ -7071,7 +7261,8 @@
           mins += exerciseMinutes(ex.series || 3, parseRestSeconds(ex.rest) || 60);
         });
         html += '  <span class="why-day-groups">' + escapeHtml(grupos.join(' · ')) + '</span>';
-        html += '  <span class="why-day-meta">' + day.exercises.length + ' ej · ~' + Math.round(mins + 6) + ' min</span>';
+        html += '  <span class="why-day-meta">' + day.exercises.length + ' ej · ~' + Math.round(mins + 6) + ' min'
+             + (kcalDias[iDia] ? ' · ~' + kcalDias[iDia] + ' kcal' : '') + '</span>';
       }
       html += '</div>';
     });
@@ -7116,6 +7307,25 @@
              + escapeHtml(cortos.map(function (g) { return (GROUP_LABEL_G[g] || g).toLowerCase(); }).join(', '))
              + '. Sigue siendo un buen plan; si puedes añadir días o minutos, crecerás más rápido.</p>';
       }
+      html += '</div>';
+    }
+
+    // Calorías: siempre después del volumen, nunca en su lugar. Las series son
+    // lo que dirige el plan; esto es un dato de contexto.
+    var kcalSemana = caloriasSemana(plan);
+    if (kcalSemana) {
+      html += '<div class="why-block">';
+      html += '  <div class="why-block-title">Gasto estimado</div>';
+      html += '  <p class="why-inline"><span class="why-inline-g">Por semana <strong>~'
+           + kcalSemana + ' kcal</strong></span></p>';
+      html += '  <p class="why-text why-text-small">Calculado con tus ' + getBodyWeight()
+           + ' kg y la duración de cada sesión. Es una orientación: en trabajo de fuerza estas '
+           + 'estimaciones se mueven fácil un 30% arriba o abajo según tu ritmo y tu esfuerzo.</p>';
+      html += '</div>';
+    } else if (!getBodyWeight()) {
+      html += '<div class="why-block">';
+      html += '  <p class="why-text why-text-small">⚖️ Añade tu peso en Inicio y te digo también '
+           + 'las calorías estimadas de cada sesión.</p>';
       html += '</div>';
     }
 
