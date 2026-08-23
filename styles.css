@@ -4555,3 +4555,39 @@ body.onboarding-lock .coach-fab { display: none; }
   color: var(--text-muted);
   margin: 0;
 }
+
+/* Separador de versión dentro de la lista de novedades. No es una tarjeta como
+   los items: es la cabecera del grupo, así que se anula el estilo de li. */
+.whatsnew-list li.whatsnew-version {
+  display: block;
+  padding: 4px 2px 0;
+  border: none;
+  background: none;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--accent-primary);
+  text-transform: uppercase;
+}
+
+/* Con varias versiones acumuladas —o con el historial completo— la lista se
+   pasa de largo. Scrollea por dentro para que el botón de cerrar siga a la
+   vista sin tener que desplazar la página entera. */
+.whatsnew-list {
+  max-height: min(58vh, 460px);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  /* Deja aire para que el último item no quede pegado al borde al scrollear */
+  padding-right: 2px;
+}
+
+/* El número de versión de la cabecera abre el historial: se marca como
+   pulsable sin convertirlo en un botón llamativo, que ahí estorbaría. */
+.app-version {
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 2px;
+}
+
+.app-version:active { opacity: 1; }

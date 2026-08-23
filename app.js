@@ -1,24 +1,87 @@
 /* =============================================
    Gym Calendar - App de Rutina de Ejercicios
-   Versión: 4.26.1 — Aviso para añadir tu peso y activar las calorías
+   Versión: 4.27.0 — Histórico de novedades: resumen de todo lo que te perdiste
    ============================================= */
 
 (function () {
   'use strict';
 
-  var APP_VERSION = '4.26.1';
+  var APP_VERSION = '4.27.0';
 
-  // Resumen corto de la versión actual para el modal de novedades. Sólo se
-  // enseña una vez por versión (localStorage) y nunca durante el onboarding.
-  var WHATS_NEW = {
-    version: '4.26.0',
-    items: [
-      { icon: '🔥', text: 'Calorías estimadas de cada sesión y del total de la semana. Añade tu peso en Inicio para activarlas: sin él no se pueden calcular. Es una orientación, no una medida exacta.' },
-      { icon: '🧠', text: 'Nuevo botón de entrenador: pregúntale por qué tu plan es como es, cómo vas de series esta semana o qué hacer con un ejercicio que se te atraganta. Conoce tu plan y tus últimos pesos.' },
-      { icon: '🎯', text: 'Cuéntale que algo ha cambiado —«me molesta el hombro», «ahora solo tengo 30 minutos»— y te ofrece aplicarlo a la rutina. Ves qué cambia antes de tocar nada, y sigue siendo el generador de siempre el que arma el plan.' },
-      { icon: '⬇️', text: 'Al actualizar ya ves cuánto queda, y las novedades se cuentan cuando la app está lista de verdad, no antes.' }
-    ]
-  };
+  // Histórico de novedades, de la más reciente a la más antigua.
+  //
+  // Es una lista y no una sola versión porque quien pasa semanas sin abrir la
+  // app se saltaba todo lo intermedio: sólo veía lo último y lo anterior se
+  // perdía para siempre. Ahora se enseña TODO lo que hay entre la última
+  // versión vista y la actual, agrupado por versión.
+  //
+  // Sólo entran cambios que el usuario nota. Los arreglos internos no van aquí.
+  var CHANGELOG = [
+    {
+      version: '4.27.0',
+      items: [
+        { icon: '📜', text: 'Si pasas tiempo sin abrir la app, ya no te pierdes nada: se te resumen de golpe todas las novedades desde la última vez. Y pulsando el número de versión de arriba ves el historial completo.' }
+      ]
+    },
+    {
+      version: '4.26.0',
+      items: [
+        { icon: '🔥', text: 'Calorías estimadas de cada sesión y del total de la semana. Añade tu peso en Inicio para activarlas: sin él no se pueden calcular. Es una orientación, no una medida exacta.' }
+      ]
+    },
+    {
+      version: '4.25.0',
+      items: [
+        { icon: '🧠', text: 'Nuevo botón de entrenador: pregúntale por qué tu plan es como es, cómo vas de series esta semana o qué hacer con un ejercicio que se te atraganta. Conoce tu plan y tus últimos pesos.' },
+        { icon: '🎯', text: 'Cuéntale que algo ha cambiado —«me molesta el hombro», «ahora solo tengo 30 minutos»— y te ofrece aplicarlo a la rutina. Ves qué cambia antes de tocar nada, y sigue siendo el generador de siempre el que arma el plan.' },
+        { icon: '⬇️', text: 'Al actualizar ya ves cuánto queda, y las novedades se cuentan cuando la app está lista de verdad, no antes.' }
+      ]
+    },
+    {
+      version: '4.23.0',
+      items: [
+        { icon: '🏃', text: 'Si dices que corres, ya se te ofrece el plan de vuelta a correr elijas los días que elijas. Antes, con 4 o más días de entrenamiento, ni se te preguntaba ni se te explicaba por qué.' },
+        { icon: '📅', text: 'Cuando el plan de carrera no cabe, tu fuerza se reagrupa en menos sesiones y más largas para dejarle sitio, manteniendo el total de series de la semana.' }
+      ]
+    },
+    {
+      version: '4.22.0',
+      items: [
+        { icon: '📊', text: 'Las rutinas se construyen por series semanales de cada músculo, no por número de ejercicios, y cada programa tiene nombre: Cuerpo completo, Push · Pull · Legs, Torso · Pierna…' },
+        { icon: '🧭', text: 'Nuevo «¿Por qué este entrenamiento?»: te explica qué programa sigues, cuántas series necesita cada músculo y cómo progresas.' }
+      ]
+    },
+    {
+      version: '4.21.0',
+      items: [
+        { icon: '🗂️', text: 'Varios planes a la vez: puedes crear, renombrar y borrar los que quieras desde el selector, cada uno con su propio historial.' }
+      ]
+    },
+    {
+      version: '4.20.0',
+      items: [
+        { icon: '🎨', text: 'Rediseño visual: paleta más neutra y tarjetas planas, para que se lea mejor en el gimnasio.' }
+      ]
+    },
+    {
+      version: '4.19.0',
+      items: [
+        { icon: '✅', text: 'Ya puedes marcar entrenamientos de días pasados.' },
+        { icon: '📱', text: 'Arreglado: en iPhone, deslizar sobre la imagen de un ejercicio movía toda la pantalla.' }
+      ]
+    },
+    {
+      version: '4.18.0',
+      items: [
+        { icon: '🏃', text: 'Plan de vuelta a correr de 12 semanas, combinable con tus días de fuerza desde el asistente.' }
+      ]
+    }
+  ];
+
+  // La versión que se marca como «vista» al cerrar el modal. Es la del
+  // changelog, no APP_VERSION: los parches sin novedades no deben resetear
+  // el aviso ni hacer que reaparezca sin nada nuevo que contar.
+  var CHANGELOG_LATEST = CHANGELOG.length ? CHANGELOG[0].version : APP_VERSION;
 
   // =============================================
   // SERGIO_PHASES: plan Push/Pull/Pierna 3 días/semana
@@ -7975,8 +8038,20 @@
       document.body.classList.remove('onboarding-lock');
     });
 
+    // El número de versión abre el histórico completo. Es el sitio donde
+    // alguien va a buscar «qué versión tengo», así que es donde tiene sentido
+    // contarle qué trajo cada una.
     var vEl = document.getElementById('appVersion');
-    if (vEl) vEl.textContent = 'v' + APP_VERSION;
+    if (vEl) {
+      vEl.textContent = 'v' + APP_VERSION;
+      vEl.setAttribute('role', 'button');
+      vEl.setAttribute('tabindex', '0');
+      vEl.title = 'Ver historial de novedades';
+      vEl.addEventListener('click', mostrarHistorialCompleto);
+      vEl.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); mostrarHistorialCompleto(); }
+      });
+    }
 
     console.log('🏋️ Gym Calendar v' + APP_VERSION);
   }
@@ -8046,11 +8121,34 @@
   // Devuelve true si va a enseñar el modal (ya o dentro de un rato). init() lo
   // necesita para decidir si la confirmación de actualización va dentro del
   // modal o hace falta sacarla en una barra aparte.
+  // Compara «4.9.0» con «4.10.0» correctamente. Con strings, '4.9.0' > '4.10.0'
+  // alfabéticamente, y eso dejaría novedades sin enseñar en cuanto la minor
+  // pasara de 9.
+  function compararVersiones(a, b) {
+    var pa = String(a || '0').split('.');
+    var pb = String(b || '0').split('.');
+    for (var i = 0; i < 3; i++) {
+      var na = parseInt(pa[i], 10) || 0;
+      var nb = parseInt(pb[i], 10) || 0;
+      if (na !== nb) return na < nb ? -1 : 1;
+    }
+    return 0;
+  }
+
+  // Todo lo publicado después de la última versión vista. Si no consta ninguna
+  // (usuario que ya usaba la app antes de que existiera este registro), se
+  // enseña sólo la entrada más reciente: volcarle año y medio de historia de
+  // golpe sería peor que no contarle nada.
+  function novedadesPendientes() {
+    var seen;
+    try { seen = localStorage.getItem('gym_whatsnew_seen'); } catch (e) { seen = null; }
+    if (!seen) return CHANGELOG.slice(0, 1);
+    return CHANGELOG.filter(function (e) { return compararVersiones(e.version, seen) > 0; });
+  }
+
   function setupWhatsNew() {
-    if (!WHATS_NEW.items.length) return false;
     if (needsOnboarding()) return false;
-    var seen = localStorage.getItem('gym_whatsnew_seen');
-    if (seen === WHATS_NEW.version) return false;
+    if (!novedadesPendientes().length) return false;
 
     // Si venimos de pulsar «Actualizar» no hay nada que esperar: la
     // actualización ya ha terminado y el propio modal da la confirmación.
@@ -8069,6 +8167,50 @@
     return true;
   }
 
+  // `conCabecera` separa por versión. Con una sola entrada sobra el título:
+  // la versión ya la dice el subtítulo y repetirla sólo añade ruido.
+  function renderNovedadesHtml(entradas, conCabecera) {
+    var html = '';
+    entradas.forEach(function (entrada) {
+      if (conCabecera) {
+        html += '<li class="whatsnew-version">v' + escapeHtml(entrada.version) + '</li>';
+      }
+      entrada.items.forEach(function (it) {
+        html += '<li><span class="whatsnew-item-icon">' + it.icon + '</span>'
+             + '<span>' + escapeHtml(it.text) + '</span></li>';
+      });
+    });
+    return html;
+  }
+
+  // Historial completo, a petición. Reutiliza el mismo modal, pero NO marca
+  // nada como visto: abrirlo por curiosidad no debe silenciar el aviso de una
+  // novedad que aún no se ha leído.
+  function mostrarHistorialCompleto() {
+    var modal = document.getElementById('whatsNewModal');
+    var overlay = document.getElementById('whatsNewModalOverlay');
+    var closeBtn = document.getElementById('whatsNewClose');
+    var okBtn = document.getElementById('whatsNewOk');
+    var sub = document.getElementById('whatsNewSub');
+    var list = document.getElementById('whatsNewList');
+    if (!modal || !list || !modal.classList.contains('hidden')) return;
+
+    sub.textContent = 'Todo lo que ha ido cambiando, de lo más reciente a lo más antiguo:';
+    list.innerHTML = renderNovedadesHtml(CHANGELOG, true);
+
+    function close() {
+      modal.classList.add('hidden');
+      closeBtn.removeEventListener('click', close);
+      overlay.removeEventListener('click', close);
+      okBtn.removeEventListener('click', close);
+    }
+
+    modal.classList.remove('hidden');
+    closeBtn.addEventListener('click', close);
+    overlay.addEventListener('click', close);
+    okBtn.addEventListener('click', close);
+  }
+
   function mostrarWhatsNew() {
     var modal = document.getElementById('whatsNewModal');
     var overlay = document.getElementById('whatsNewModalOverlay');
@@ -8078,18 +8220,33 @@
     var list = document.getElementById('whatsNewList');
     if (!modal || !list) return;
 
-    // Al venir de actualizar, el propio modal confirma que ya ha terminado.
-    // Es el único sitio donde se lee seguro: cualquier barra queda detrás.
-    sub.textContent = acabamosDeActualizar
-      ? '✅ Ya estás en la v' + WHATS_NEW.version + '. Esto es lo que ha cambiado:'
-      : 'Esto es lo que ha cambiado en la v' + WHATS_NEW.version + ':';
-    list.innerHTML = WHATS_NEW.items.map(function (it) {
-      return '<li><span class="whatsnew-item-icon">' + it.icon + '</span><span>' + escapeHtml(it.text) + '</span></li>';
-    }).join('');
+    var pendientes = novedadesPendientes();
+    if (!pendientes.length) return;
+
+    // Con varias versiones acumuladas se dice cuántas son: sin ese aviso, la
+    // lista larga parece un cambio enorme de golpe en vez de un resumen de
+    // varias actualizaciones.
+    var varias = pendientes.length > 1;
+    if (acabamosDeActualizar) {
+      sub.textContent = varias
+        ? '✅ Ya estás en la v' + CHANGELOG_LATEST + '. Te resumo las ' + pendientes.length + ' últimas actualizaciones:'
+        : '✅ Ya estás en la v' + CHANGELOG_LATEST + '. Esto es lo que ha cambiado:';
+    } else {
+      sub.textContent = varias
+        ? 'Te has perdido ' + pendientes.length + ' actualizaciones. Esto es todo lo nuevo:'
+        : 'Esto es lo que ha cambiado en la v' + pendientes[0].version + ':';
+    }
+
+    list.innerHTML = renderNovedadesHtml(pendientes, varias);
 
     function close() {
       modal.classList.add('hidden');
-      localStorage.setItem('gym_whatsnew_seen', WHATS_NEW.version);
+      localStorage.setItem('gym_whatsnew_seen', CHANGELOG_LATEST);
+      // Se retiran: este modal lo comparte también el historial completo, y
+      // sin esto los listeners se acumularían entre aperturas.
+      closeBtn.removeEventListener('click', close);
+      overlay.removeEventListener('click', close);
+      okBtn.removeEventListener('click', close);
       // Si este modal tapaba el aviso del peso, es el momento de sacarlo: sin
       // este gancho, alguien que no cambia de pestaña no lo vería nunca.
       maybePromptBodyWeight();
