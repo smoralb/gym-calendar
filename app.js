@@ -1,12 +1,12 @@
 /* =============================================
    Gym Calendar - App de Rutina de Ejercicios
-   Versión: 4.26.0 — Calorías estimadas por sesión y por semana
+   Versión: 4.26.1 — Aviso para añadir tu peso y activar las calorías
    ============================================= */
 
 (function () {
   'use strict';
 
-  var APP_VERSION = '4.26.0';
+  var APP_VERSION = '4.26.1';
 
   // Resumen corto de la versión actual para el modal de novedades. Sólo se
   // enseña una vez por versión (localStorage) y nunca durante el onboarding.
@@ -2835,7 +2835,7 @@
     document.getElementById('statsView').style.display = tab === 'stats' ? '' : 'none';
     var dbView = document.getElementById('dbView');
     if (dbView) dbView.style.display = tab === 'db' ? '' : 'none';
-    if (tab === 'rutina') { renderCurrentDay(); updateAll(); }
+    if (tab === 'rutina') { renderCurrentDay(); updateAll(); maybePromptBodyWeight(); }
     if (tab === 'home') renderHome();
     if (tab === 'stats') renderStats();
     if (tab === 'db') renderExerciseBrowser();
@@ -7212,6 +7212,75 @@
     return total || null;
   }
 
+  // =============================================
+  // AVISO DEL PESO CORPORAL
+  // ---------------------------------------------
+  // Quien ya tenía una rutina antes de la v4.26.0 nunca ve el campo de
+  // Inicio si no entra ahí por su cuenta, así que las calorías se quedan
+  // apagadas para siempre en silencio. Este modal se lo pide una vez por
+  // sesión al entrar a la pestaña Rutina — donde va a entrenar, que es
+  // adonde apunta el dato — con la explicación de por qué se pide.
+  //
+  // No es bloqueante: se puede posponer. «Forzar» aquí significa no dejar
+  // que pase desapercibido, no impedir usar la app sin dar el peso.
+  var weightPromptShown = false;
+
+  function maybePromptBodyWeight() {
+    if (weightPromptShown) return;
+    if (needsOnboarding()) return;      // usuario nuevo: eso lo pide el asistente
+    if (getBodyWeight()) return;
+
+    var modal = document.getElementById('weightPromptModal');
+    if (!modal || !modal.classList.contains('hidden')) return;
+
+    // No se apila sobre otro modal a pantalla completa: se reintenta al
+    // cerrar el que esté delante (ver el close() de mostrarWhatsNew()).
+    var wn = document.getElementById('whatsNewModal');
+    if (wn && !wn.classList.contains('hidden')) return;
+    var wiz = document.getElementById('wizardModal');
+    if (wiz && !wiz.classList.contains('hidden')) return;
+
+    weightPromptShown = true;
+    showBodyWeightPrompt();
+  }
+
+  function showBodyWeightPrompt() {
+    var modal = document.getElementById('weightPromptModal');
+    var overlay = document.getElementById('weightPromptOverlay');
+    var input = document.getElementById('weightPromptInput');
+    var save = document.getElementById('weightPromptSave');
+    var later = document.getElementById('weightPromptLater');
+    if (!modal || !input || !save) return;
+
+    input.value = '';
+    modal.classList.remove('hidden');
+    setTimeout(function () { input.focus(); }, 150);
+
+    function close() { modal.classList.add('hidden'); }
+
+    function guardar() {
+      var v = parseFloat(input.value.replace(',', '.'));
+      if (isNaN(v) || v < 30 || v > 250) {
+        showToast('Pon un peso entre 30 y 250 kg');
+        return;
+      }
+      setBodyWeight(v);
+      showToast('✓ Peso guardado: ' + v + ' kg');
+      close();
+      // Repinta lo que ya está en pantalla para que las kcal aparezcan ya,
+      // sin esperar a la próxima navegación.
+      renderRoutineStatus();
+      if (currentTab === 'rutina') renderCurrentDay();
+    }
+
+    save.addEventListener('click', guardar);
+    input.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { e.preventDefault(); guardar(); }
+    });
+    if (later) later.addEventListener('click', close);
+    if (overlay) overlay.addEventListener('click', close);
+  }
+
   // `progreso` opcional: si viene, se pintan barras de lo hecho esta semana.
   function planExplainerHtml(plan, progreso) {
     if (!plan) return '';
@@ -7882,6 +7951,12 @@
     if (acabamosDeActualizar && !habraNovedades) mostrarBannerActualizada();
     flushFeedbackQueue();
 
+    // La pestaña por defecto es Rutina, y ahí no pasa por switchTab(), así que
+    // hace falta este gancho aparte. El retraso deja que termine primero el
+    // modal de novedades (WHATSNEW_ESPERA, 2,5 s) si va a aparecer: si sigue
+    // abierto al disparar esto, se reintenta desde su propio close().
+    setTimeout(maybePromptBodyWeight, 3200);
+
     var pendingOnboarding = needsOnboarding();
     // Bloquea la app desde el primer frame para que no se vea el fondo
     if (pendingOnboarding) document.body.classList.add('onboarding-lock');
@@ -8015,6 +8090,9 @@
     function close() {
       modal.classList.add('hidden');
       localStorage.setItem('gym_whatsnew_seen', WHATS_NEW.version);
+      // Si este modal tapaba el aviso del peso, es el momento de sacarlo: sin
+      // este gancho, alguien que no cambia de pestaña no lo vería nunca.
+      maybePromptBodyWeight();
     }
 
     modal.classList.remove('hidden');

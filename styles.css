@@ -4489,3 +4489,69 @@ body.onboarding-lock .coach-fab { display: none; }
   font-weight: 500;
   opacity: 0.85;
 }
+
+/* Aviso de peso corporal: reutiliza el zócalo de .whatsnew-modal, con su
+   propio contenido centrado en vez de la lista de novedades. */
+.weight-prompt-sheet {
+  align-items: center;
+  text-align: center;
+}
+
+.weight-prompt-icon {
+  font-size: 2rem;
+  margin-bottom: 2px;
+}
+
+.weight-prompt-text {
+  font-size: 0.88rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.weight-prompt-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 6px 0 4px;
+}
+
+.weight-prompt-input {
+  width: 120px;
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-family: var(--font);
+  font-size: 1.1rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.weight-prompt-input:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+}
+
+.weight-prompt-unit {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
+.weight-prompt-later {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-family: var(--font);
+  font-size: 0.85rem;
+  cursor: pointer;
+  padding: 6px;
+}
+
+.weight-prompt-note {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin: 0;
+}

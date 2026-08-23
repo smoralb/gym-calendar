@@ -210,6 +210,26 @@
     </div>
   </div>
 
+  <!-- MODAL: PEDIR EL PESO CORPORAL -->
+  <div id="weightPromptModal" class="whatsnew-modal hidden">
+    <div class="whatsnew-modal-overlay" id="weightPromptOverlay"></div>
+    <div class="whatsnew-modal-sheet weight-prompt-sheet">
+      <div class="weight-prompt-icon">⚖️</div>
+      <div class="whatsnew-title">Un dato más y ya está</div>
+      <p class="weight-prompt-text">
+        Con tu peso puedo calcularte cuántas calorías estimadas quema cada
+        sesión y la semana entera. Sin él, esa parte se queda apagada.
+      </p>
+      <div class="weight-prompt-row">
+        <input id="weightPromptInput" class="weight-prompt-input" type="number" inputmode="decimal" min="30" max="250" step="0.5" placeholder="Tu peso" autocomplete="off">
+        <span class="weight-prompt-unit">kg</span>
+      </div>
+      <button id="weightPromptSave" class="whatsnew-ok">Guardar</button>
+      <button id="weightPromptLater" class="weight-prompt-later">Ahora no</button>
+      <p class="weight-prompt-note">Se puede cambiar cuando quieras desde Inicio.</p>
+    </div>
+  </div>
+
   <!-- MODAL: ¿POR QUÉ ESTE ENTRENAMIENTO? -->
   <div id="whyModal" class="whatsnew-modal hidden">
     <div class="whatsnew-modal-overlay" id="whyModalOverlay"></div>
