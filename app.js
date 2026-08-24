@@ -1,12 +1,12 @@
 /* =============================================
    Gym Calendar - App de Rutina de Ejercicios
-   Versión: 4.30.0 — Racha por sesiones seguidas, con aviso antes de perderla
+   Versión: 4.31.0 — Perfil se abre desde la cabecera y recoge también los planes
    ============================================= */
 
 (function () {
   'use strict';
 
-  var APP_VERSION = '4.30.0';
+  var APP_VERSION = '4.31.0';
 
   // Histórico de novedades, de la más reciente a la más antigua.
   //
@@ -17,6 +17,12 @@
   //
   // Sólo entran cambios que el usuario nota. Los arreglos internos no van aquí.
   var CHANGELOG = [
+    {
+      version: '4.31.0',
+      items: [
+        { icon: '👤', text: 'El botón redondo de arriba a la derecha ahora abre tu perfil, que es lo que parecía. Dentro tienes tus planes, tu progreso y tus ajustes, todo junto. La pestaña «Perfil» desaparece de abajo: se entra por ese botón.' }
+      ]
+    },
     {
       version: '4.30.0',
       items: [
@@ -2913,6 +2919,12 @@
   function switchTab(tab) {
     currentTab = tab;
     document.querySelectorAll('.tab-btn').forEach(function (btn) { btn.classList.toggle('active', btn.dataset.tab === tab); });
+    // Perfil ya no tiene pestaña: sin esto, al entrar no quedaría ningún
+    // control marcado y no habría forma de saber dónde estás.
+    var badge = document.getElementById('profileBadge');
+    if (badge) badge.classList.toggle('active', tab === 'stats');
+    // Salir de Perfil apaga el modo edición de planes.
+    if (tab !== 'stats') salirDeEdicionDePlanes();
     document.getElementById('homeView').style.display = tab === 'home' ? '' : 'none';
     document.getElementById('rutinaView').style.display = tab === 'rutina' ? '' : 'none';
     document.getElementById('statsView').style.display = tab === 'stats' ? '' : 'none';
@@ -5238,7 +5250,13 @@
     var phase = getPhase(getTodayKey());
     var weekNum = getWeekNumber(getTodayKey());
 
-    var html = '<div class="phase-banner"><span class="phase-banner-icon">📌</span><span class="phase-banner-text">' + phase.name + '</span><span class="phase-banner-week">Semana ' + weekNum + '/12</span></div>';
+    // Los planes van los primeros: es a lo que se viene cuando se pulsa el
+    // botón de la cabecera, y lo que da contexto a todo lo de abajo (el
+    // progreso y los ajustes son los del plan activo, no los de todos).
+    var html = planSelectorHtml();
+
+    html += '<div class="stats-section-title">📊 Tu progreso <span class="line"></span></div>';
+    html += '<div class="phase-banner"><span class="phase-banner-icon">📌</span><span class="phase-banner-text">' + phase.name + '</span><span class="phase-banner-week">Semana ' + weekNum + '/12</span></div>';
 
     // La racha pasa a ser la tarjeta principal. En riesgo cambia de color y lo
     // dice: es el único aviso que de verdad mueve a entrenar hoy.
@@ -5317,6 +5335,7 @@
       select.addEventListener('change', function () { setupChart(select.value); });
     }
 
+    setupPlanSelector();
     setupAjustesPersonales();
   }
 
@@ -8006,6 +8025,42 @@
   // el número de planes es variable.
   var planEditMode = false;
 
+  // Cabecera y contenedor del selector, dentro de Perfil. Los planes en sí los
+  // pinta renderPlanOptions() desde el registro.
+  function planSelectorHtml() {
+    var html = '';
+    // El botón va DESPUÉS de la línea: la línea es flex:1 y, colocado antes,
+    // se quedaría sin ancho.
+    html += '<div class="stats-section-title">🗂️ Tus planes '
+         + '<span class="line"></span>'
+         + '<button id="planEditToggle" class="plan-edit-toggle">'
+         + (planEditMode ? 'Hecho' : '✏️ Editar') + '</button>'
+         + '</div>';
+    html += '<div class="plan-selector-card">';
+    html += '  <div class="profile-modal-options' + (planEditMode ? ' editing' : '') + '"></div>';
+    html += '  <button id="redoWizardBtn" class="profile-modal-action">';
+    html += '    <span class="profile-modal-action-icon">🎯</span>';
+    html += '    <span class="profile-modal-action-text">';
+    html += '      <span class="profile-modal-action-title">Cambiar mi objetivo</span>';
+    html += '      <span class="profile-modal-action-desc">Vuelve a responder las preguntas y genera otra rutina</span>';
+    html += '    </span>';
+    html += '  </button>';
+    html += '</div>';
+    return html;
+  }
+
+  function setupPlanSelector() {
+    var editToggle = document.getElementById('planEditToggle');
+    if (editToggle) editToggle.addEventListener('click', togglePlanEditMode);
+
+    var redoBtn = document.getElementById('redoWizardBtn');
+    if (redoBtn) redoBtn.addEventListener('click', function () {
+      openRoutineWizard(false, { mode: 'edit', planId: activeProfile });
+    });
+
+    renderPlanOptions();
+  }
+
   function renderPlanOptions() {
     var wrap = document.querySelector('.profile-modal-options');
     if (!wrap) return;
@@ -8043,7 +8098,6 @@
     add.innerHTML = '<span class="profile-option-initial">+</span>'
       + '<span class="profile-option-name">Nuevo plan</span>';
     add.addEventListener('click', function () {
-      closeProfileSelector();
       openRoutineWizard(false, { mode: 'create' });
     });
     wrap.appendChild(add);
@@ -8105,6 +8159,12 @@
     renderPlanOptions();
   }
 
+  // El modo edición no debe sobrevivir a salir de Perfil: al volver se espera
+  // poder cambiar de plan de un toque, no borrarlo sin querer.
+  function salirDeEdicionDePlanes() {
+    if (planEditMode) planEditMode = false;
+  }
+
   // Se mantiene el nombre antiguo: lo llaman varios puntos del arranque.
   function addCustomProfileOption() { renderPlanOptions(); }
 
@@ -8126,20 +8186,8 @@
     });
   }
 
-  function openProfileSelector() {
-    var modal = document.getElementById('profileModal');
-    if (!modal) return;
-    renderPlanOptions();
-    modal.classList.remove('hidden');
-  }
-
-  function closeProfileSelector() {
-    // El modo edición no debe sobrevivir al cierre: al reabrir se espera
-    // poder cambiar de plan de un toque, no borrarlo sin querer.
-    if (planEditMode) togglePlanEditMode();
-    var modal = document.getElementById('profileModal');
-    if (modal) modal.classList.add('hidden');
-  }
+  // El botón de la cabecera lleva a Perfil, que es donde viven los planes.
+  function openProfileSelector() { switchTab('stats'); }
 
   // Primera vez que se entra en el plan combinado: fija la semana 1 en la
   // semana actual y arrastra los pesos ya registrados en Sergio, que comparte
@@ -8185,9 +8233,9 @@
     renderRoutineStatus();
     renderCurrentDay();
     updateAll();
+    salirDeEdicionDePlanes();
     if (currentTab === 'home') renderHome();
     if (currentTab === 'stats') renderStats();
-    closeProfileSelector();
     showToast('Plan: ' + PROFILES[activeProfile].name);
   }
 
@@ -8409,28 +8457,12 @@
       if (e.target && e.target.classList.contains('weight-input')) scheduleSuggestionCheck();
     });
 
+    // El botón de la cabecera abre Perfil. Sus controles internos (editar,
+    // cambiar de plan, «Cambiar mi objetivo») se enganchan en
+    // setupPlanSelector() cada vez que se pinta la vista.
     var badge = document.getElementById('profileBadge');
     if (badge) badge.addEventListener('click', openProfileSelector);
 
-    var overlay = document.getElementById('profileModalOverlay');
-    if (overlay) overlay.addEventListener('click', closeProfileSelector);
-
-    // Los planes ya no están escritos en el HTML: se pintan desde el registro
-    // y cada botón lleva su propio listener (ver renderPlanOptions).
-
-    var editToggle = document.getElementById('planEditToggle');
-    if (editToggle) editToggle.addEventListener('click', togglePlanEditMode);
-
-    // Rehacer el tutorial desde el menú. No va en modo onboarding: aquí sí se
-    // puede cerrar sin completarlo, y el plan actual se mantiene hasta que se
-    // confirme el nuevo en el resumen.
-    var redoBtn = document.getElementById('redoWizardBtn');
-    if (redoBtn) redoBtn.addEventListener('click', function () {
-      closeProfileSelector();
-      openRoutineWizard(false, { mode: 'edit', planId: activeProfile });
-    });
-
-    renderPlanOptions();
     updateProfileUI();
 
     var wizardOverlay = document.getElementById('wizardModalOverlay');

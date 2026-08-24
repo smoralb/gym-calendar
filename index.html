@@ -41,28 +41,13 @@
           <span class="subtitle" id="appSubtitle">3 días por semana</span>
           <span id="appVersion" class="app-version"></span>
         </span>
-        <button id="profileBadge" class="profile-badge" aria-label="Cambiar perfil">S</button>
+        <!-- Este botón parece un avatar, así que ahora hace lo que aparenta:
+             abrir Perfil. Antes abría el selector de planes, que con una
+             pestaña llamada «Perfil» al lado resultaba desconcertante. El
+             selector se ha mudado dentro de Perfil. -->
+        <button id="profileBadge" class="profile-badge" aria-label="Abrir tu perfil">S</button>
       </div>
 
-      <!-- PROFILE SELECTOR MODAL -->
-      <div id="profileModal" class="profile-modal hidden">
-        <div class="profile-modal-overlay" id="profileModalOverlay"></div>
-        <div class="profile-modal-sheet">
-          <div class="profile-modal-head">
-            <div class="profile-modal-title">Tus planes</div>
-            <button id="planEditToggle" class="profile-modal-edit">✏️ Editar</button>
-          </div>
-          <!-- Los planes se pintan desde el registro (renderPlanOptions) -->
-          <div class="profile-modal-options"></div>
-          <button id="redoWizardBtn" class="profile-modal-action">
-            <span class="profile-modal-action-icon">🎯</span>
-            <span class="profile-modal-action-text">
-              <span class="profile-modal-action-title">Cambiar mi objetivo</span>
-              <span class="profile-modal-action-desc">Vuelve a responder las preguntas y genera otra rutina</span>
-            </span>
-          </button>
-        </div>
-      </div>
       <!-- TAB BAR -->
       <div class="tab-bar">
         <button class="tab-btn" data-tab="home">
@@ -77,14 +62,11 @@
           <span class="tab-icon">🔍</span>
           <span class="tab-label">Ejercicios</span>
         </button>
-        <!-- El id interno sigue siendo 'stats' a propósito: renombrarlo
-             obligaría a tocar switchTab, currentTab y renderStats sin ganar
-             nada. Lo que cambia es lo que ve el usuario, que ahora también
-             encuentra aquí sus ajustes. -->
-        <button class="tab-btn" data-tab="stats">
-          <span class="tab-icon">👤</span>
-          <span class="tab-label">Perfil</span>
-        </button>
+        <!-- Perfil ya no es una pestaña: se entra por el botón de la cabecera,
+             que es el que parece un avatar. Dentro están los planes, el
+             progreso y los ajustes. La vista sigue siendo 'stats' por dentro:
+             renombrarla obligaría a tocar switchTab, currentTab y renderStats
+             sin ganar nada. -->
       </div>
     </header>
 
