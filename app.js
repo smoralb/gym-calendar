@@ -1,12 +1,12 @@
 /* =============================================
    Gym Calendar - App de Rutina de Ejercicios
-   Versión: 4.31.0 — Perfil se abre desde la cabecera y recoge también los planes
+   Versión: 4.31.1 — El peso corporal pasa a ser único para todos los planes
    ============================================= */
 
 (function () {
   'use strict';
 
-  var APP_VERSION = '4.31.0';
+  var APP_VERSION = '4.31.1';
 
   // Histórico de novedades, de la más reciente a la más antigua.
   //
@@ -17,6 +17,12 @@
   //
   // Sólo entran cambios que el usuario nota. Los arreglos internos no van aquí.
   var CHANGELOG = [
+    {
+      version: '4.31.1',
+      items: [
+        { icon: '⚖️', text: 'Tu peso ya es el mismo en todos los planes. Antes era de cada plan y al cambiar de uno a otro te lo volvía a pedir, cuando tú pesas lo mismo en todos.' }
+      ]
+    },
     {
       version: '4.31.0',
       items: [
@@ -7276,15 +7282,45 @@
   var MET_TROTE = 7.0;
   var MET_CARRERA_CONTINUA = 8.5;
 
+  // El peso es de la PERSONA, no del plan, así que vive en su propia clave y
+  // no dentro del estado de cada plan. Antes era por plan y cambiar de plan te
+  // volvía a pedir el peso, que no tiene ningún sentido: los planes son
+  // programas de entrenamiento, y quien los usa pesa lo mismo en todos.
+  var BODY_WEIGHT_KEY = 'gym_body_weight';
+
   function getBodyWeight() {
-    var w = state.settings && state.settings.bodyWeight;
-    return (typeof w === 'number' && w > 0) ? w : null;
+    var w;
+    try { w = parseFloat(localStorage.getItem(BODY_WEIGHT_KEY)); }
+    catch (e) { return null; }
+    return (!isNaN(w) && w > 0) ? w : null;
   }
 
   function setBodyWeight(kg) {
-    if (!state.settings) state.settings = {};
-    state.settings.bodyWeight = (typeof kg === 'number' && kg > 0) ? kg : null;
-    saveState();
+    try {
+      if (typeof kg === 'number' && kg > 0) localStorage.setItem(BODY_WEIGHT_KEY, String(kg));
+      else localStorage.removeItem(BODY_WEIGHT_KEY);
+    } catch (e) { /* almacenamiento lleno: se pierde el ajuste, no rompemos */ }
+  }
+
+  // Rescata el peso que ya estuviera guardado dentro de algún plan. Sin esto,
+  // quien lo tuviera puesto se lo encontraría vacío y volvería a que se lo
+  // pidieran. Se prefiere el del plan activo; si no, vale cualquiera.
+  function migrarPesoCorporal() {
+    if (getBodyWeight()) return;
+
+    var candidatos = [];
+    try {
+      var propio = 'gym_calendar_data_' + activeProfile;
+      Object.keys(localStorage).forEach(function (k) {
+        if (k.indexOf('gym_calendar_data_') !== 0) return;
+        var st;
+        try { st = JSON.parse(localStorage.getItem(k)); } catch (e) { return; }
+        var w = st && st.settings && st.settings.bodyWeight;
+        if (typeof w === 'number' && w > 0) candidatos.push({ clave: k, peso: w });
+      });
+      var elegido = candidatos.filter(function (c) { return c.clave === propio; })[0] || candidatos[0];
+      if (elegido) setBodyWeight(elegido.peso);
+    } catch (e) { /* sin migración: se pedirá el peso, que no es grave */ }
   }
 
   function metDelPlan(plan) {
@@ -8443,6 +8479,9 @@
   // =============================================
   function init() {
     initCombinedPlan();
+    // Antes de pintar nada: el peso pasó de vivir por plan a ser único, y hay
+    // que rescatar el que ya estuviera guardado.
+    migrarPesoCorporal();
     reregisterSwappedExercises();
     renderRoutineStatus();
     renderCurrentDay();
