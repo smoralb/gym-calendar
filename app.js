@@ -1,12 +1,12 @@
 /* =============================================
    Gym Calendar - App de Rutina de Ejercicios
-   Versión: 4.31.1 — El peso corporal pasa a ser único para todos los planes
+   Versión: 4.32.0 — Las alternativas salen del núcleo curado, no del catálogo
    ============================================= */
 
 (function () {
   'use strict';
 
-  var APP_VERSION = '4.31.1';
+  var APP_VERSION = '4.32.0';
 
   // Histórico de novedades, de la más reciente a la más antigua.
   //
@@ -17,6 +17,12 @@
   //
   // Sólo entran cambios que el usuario nota. Los arreglos internos no van aquí.
   var CHANGELOG = [
+    {
+      version: '4.32.0',
+      items: [
+        { icon: '🔍', text: 'Las alternativas ya no son un desastre: salen del mismo núcleo curado que tu rutina, así que respetan el material que dijiste tener, tu nivel y tus molestias. Además no repiten lo que ya haces ese día y cambian de orden cada vez.' }
+      ]
+    },
     {
       version: '4.31.1',
       items: [
@@ -3523,16 +3529,152 @@
   // Material considerado "guiado" o de bajo impacto para el motivo 'dolor'.
   var GENTLE_EQUIPMENT = { 'body weight': 1, 'cable': 1, 'leverage machine': 1, 'band': 1, 'resistance band': 1, 'stability ball': 1, 'roller': 1 };
 
+  // =============================================
+  // BUSCADOR DE ALTERNATIVAS
+  // ---------------------------------------------
+  // Las alternativas salen de CORE_EXERCISES, el mismo núcleo curado que usa el
+  // generador, y NO del catálogo de 1.324. El catálogo se sigue usando como
+  // último recurso, pero no como fuente principal.
+  //
+  // Antes era al revés, y de ahí salían las tres quejas de siempre:
+  //
+  //   - «Siempre el mismo orden, da igual el músculo». Si el ejercicio no
+  //     estaba mapeado al catálogo, `baseRec` era null y con él se caían
+  //     patrón, nivel, músculo y zona. Toda la puntuación se anulaba y la
+  //     lista acababa ordenada por LONGITUD DEL NOMBRE, idéntica siempre.
+  //   - «Me propone material que dije que no tengo». El filtro sólo se
+  //     aplicaba si el plan venía del asistente, y encima usaba el campo `eq`
+  //     del catálogo, que a veces miente.
+  //   - «Me propone ejercicios avanzados en un plan de principiante». El nivel
+  //     se comparaba con el del ejercicio sustituido —adivinado con regex
+  //     sobre el nombre en inglés— y nunca con el nivel declarado. En los
+  //     motivos «otra» y «material» ni siquiera se miraba.
+  //
+  // El núcleo tiene material, nivel, grupo muscular y lesiones verificados a
+  // mano, así que `coreAvailable()` resuelve las tres de una vez: es la misma
+  // restricción dura que impide que el generador recete «Ring dips» a un
+  // principiante sin material.
+
+  // Qué puede hacer el usuario. Con plan del asistente es lo que declaró; sin
+  // él (plantillas fijas) no hay respuestas guardadas, así que se asume peso
+  // corporal más el material del ejercicio que está sustituyendo: si lo tiene
+  // en su rutina, ese material lo tiene. Antes, sin respuestas, no se filtraba
+  // NADA, que es como acababa proponiendo barras a quien entrena en el salón.
+  function contextoDeAlternativas(exercise) {
+    var plan = loadCustomPlan();
+    var answers = (plan && plan.answers) ? normalizeAnswers(plan.answers) : null;
+
+    if (answers) {
+      return {
+        inventory: getInventory(answers),
+        level: answers.level || 'principiante',
+        avoid: answerList(answers, 'avoid')
+      };
+    }
+
+    var inv = {};
+    inv[BODYWEIGHT_EQ] = 1;
+    var base = exercise && exercise.coreId ? CORE_BY_ID[exercise.coreId] : null;
+    if (base) (base.mat || []).forEach(function (m) { inv[m] = 1; });
+    return { inventory: inv, level: 'principiante', avoid: [] };
+  }
+
+  // Baraja en sitio. Sin esto, a igualdad de puntuación el orden es siempre el
+  // mismo y «buscar otra» recorre una lista fija: la sensación es que la app
+  // sugiere siempre lo mismo aunque técnicamente vaya avanzando.
+  function barajar(arr) {
+    for (var i = arr.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1));
+      var t = arr[i]; arr[i] = arr[j]; arr[j] = t;
+    }
+    return arr;
+  }
+
+  // Candidatos del núcleo curado. Devuelve [] si no hay nada, y entonces se
+  // cae al catálogo.
+  function alternativasDelNucleo(exercise, reasonKey, excluidos) {
+    var base = exercise && exercise.coreId ? CORE_BY_ID[exercise.coreId] : null;
+    var ctx = contextoDeAlternativas(exercise);
+
+    // Para el motivo «me duele», además de las lesiones declaradas se evita lo
+    // que carga la zona del ejercicio que molesta.
+    var evitar = ctx.avoid.slice();
+    if (reasonKey === 'dolor' && base && base.evitar) {
+      base.evitar.forEach(function (z) { if (evitar.indexOf(z) === -1) evitar.push(z); });
+    }
+
+    var disponibles = coreAvailable(ctx.inventory, ctx.level, evitar);
+
+    var items = [];
+    disponibles.forEach(function (e) {
+      if (e.id === (base && base.id)) return;
+      if (excluidos['core_' + e.id]) return;
+
+      // Mismo grupo muscular: es lo que hace que una alternativa sea una
+      // alternativa y no otro ejercicio cualquiera.
+      var score = 0;
+      if (base) {
+        if (e.grupo === base.grupo) score += 20;
+        else if (e.patron === base.patron) score += 6;
+        else return;   // ni el mismo músculo ni el mismo patrón: no es sustituto
+        if (e.patron === base.patron) score += 5;
+      } else if (exercise && exercise.muscle) {
+        // Sin coreId (p. ej. una alternativa elegida antes) se compara por la
+        // etiqueta de músculo que ya lleva el ejercicio.
+        if ((GROUP_LABEL_G[e.grupo] || e.grupo) === exercise.muscle) score += 20;
+        else return;
+      }
+
+      var rank = LEVEL_RANK[e.nivel] === undefined ? 0 : LEVEL_RANK[e.nivel];
+      var rankBase = base && LEVEL_RANK[base.nivel] !== undefined ? LEVEL_RANK[base.nivel] : null;
+
+      if (reasonKey === 'material') {
+        if (!(e.mat || []).length) score += 12;          // peso corporal
+        else if ((e.mat || []).length < ((base && base.mat) || []).length) score += 6;
+        if (base && base.mat && base.mat.length &&
+            (e.mat || []).join() === base.mat.join()) return;   // mismo material: no resuelve nada
+
+      } else if (reasonKey === 'dificil') {
+        if (base && base.facil === e.id) score += 25;    // la variante fácil declarada
+        if (rankBase !== null && rank >= rankBase) return;
+        score += (rankBase - rank) * 6;
+
+      } else if (reasonKey === 'dolor') {
+        if (rank === 0) score += 8;                      // principiante = más suave
+        if (!(e.mat || []).length) score += 3;
+
+      } else if (reasonKey === 'variar') {
+        if (rankBase !== null && rank > rankBase) return;
+        if (rankBase !== null && rank === rankBase) score += 6;
+
+      } else {   // 'otra'
+        if (rankBase !== null && rank === rankBase) score += 4;
+      }
+
+      items.push({ core: e, score: score });
+    });
+
+    // Se baraja ANTES de ordenar: así los empates salen en orden distinto cada
+    // vez y deja de parecer que siempre propone lo mismo.
+    barajar(items);
+    items.sort(function (a, b) { return b.score - a.score; });
+
+    return items.map(function (i) { return i.core; });
+  }
+
   // Devuelve candidatos del catálogo para sustituir a `exercise` por el motivo
   // `reasonKey`, ya ordenados. `excludeIds` son los que ya se han descartado.
   // Nunca devuelve vacío si el catálogo tiene algo que ofrecer: si los filtros
   // estrictos no dan nada, se van relajando por pasos.
-  function findAlternativeCandidates(exercise, reasonKey, excludeIds) {
+  function findAlternativeCandidates(exercise, reasonKey, excludeIds, excludeNames) {
     if (!EXERCISE_DB.isLoaded()) return [];
     excludeIds = excludeIds || [];
 
     var excluded = {};
     excludeIds.forEach(function (id) { excluded[id] = 1; });
+
+    var nombresFuera = {};
+    (excludeNames || []).forEach(function (n) { nombresFuera[n] = 1; });
 
     var baseRec = getDbRecord(exercise.id);
     if (baseRec) excluded[baseRec.id] = 1;
@@ -3544,13 +3686,13 @@
     var baseTarget = baseRec ? baseRec.tg : null;
     var basePart = baseRec ? baseRec.bp : null;
 
-    // Material declarado en el asistente. Si no hizo el tutorial no sabemos
-    // qué tiene, así que no se restringe; pero si lo hizo, es restricción dura
-    // para TODOS los motivos: nunca tiene sentido proponer algo que no puede
-    // hacer, ni aunque el motivo sea la dificultad o el dolor.
-    var plan = loadCustomPlan();
-    var answers = (plan && plan.answers) ? normalizeAnswers(plan.answers) : null;
-    var inventory = answers ? getInventory(answers) : null;
+    // Material y nivel del usuario. Se usa el MISMO contexto que el buscador
+    // del núcleo, así que aquí ya nunca se cae en «sin respuestas, sin
+    // filtro»: antes eso era lo que dejaba pasar barras a quien entrena en el
+    // salón, y ejercicios avanzados a un principiante.
+    var ctx = contextoDeAlternativas(exercise);
+    var inventory = ctx.inventory;
+    var nivelUsuario = ctx.level;
 
     // Universo de partida. Sin mapeo al dataset no hay patrón ni nivel de
     // referencia: se tira de búsqueda por texto y se relajan los filtros.
@@ -3572,6 +3714,12 @@
         if (inventory && !canPerform(rec, inventory)) return;
         var t = EXERCISE_TAGS.tagsFor(rec);
         if (!t) return;
+
+        // Nunca por encima del nivel DECLARADO. Antes se comparaba con el
+        // nivel del ejercicio sustituido —adivinado con regex sobre el nombre
+        // en inglés— y en los motivos «otra» y «material» ni se miraba: por
+        // ahí se colaban cosas como «Clap push up» a un principiante.
+        if (relax <= 1 && levelOrder[t._level] > levelOrder[nivelUsuario]) return;
 
         if (relax <= 1 && basePattern && t._pattern !== basePattern) return;
         if (relax === 2 && basePart && rec.bp !== basePart) return;
@@ -3628,7 +3776,7 @@
       var out = [];
       items.forEach(function (i) {
         var visible = EXERCISE_DB.labelName(i.rec.n);
-        if (names[visible]) return;
+        if (names[visible] || nombresFuera[visible]) return;
         names[visible] = 1;
         out.push(i.rec);
       });
@@ -3664,6 +3812,93 @@
     };
   }
 
+  // Igual que catalogRecToExercise pero desde el núcleo curado. Conserva
+  // `coreId`, así que la alternativa sigue siendo sustituible después y el
+  // buscador vuelve a tener músculo, patrón y nivel de referencia.
+  function coreToExercise(core, baseExercise, reasonKey) {
+    var rec = EXERCISE_DB.get(core.db);
+    return {
+      id: 'alt_core_' + core.id,
+      dbId: core.db,
+      coreId: core.id,
+      name: core.nombre,
+      muscle: GROUP_LABEL_G[core.grupo] || core.grupo,
+      series: baseExercise.series,
+      reps: baseExercise.reps,
+      repsMin: baseExercise.repsMin,
+      repsMax: baseExercise.repsMax,
+      rest: baseExercise.rest,
+      isTimed: baseExercise.isTimed,
+      focus: (rec && rec.es && rec.es.length ? rec.es[0] : 'Movimiento controlado en todo el recorrido.'),
+      weightHint: (core.mat && core.mat.length) ? 'Ajusta el peso a tu nivel' : 'Peso corporal',
+      reason: reasonByKey(reasonKey).label
+    };
+  }
+
+  // Punto de entrada único. Primero el núcleo curado —material, nivel y
+  // lesiones verificados— y sólo si no da nada, el catálogo completo.
+  // Devuelve objetos { tipo: 'core'|'db', item }.
+  // `ampliar` = el usuario ha pedido expresamente ver el catálogo completo
+  // después de agotar el núcleo. No se mezclan solos a propósito: el catálogo
+  // tiene el nivel adivinado por regex sobre el nombre en inglés, y colaba
+  // plióticos como «Clap push up» o «Plyo push up» a un principiante. Mejor
+  // decir «no hay más» que proponer algo que no debería hacer.
+  function buscarAlternativas(exercise, reasonKey, excludeIds, dateKey, ampliar) {
+    var excluidos = {};
+    (excludeIds || []).forEach(function (id) { excluidos[id] = 1; });
+
+    // Fuera lo que ya está en la sesión de hoy: proponer un ejercicio que el
+    // usuario va a hacer de todas formas no es una alternativa, y encima le
+    // duplicaría el trabajo de ese músculo.
+    try {
+      var day = getDayDef(dateKey || getTodayKey());
+      if (day && day.exercises) {
+        day.exercises.forEach(function (ex) {
+          if (ex.coreId) excluidos['core_' + ex.coreId] = 1;
+          if (ex.dbId) excluidos[ex.dbId] = 1;
+        });
+      }
+    } catch (e) { /* sin día resuelto: se sigue sin esta exclusión */ }
+
+    if (!ampliar) {
+      return alternativasDelNucleo(exercise, reasonKey, excluidos)
+        .map(function (c) { return { tipo: 'core', item: c }; });
+    }
+
+    // Al catálogo se le pasan los ids descartados y también los NOMBRES de los
+    // del núcleo: el dataset trae variantes distintas que al traducir colapsan
+    // en el mismo nombre, así que excluir sólo por id reofrecía el mismo
+    // ejercicio que acababas de rechazar.
+    var ids = [];
+    var nombres = [];
+    Object.keys(excluidos).forEach(function (id) {
+      if (id.indexOf('core_') !== 0) { ids.push(id); return; }
+      var core = CORE_BY_ID[id.slice(5)];
+      if (core && core.nombre) nombres.push(core.nombre);
+    });
+
+    return findAlternativeCandidates(exercise, reasonKey, ids, nombres).map(function (r) {
+      return { tipo: 'db', item: r };
+    });
+  }
+
+  function alternativaAExercise(cand, baseExercise, reasonKey) {
+    return cand.tipo === 'core'
+      ? coreToExercise(cand.item, baseExercise, reasonKey)
+      : catalogRecToExercise(cand.item, baseExercise, reasonKey);
+  }
+
+  // Claves con las que se recuerda un candidato rechazado. Los del núcleo
+  // llevan DOS: la suya y la de su ficha en el catálogo. Sin la segunda, al
+  // ampliar al catálogo reaparecía el mismo ejercicio que ya habías
+  // descartado, con otro nombre y sin traducir.
+  function clavesDeCandidato(cand) {
+    if (cand.tipo !== 'core') return [cand.item.id];
+    var claves = ['core_' + cand.item.id];
+    if (cand.item.db) claves.push(cand.item.db);
+    return claves;
+  }
+
   // Modal en dos pantallas: primero el motivo, después las propuestas, que se
   // pueden ir rechazando indefinidamente con "Buscar otra".
   function showAlternativeFinderModal(originalId, exercise, dateKey, onDone) {
@@ -3684,6 +3919,8 @@
     var candidates = [];
     var idx = 0;
     var reasonKey = null;
+    // Se ha pedido salir del núcleo curado al catálogo completo.
+    var ampliado = false;
 
     function close() { overlay.remove(); }
 
@@ -3747,7 +3984,7 @@
     }
 
     function runSearch() {
-      candidates = findAlternativeCandidates(exercise, reasonKey, rejected);
+      candidates = buscarAlternativas(exercise, reasonKey, rejected, dateKey, ampliado);
       idx = 0;
       renderProposal();
     }
@@ -3761,8 +3998,30 @@
 
       var sub = document.createElement('div');
       sub.className = 'alt-finder-subtitle';
-      sub.textContent = 'No hemos encontrado (más) alternativas para ese motivo.';
+      sub.textContent = ampliado
+        ? 'No hemos encontrado (más) alternativas para ese motivo.'
+        : 'Se han acabado las alternativas verificadas para ese motivo.';
       modal.appendChild(sub);
+
+      // El catálogo completo se ofrece sólo si se pide, y avisando: ahí el
+      // material y el nivel no están comprobados a mano, así que pueden salir
+      // ejercicios que no encajen con lo que declaraste.
+      if (!ampliado) {
+        var mas = document.createElement('button');
+        mas.className = 'alt-finder-again';
+        mas.textContent = '🔍 Buscar en el catálogo completo';
+        mas.addEventListener('click', function (e) {
+          e.stopPropagation();
+          ampliado = true;
+          runSearch();
+        });
+        modal.appendChild(mas);
+
+        var aviso = document.createElement('div');
+        aviso.className = 'alt-finder-warning';
+        aviso.textContent = 'Ahí hay 1.324 ejercicios, pero su material y su nivel no están verificados: revisa la ficha antes de aceptar.';
+        modal.appendChild(aviso);
+      }
 
       var again = document.createElement('button');
       again.className = 'alt-finder-again';
@@ -3775,9 +4034,9 @@
 
     function renderProposal() {
       if (idx >= candidates.length) { renderEmpty(); return; }
-      var rec = candidates[idx];
+      var cand = candidates[idx];
       var reason = reasonByKey(reasonKey);
-      var alt = catalogRecToExercise(rec, exercise, reasonKey);
+      var alt = alternativaAExercise(cand, exercise, reasonKey);
 
       modal.innerHTML = '';
 
@@ -3793,15 +4052,26 @@
 
       var card = document.createElement('div');
       card.className = 'alt-finder-card';
+      // La ficha (animación, material, pasos) sale siempre del catálogo: el
+      // núcleo sólo guarda el id, y del catálogo vienen la imagen y el texto.
+      var rec = cand.tipo === 'core' ? EXERCISE_DB.get(cand.item.db) : cand.item;
+
       var html = '';
-      var gif = EXERCISE_DB.gifUrl(rec);
+      var gif = rec ? EXERCISE_DB.gifUrl(rec) : '';
       if (gif) {
         html += '<img class="alt-finder-card-gif" loading="lazy" alt="Animación: ' + escapeHtml(alt.name) + '" src="' + gif + '">';
       }
       html += '<div class="alt-finder-card-name">' + escapeHtml(alt.name) + '</div>';
-      html += '<div class="alt-finder-card-meta">' + escapeHtml(alt.muscle) + ' · ' + escapeHtml(EXERCISE_DB.labelEquipment(rec.eq)) + '</div>';
+      // El material se dice desde el núcleo cuando viene de él: el campo `eq`
+      // del catálogo a veces miente, y es justo el dato que hay que acertar.
+      var material = cand.tipo === 'core'
+        ? ((cand.item.mat && cand.item.mat.length)
+            ? cand.item.mat.map(function (m) { return EXERCISE_DB.labelEquipment(m); }).join(' + ')
+            : 'Peso corporal')
+        : (rec ? EXERCISE_DB.labelEquipment(rec.eq) : '');
+      html += '<div class="alt-finder-card-meta">' + escapeHtml(alt.muscle) + (material ? ' · ' + escapeHtml(material) : '') + '</div>';
       html += '<div class="alt-finder-card-scheme">' + escapeHtml(String(alt.series)) + '×' + escapeHtml(String(alt.reps)) + ' · descanso ' + escapeHtml(String(alt.rest || '—')) + '</div>';
-      if (rec.es && rec.es.length) {
+      if (rec && rec.es && rec.es.length) {
         html += '<ol class="alt-finder-steps">';
         rec.es.slice(0, 3).forEach(function (s) { html += '<li>' + escapeHtml(s) + '</li>'; });
         html += '</ol>';
@@ -3817,12 +4087,12 @@
       again.textContent = '🔄 Buscar otra';
       again.addEventListener('click', function (e) {
         e.stopPropagation();
-        rejected.push(rec.id);
+        clavesDeCandidato(cand).forEach(function (k) { rejected.push(k); });
         idx++;
         // Agotada la tanda, se vuelve a buscar con los rechazados fuera: así
-        // entran en juego los filtros relajados y siempre hay salida.
+        // se pasa del núcleo al catálogo y siempre hay salida.
         if (idx >= candidates.length) {
-          candidates = findAlternativeCandidates(exercise, reasonKey, rejected);
+          candidates = buscarAlternativas(exercise, reasonKey, rejected, dateKey);
           idx = 0;
         }
         renderProposal();

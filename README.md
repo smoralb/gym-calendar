@@ -108,8 +108,29 @@ familias:
 | Nivel | `principiante` · `intermedio` · `avanzado` |
 
 Los tags sostienen los **filtros del catálogo** (chips acumulables en la pestaña
-Ejercicios) y el **buscador de alternativas**. Ojo: **ya no se usan para generar
-la rutina** — eso lo hace un núcleo curado aparte, ver la sección siguiente.
+Ejercicios). Ojo: **ya no se usan ni para generar la rutina ni para proponer
+alternativas** — las dos cosas salen del núcleo curado, ver las secciones
+siguientes.
+
+### 🔍 Buscador de alternativas
+
+Las alternativas salen de **`CORE_EXERCISES`**, igual que la rutina, y pasan por
+el mismo `coreAvailable()`: material declarado, nivel declarado y zonas a
+evitar. Se ordenan por grupo muscular y por el motivo del cambio (no tengo
+material, es muy difícil, me duele, quiero variar), y se barajan los empates
+para que no salga siempre lo mismo en el mismo orden.
+
+Antes tiraban del catálogo completo y de `EXERCISE_TAGS`, y de ahí salían las
+tres quejas clásicas: mismo orden para cualquier músculo (sin mapeo al catálogo
+la puntuación se anulaba y ordenaba por longitud del nombre), material que el
+usuario había dicho que no tenía (el filtro sólo se aplicaba con plan del
+asistente, y el campo `eq` del dataset a veces miente) y ejercicios avanzados en
+planes de principiante (el nivel se comparaba con el del ejercicio sustituido,
+adivinado por regex, y en dos motivos ni se miraba).
+
+El catálogo completo sigue estando, pero **sólo si se pide** al agotar el
+núcleo, y avisando de que allí el material y el nivel no están verificados.
+También se excluyen los ejercicios que ya están en la sesión de ese día.
 
 ### 🧠 Generador de rutinas
 
