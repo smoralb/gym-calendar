@@ -1,12 +1,12 @@
 /* =============================================
    Gym Calendar - App de Rutina de Ejercicios
-   Versión: 4.32.0 — Las alternativas salen del núcleo curado, no del catálogo
+   Versión: 4.32.1 — Actualizar la rutina ya cambia la rutina de verdad
    ============================================= */
 
 (function () {
   'use strict';
 
-  var APP_VERSION = '4.32.0';
+  var APP_VERSION = '4.32.1';
 
   // Histórico de novedades, de la más reciente a la más antigua.
   //
@@ -17,6 +17,12 @@
   //
   // Sólo entran cambios que el usuario nota. Los arreglos internos no van aquí.
   var CHANGELOG = [
+    {
+      version: '4.32.1',
+      items: [
+        { icon: '🐛', text: 'Arreglado: al cambiar tu rutina desde el coach o desde el asistente, decía «Rutina actualizada» pero seguías viendo la de antes. Y si pedías más días, te dejaba el programa anterior repartido entre ellos en vez de uno de verdad para esos días.' }
+      ]
+    },
     {
       version: '4.32.0',
       items: [
@@ -6268,8 +6274,17 @@
 
   // Resuelve el programa de un plan: el elegido, o el recomendado si no hay
   // elección (planes antiguos, o números de días con una sola opción).
+  // El split guardado sólo vale si sigue siendo de los días que se piden ahora.
+  //
+  // Sin esta comprobación, cambiar los días sin tocar el split dejaba pegado el
+  // anterior: pedir 5 días partiendo de un plan de 3 daba un «Cuerpo completo»
+  // de 3 sesiones rotando sobre 5 días, o sea cada músculo entrenado bastante
+  // más de lo que marcan los objetivos de volumen. Pasaba al ajustar desde el
+  // coach, que cambia `days` y no toca `split`.
   function resolveSplit(answers) {
-    return getSplitById(answers.split) || recommendedSplit(answers) || splitsForDays('3')[0];
+    var guardado = getSplitById(answers.split);
+    if (guardado && String(guardado.days) === String(answers.days)) return guardado;
+    return recommendedSplit(answers) || splitsForDays(answers.days)[0] || splitsForDays('3')[0];
   }
 
   // =============================================
@@ -7154,7 +7169,45 @@
     savePlanRegistry();
     rebuildProfiles();
     registerPlanExercises(plan);
+    sincronizarDiasDeEntreno(id, plan);
     return id;
+  }
+
+  // Al REEMPLAZAR un plan hay que refrescar sus días de entreno guardados.
+  //
+  // Sin esto, el plan nuevo se guardaba bien pero `state.settings.trainingDays`
+  // conservaba los del plan viejo, y el resultado era el peor posible: la app
+  // decía «Rutina actualizada» y seguías viendo lo de antes. Pasaba tanto al
+  // editar desde el asistente como al aceptar un cambio del coach.
+  //
+  // Y si el plan nuevo tiene MENOS sesiones que días marcados, los días
+  // sobrantes se quedan sin sesión que mostrar, porque el calendario indexa
+  // phase.days por la posición del día dentro de getTrainingDays().
+  //
+  // Sólo afecta a planes existentes: los nuevos nacen con su estado por
+  // defecto, que ya toma los días del propio plan.
+  function sincronizarDiasDeEntreno(id, plan) {
+    var dias = plan && plan.trainingDays;
+    if (!dias || !dias.length) return;
+
+    if (id === activeProfile) {
+      if (!state.settings) state.settings = {};
+      state.settings.trainingDays = dias.slice();
+      saveState();
+      return;
+    }
+
+    // Plan que no es el activo: se escribe directamente en su clave, si ya
+    // tiene estado guardado. Si no lo tiene, nacerá con los días correctos.
+    try {
+      var clave = 'gym_calendar_data_' + id;
+      var raw = localStorage.getItem(clave);
+      if (!raw) return;
+      var st = JSON.parse(raw);
+      if (!st.settings) st.settings = {};
+      st.settings.trainingDays = dias.slice();
+      localStorage.setItem(clave, JSON.stringify(st));
+    } catch (e) { /* sin sincronizar: se vería el plan viejo, no se rompe */ }
   }
 
   // Borra un plan y su historial. Devuelve false si es el último que queda:
