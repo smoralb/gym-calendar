@@ -1,12 +1,12 @@
 /* =============================================
    Gym Calendar - App de Rutina de Ejercicios
-   Versión: 4.32.1 — Actualizar la rutina ya cambia la rutina de verdad
+   Versión: 4.33.0 — Copia automática, y las plantillas ya se pueden ajustar
    ============================================= */
 
 (function () {
   'use strict';
 
-  var APP_VERSION = '4.32.1';
+  var APP_VERSION = '4.33.0';
 
   // Histórico de novedades, de la más reciente a la más antigua.
   //
@@ -17,6 +17,19 @@
   //
   // Sólo entran cambios que el usuario nota. Los arreglos internos no van aquí.
   var CHANGELOG = [
+    {
+      version: '4.33.0',
+      items: [
+        { icon: '☁️', text: 'Tus datos ya se copian solos fuera del móvil: cada vez que entrenas y cada vez que cierras la app. Sin cuentas ni botones. En Perfil tienes un código para recuperarlos en otro móvil — apúntalo, es la única llave.' },
+        { icon: '🪄', text: 'Los planes de plantilla (Sergio, Eva, Gely) ya se pueden convertir en rutina a tu medida, conservando tus pesos, tus sesiones y tu racha. A partir de ahí el coach sí puede ajustártelos. Y se puede volver atrás desde Perfil → Editar.' },
+        { icon: '🐛', text: 'Arreglado: le pedías al coach que te cambiara la rutina, te decía que sí, y no cambiaba nada. Con los planes de plantilla no había forma de aplicarlo y no te avisaba de ello.' },
+        { icon: '🗓️', text: 'Mapa de calor de los últimos 6 meses en Perfil: una casilla por día, más intensa cuantos más ejercicios hiciste.' },
+        { icon: '⚖️', text: 'Tu peso corporal ahora tiene gráfica: cada vez que lo actualizas queda un apunte y ves la curva.' },
+        { icon: '💾', text: 'También puedes descargarte tus datos a un fichero y volver a importarlos, si prefieres no depender de nada.' },
+        { icon: '🔆', text: 'La pantalla ya no se apaga mientras entrenas.' },
+        { icon: '🏃', text: 'Con el plan de vuelta a correr, la cabecera decía los días que pediste y no los que hay de verdad. Ahora dice la verdad y te explica por qué la carrera ocupa 3 días suyos.' }
+      ]
+    },
     {
       version: '4.32.1',
       items: [
@@ -2106,6 +2119,27 @@
     gely:   { name: 'Gely',   initial: 'G', phases: GELY_PHASES,   warmup: WARMUP_GELY, defaultDays: [1, 3, 5], daysLabel: '3 días tono + remo' }
   };
 
+  // Respuestas equivalentes a cada plantilla, para poder CONVERTIRLA en una
+  // rutina a medida sin empezar el cuestionario en blanco.
+  //
+  // Una plantilla está escrita a mano y no tiene respuestas: por eso el coach
+  // no podía tocarla y el asistente, al abrirla, se iba a crear un plan nuevo
+  // y te dejaba el historial atrás. Con esto el cuestionario sale relleno con
+  // algo parecido a lo que ya entrenas, y lo que se genera se guarda BAJO EL
+  // MISMO ID, así que pesos, sesiones y racha siguen siendo tuyos.
+  //
+  // Son aproximaciones, no equivalencias: el generador elige de CORE_EXERCISES
+  // y no va a reproducir la plantilla ejercicio a ejercicio. Por eso convertir
+  // se avisa antes y se puede deshacer (restaurarPlantilla()).
+  var BUILTIN_SEEDS = {
+    sergio: { goal: ['hipertrofia'], place: ['gimnasio'], days: '5', split: 'auto',
+              minutes: '60', level: 'intermedio', avoid: [], running: 'si', runningPlan: 'si', focus: '' },
+    eva:    { goal: ['tono'], place: ['gimnasio'], days: '2', split: 'auto',
+              minutes: '45', level: 'principiante', avoid: [], running: '', runningPlan: '', focus: '' },
+    gely:   { goal: ['tono'], place: ['gimnasio'], days: '3', split: 'auto',
+              minutes: '45', level: 'principiante', avoid: [], running: '', runningPlan: '', focus: '' }
+  };
+
   // =============================================
   // REGISTRO DE PLANES
   // =============================================
@@ -2144,6 +2178,7 @@
 
   function savePlanRegistry() {
     try { localStorage.setItem(PLANS_KEY, JSON.stringify(planRegistry)); } catch (e) {}
+    marcarCambioLocal();
   }
 
   // Construye el registro la primera vez. NO intenta adivinar de quién es cada
@@ -2332,6 +2367,7 @@
 
   function saveState() {
     try { localStorage.setItem(getStorageKey(), JSON.stringify(state)); } catch (e) {}
+    marcarCambioLocal();
   }
 
   var state = loadState();
@@ -2356,6 +2392,10 @@
     if (!state.finished) state.finished = {};
     state.finished[key] = new Date().toISOString();
     saveState();
+    // Terminar el entreno es EL momento en que hay algo que no se puede
+    // perder, así que no se espera al agrupador: sube ya.
+    subirCopiaYa();
+    soltarWakeLock();
     renderCurrentDay();
     // Para que no llegue el segundo recordatorio del día habiendo entrenado ya.
     reportarEntrenoHecho();
@@ -2754,6 +2794,7 @@
       state.completions[key][exerciseId] = true;
       playCompleteSound();
       vibrate();
+      pedirWakeLock();
       if (originalId) nextId = advanceToNextPending(originalId);
       // Check if all exercises done (Eva motivational message)
       if (activeProfile === 'eva') checkEvaWorkoutComplete();
@@ -2943,6 +2984,9 @@
     if (badge) badge.classList.toggle('active', tab === 'stats');
     // Salir de Perfil apaga el modo edición de planes.
     if (tab !== 'stats') salirDeEdicionDePlanes();
+    // Fuera de Rutina ya no se está entrenando: no hay por qué seguir
+    // impidiendo que se apague la pantalla.
+    if (tab !== 'rutina') soltarWakeLock();
     document.getElementById('homeView').style.display = tab === 'home' ? '' : 'none';
     document.getElementById('rutinaView').style.display = tab === 'rutina' ? '' : 'none';
     document.getElementById('statsView').style.display = tab === 'stats' ? '' : 'none';
@@ -3374,9 +3418,55 @@
     }
   }
 
+  // =============================================
+  // PANTALLA ENCENDIDA MIENTRAS ENTRENAS
+  // ---------------------------------------------
+  // Entre serie y serie el móvil se bloquea y hay que desbloquearlo con las
+  // manos ocupadas y sudadas. Se pide el bloqueo al marcar el primer ejercicio
+  // o al arrancar un descanso, y se suelta al terminar el entreno o al salir
+  // de la pestaña Rutina.
+  //
+  // El navegador revoca el bloqueo él solo al cambiar de pestaña o apagar la
+  // pantalla, y no lo devuelve al volver: por eso se guarda aparte la
+  // intención (`wakeLockQuerido`) y se vuelve a pedir en `visibilitychange`.
+  var wakeLock = null;
+  var wakeLockQuerido = false;
+
+  function wakeLockSoportado() {
+    return !!(navigator.wakeLock && navigator.wakeLock.request);
+  }
+
+  function pedirWakeLock() {
+    if (!wakeLockSoportado()) return;
+    wakeLockQuerido = true;
+    if (wakeLock || document.visibilityState !== 'visible') return;
+    navigator.wakeLock.request('screen').then(function (lock) {
+      // Puede haberse soltado mientras se resolvía la promesa.
+      if (!wakeLockQuerido) { try { lock.release(); } catch (e) {} return; }
+      wakeLock = lock;
+      lock.addEventListener('release', function () { wakeLock = null; });
+    }).catch(function () {
+      // Batería baja, pestaña en segundo plano o el navegador dice que no.
+      // No es crítico: la app funciona igual, sólo se apaga la pantalla.
+    });
+  }
+
+  function soltarWakeLock() {
+    wakeLockQuerido = false;
+    if (!wakeLock) return;
+    var lock = wakeLock;
+    wakeLock = null;
+    try { lock.release(); } catch (e) {}
+  }
+
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible' && wakeLockQuerido) pedirWakeLock();
+  });
+
   function startRestTimer(exerciseId, totalSeconds) {
     if (totalSeconds <= 0) return;
     clearActiveTimer();
+    pedirWakeLock();
 
     var remaining = totalSeconds;
     var timerDisplay = document.getElementById('timer-display-' + exerciseId);
@@ -5561,6 +5651,9 @@
     html += '<div class="stat-card"><div class="stat-icon">📊</div><div class="stat-number">' + weeklyPct + '%</div><div class="stat-label">Consistencia</div><div class="stat-sub">' + weeklyData.length + ' semanas</div></div>';
     html += '</div>';
 
+    html += '<div class="stats-section-title">🗓️ Tu año <span class="line"></span></div>';
+    html += heatmapHtml();
+
     html += '<div class="stats-section-title">📆 Consistencia semanal <span class="line"></span></div>';
     html += '<div class="weekly-list">';
     if (weeklyData.length === 0) html += '<div style="text-align:center;padding:16px 0;color:var(--text-muted);font-size:0.78rem;">Aún no hay datos.</div>';
@@ -5575,6 +5668,9 @@
       });
     }
     html += '</div>';
+
+    html += '<div class="stats-section-title">⚖️ Tu peso corporal <span class="line"></span></div>';
+    html += bodyWeightChartHtml();
 
     html += '<div class="stats-section-title">🏋️ Evolución de peso <span class="line"></span></div>';
     var exWithData = getAllExercisesWithProgress();
@@ -5617,8 +5713,119 @@
       select.addEventListener('change', function () { setupChart(select.value); });
     }
 
+    setupBodyWeightChart();
     setupPlanSelector();
     setupAjustesPersonales();
+  }
+
+  // =============================================
+  // MAPA DE CALOR DE ENTRENAMIENTOS
+  // ---------------------------------------------
+  // Una casilla por día, columnas de lunes a domingo, al estilo del de GitHub.
+  // Media hoja de datos que ya teníamos (`state.completions`) y que hasta
+  // ahora sólo se veía de ocho en ocho sesiones.
+  //
+  // 26 semanas y no 52: en un móvil de 360 px, 52 columnas dejan celdas de
+  // 4 px que no se distinguen. Medio año ya cuenta la historia.
+  var HEATMAP_SEMANAS = 26;
+
+  function heatmapHtml() {
+    var hoy = new Date();
+    hoy.setHours(12, 0, 0, 0);
+    // Lunes de esta semana. getDay() da 0 para domingo, de ahí el +6 % 7.
+    var lunes = new Date(hoy);
+    lunes.setDate(hoy.getDate() - ((hoy.getDay() + 6) % 7));
+    var inicio = new Date(lunes);
+    inicio.setDate(lunes.getDate() - (HEATMAP_SEMANAS - 1) * 7);
+
+    var completions = state.completions || {};
+    var celdas = [];
+    var maxEj = 0;
+    var totalDias = 0;
+    for (var s = 0; s < HEATMAP_SEMANAS; s++) {
+      for (var d = 0; d < 7; d++) {
+        var fecha = new Date(inicio);
+        fecha.setDate(inicio.getDate() + s * 7 + d);
+        var key = getDateKey(fecha);
+        var n = completions[key] ? Object.keys(completions[key]).length : 0;
+        if (n > maxEj) maxEj = n;
+        if (n > 0) totalDias++;
+        celdas.push({ semana: s, key: key, fecha: fecha, n: n, futuro: fecha > hoy });
+      }
+    }
+
+    var MESES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+    var html = '<div class="heatmap-card">';
+
+    // Etiquetas de mes: una por columna donde empieza un mes nuevo.
+    html += '<div class="heatmap-meses">';
+    var mesPrevio = -1;
+    for (s = 0; s < HEATMAP_SEMANAS; s++) {
+      var primerDia = celdas[s * 7].fecha;
+      var mes = primerDia.getMonth();
+      var etiqueta = (mes !== mesPrevio) ? MESES[mes] : '';
+      mesPrevio = mes;
+      html += '<span class="heatmap-mes">' + etiqueta + '</span>';
+    }
+    html += '</div>';
+
+    html += '<div class="heatmap-grid" role="img" aria-label="Días entrenados en los últimos '
+         + HEATMAP_SEMANAS + ' semanas: ' + totalDias + '">';
+    celdas.forEach(function (c) {
+      // El nivel es relativo al mejor día del propio usuario: comparar contra
+      // un número fijo pintaría de gris a quien hace sesiones cortas.
+      var nivel = 0;
+      if (c.n > 0) nivel = maxEj <= 1 ? 4 : Math.min(4, Math.ceil((c.n / maxEj) * 4));
+      var titulo = formatDateShort(c.fecha) + (c.n > 0 ? ' · ' + c.n + ' ejercicios' : ' · sin entrenar');
+      html += '<span class="heatmap-dia n' + nivel + (c.futuro ? ' futuro' : '')
+           + '" title="' + titulo + '"></span>';
+    });
+    html += '</div>';
+
+    html += '<div class="heatmap-leyenda"><span>Menos</span>'
+         + '<span class="heatmap-dia n0"></span><span class="heatmap-dia n1"></span>'
+         + '<span class="heatmap-dia n2"></span><span class="heatmap-dia n3"></span>'
+         + '<span class="heatmap-dia n4"></span><span>Más</span></div>';
+    html += '</div>';
+    return html;
+  }
+
+  // =============================================
+  // GRÁFICA DE PESO CORPORAL
+  // =============================================
+  function bodyWeightChartHtml() {
+    var hist = getBodyWeightHistory();
+    if (hist.length < 2) {
+      return '<div class="chart-container"><div class="chart-empty"><div class="icon">⚖️</div>'
+           + '<p>' + (hist.length
+               ? 'Con un apunte más ya verás la curva. Actualiza tu peso en Ajustes.'
+               : 'Apunta tu peso en Ajustes y aquí verás cómo evoluciona.')
+           + '</p></div></div>';
+    }
+    return '<div class="chart-container"><div class="chart-title">Peso corporal</div>'
+         + '<div class="chart-canvas-wrapper"><canvas id="bodyWeightChart" width="400" height="220"></canvas></div>'
+         + '<div class="chart-stats-row" id="bodyWeightStats"></div></div>';
+  }
+
+  function setupBodyWeightChart() {
+    var canvas = document.getElementById('bodyWeightChart');
+    if (!canvas) return;
+    var hist = getBodyWeightHistory();
+    if (hist.length < 2) return;
+    drawWeightChart(canvas, hist);
+
+    var statsEl = document.getElementById('bodyWeightStats');
+    if (!statsEl) return;
+    var primero = hist[0].weight, ultimo = hist[hist.length - 1].weight;
+    var maxW = -Infinity, minW = Infinity;
+    hist.forEach(function (e) { if (e.weight > maxW) maxW = e.weight; if (e.weight < minW) minW = e.weight; });
+    var diff = ultimo - primero;
+    // Aquí no hay flecha «buena»: bajar puede ser el objetivo o no. Se marca
+    // el signo y ya, sin colorear de verde ni de rojo.
+    statsEl.innerHTML = '<span class="chart-stat-item">📉 Cambio: <span class="value">'
+      + (diff > 0 ? '+' : '') + diff.toFixed(1) + ' kg</span></span>'
+      + '<span class="chart-stat-item">⬆️ Máx: <span class="value">' + maxW + ' kg</span></span>'
+      + '<span class="chart-stat-item">⬇️ Mín: <span class="value">' + minW + ' kg</span></span>';
   }
 
   function setupChart(exerciseId) {
@@ -6798,6 +7005,13 @@
       };
     });
 
+    // Días de la semana que va a ocupar el plan de verdad. Con carrera los
+    // manda el patrón combinado (la carrera necesita 3 días suyos), y no el
+    // número que se pidió.
+    var diasReales = runningCombo
+      ? runningCombo.weekdays
+      : (DEFAULT_DAYS_BY_COUNT[answers.days] || [1, 3, 5]);
+
     // Objetivo semanal alcanzado por el plan, para poder explicárselo al
     // usuario sin recalcularlo en cada render.
     var volumePlan = {};
@@ -6820,8 +7034,13 @@
       // Última semana de cada fase: se baja el volumen para recuperar. Doce
       // semanas de intensidad creciente sin descarga acaban en estancamiento.
       deloadWeeks: [4, 8, 12],
-      trainingDays: (runningCombo ? runningCombo.weekdays : (DEFAULT_DAYS_BY_COUNT[answers.days] || [1, 3, 5])).slice(),
-      daysLabel: answers.days + ' días · '
+      trainingDays: diasReales.slice(),
+      // El rótulo dice los días que hay DE VERDAD, no los que se pidieron.
+      // Con el plan de carrera no coinciden: la carrera se lleva 3 días suyos
+      // y la fuerza se reagrupa, así que pedir 5 y pedir 3 acaba dando la
+      // misma semana de 6 días. Poniendo aquí `answers.days` el rótulo decía
+      // «3 días» sobre un calendario de 6, y el usuario no entendía nada.
+      daysLabel: diasReales.length + ' días · '
         + goals.map(function (g) { return GOAL_LABEL[g] || ''; }).filter(Boolean).join(' + ')
         + ' · ' + minutes + ' min'
         + (runningCombo ? ' · + carrera 12 sem' : '')
@@ -7273,6 +7492,27 @@
     return found;
   }
 
+  // El plan que el coach puede tocar: SÓLO el activo, y sólo si lo generó el
+  // asistente (es decir, si tiene respuestas con las que regenerarlo).
+  //
+  // No vale `loadCustomPlan()` para esto. Cuando el plan activo es una
+  // plantilla (Sergio, Eva, Gely) ése se cae al plan generado que encuentre
+  // por ahí, que es OTRO plan: el coach acababa ajustando la configuración de
+  // un plan distinto y guardando el resultado encima del que estás mirando.
+  // Y si no había ninguno generado, devolvía null y el coach se callaba.
+  function planAjustable() {
+    var entry = getPlanEntry(activeProfile);
+    if (!entry || entry.builtin || !entry.plan || !entry.plan.answers) return null;
+    return entry.plan;
+  }
+
+  // Nombre del plan activo, para poder decirle al usuario cuál no se puede
+  // ajustar en vez de hablarle de «tu plan» en abstracto.
+  function nombrePlanActivo() {
+    var entry = getPlanEntry(activeProfile);
+    return (entry && entry.name) || (PROFILES[activeProfile] && PROFILES[activeProfile].name) || 'este plan';
+  }
+
   // ---- Onboarding de primer arranque ----
   var ONBOARDING_KEY = 'gym_onboarding_done';
 
@@ -7316,6 +7556,10 @@
   // 'create' → plan nuevo, con respuestas en blanco y UUID propio
   var wizardMode = 'edit';
   var wizardTargetId = null;
+  // Se está convirtiendo una plantilla en rutina a medida. Cambia lo que se
+  // avisa antes de guardar: no es «rehacer tu rutina», es sustituir un
+  // programa escrito a mano por uno generado.
+  var wizardConvirtiendo = false;
 
   function openRoutineWizard(onboarding, opts) {
     opts = opts || {};
@@ -7330,6 +7574,7 @@
     wizardMode = opts.mode === 'create' ? 'create' : 'edit';
     wizardStep = 0;
     wizardAnswers = {};
+    wizardConvirtiendo = false;
 
     if (wizardMode === 'edit') {
       // Rehacer un plan parte de sus respuestas: así el cuestionario sale
@@ -7342,11 +7587,17 @@
       wizardShuffleSeed++;
       wizardTargetId = opts.planId || activeProfile;
       var entry = getPlanEntry(wizardTargetId);
-      // Un plan de plantilla no tiene respuestas que rehacer; al tocarle
-      // «cambiar objetivo» se genera uno nuevo en vez de sobrescribirlo.
-      if (!entry || entry.builtin) {
+      if (!entry) {
         wizardMode = 'create';
         wizardTargetId = null;
+      } else if (entry.builtin) {
+        // CONVERSIÓN: la plantilla pasa a ser una rutina a medida con el mismo
+        // id. Antes aquí se forzaba 'create', y eso dejaba el historial
+        // huérfano en la clave del plan viejo mientras el nuevo nacía a cero.
+        // Se parte de la semilla para que el cuestionario salga relleno con
+        // algo parecido a lo que ya entrena.
+        wizardAnswers = JSON.parse(JSON.stringify(BUILTIN_SEEDS[entry.id] || {}));
+        wizardConvirtiendo = true;
       } else if (entry.plan && entry.plan.answers) {
         wizardAnswers = entry.plan.answers;
       }
@@ -7623,6 +7874,44 @@
       if (typeof kg === 'number' && kg > 0) localStorage.setItem(BODY_WEIGHT_KEY, String(kg));
       else localStorage.removeItem(BODY_WEIGHT_KEY);
     } catch (e) { /* almacenamiento lleno: se pierde el ajuste, no rompemos */ }
+    if (typeof kg === 'number' && kg > 0) anotarPesoCorporal(kg);
+    marcarCambioLocal();
+  }
+
+  // El peso actual es un escalar, pero lo interesante es cómo se mueve. El
+  // histórico se guarda aparte para no tocar `BODY_WEIGHT_KEY`, que ya lee
+  // media app, y con la misma forma `{date, weight}` que usa el progreso de
+  // los ejercicios: así `drawWeightChart()` sirve tal cual.
+  var BODY_WEIGHT_HISTORY_KEY = 'gym_body_weight_history';
+  var BODY_WEIGHT_HISTORY_MAX = 400;
+
+  function getBodyWeightHistory() {
+    var arr;
+    try { arr = JSON.parse(localStorage.getItem(BODY_WEIGHT_HISTORY_KEY)); }
+    catch (e) { return []; }
+    if (!Array.isArray(arr)) return [];
+    return arr.filter(function (e) {
+      return e && typeof e.weight === 'number' && e.weight > 0 && typeof e.date === 'string';
+    }).sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
+  }
+
+  // Un apunte por día: pesarse dos veces la misma mañana, o corregir un
+  // dedazo, no debe dejar dos puntos en la gráfica.
+  function anotarPesoCorporal(kg) {
+    var hoy = getTodayKey();
+    var hist = getBodyWeightHistory().filter(function (e) { return e.date !== hoy; });
+    hist.push({ date: hoy, weight: kg });
+    if (hist.length > BODY_WEIGHT_HISTORY_MAX) hist = hist.slice(-BODY_WEIGHT_HISTORY_MAX);
+    try { localStorage.setItem(BODY_WEIGHT_HISTORY_KEY, JSON.stringify(hist)); } catch (e) {}
+  }
+
+  // Quien ya tenía un peso puesto arranca con el histórico vacío y la gráfica
+  // no aparecería nunca hasta que volviera a tocarlo. Se siembra con el que
+  // hay, fechado hoy: es lo único que sabemos.
+  function migrarHistorialPeso() {
+    if (getBodyWeightHistory().length) return;
+    var actual = getBodyWeight();
+    if (actual) anotarPesoCorporal(actual);
   }
 
   // Rescata el peso que ya estuviera guardado dentro de algún plan. Sin esto,
@@ -7644,6 +7933,401 @@
       var elegido = candidatos.filter(function (c) { return c.clave === propio; })[0] || candidatos[0];
       if (elegido) setBodyWeight(elegido.peso);
     } catch (e) { /* sin migración: se pedirá el peso, que no es grave */ }
+  }
+
+  // =============================================
+  // COPIA DE SEGURIDAD (exportar / importar)
+  // ---------------------------------------------
+  // Todo vive en el localStorage de UN navegador. Borrar los datos del sitio,
+  // cambiar de móvil o reinstalar se lleva por delante meses de registro sin
+  // ninguna forma de recuperarlo. Esto no es sincronización: es un fichero que
+  // te llevas tú y vuelves a meter donde quieras.
+  //
+  // Los valores se guardan como las cadenas crudas de localStorage, sin
+  // parsear ni volver a serializar: cualquier clave nueva que se añada en el
+  // futuro entra en la copia sola, y nada se deforma por el camino.
+  var BACKUP_FORMATO = 1;
+
+  // Cosas que son de ESTE navegador y ahora mismo, no del usuario. Restaurar
+  // la cola de feedback reenviaría reportes ya enviados, y el flag de recarga
+  // dejaría la app creyéndose a medio actualizar.
+  // Las de sincronización tampoco viajan: el código es la identidad DE ESTE
+  // dispositivo, y meterlo dentro de la copia haría que importar un fichero de
+  // otro móvil te robara la suya. Los sellos de tiempo, por lo mismo: son de
+  // aquí, no del contenido.
+  var BACKUP_EXCLUIDAS = [
+    'gym_feedback_queue', 'gym_update_recargando', 'gym_push_preguntado',
+    'gym_sync_codigo', 'gym_sync_ts', 'gym_sync_subido'
+  ];
+
+  function clavesDeLaApp() {
+    var claves = [];
+    try {
+      Object.keys(localStorage).forEach(function (k) {
+        if (k.indexOf('gym') === 0 && BACKUP_EXCLUIDAS.indexOf(k) === -1) claves.push(k);
+      });
+    } catch (e) { /* localStorage inaccesible: no hay nada que copiar */ }
+    return claves.sort();
+  }
+
+  function construirBackup() {
+    var datos = {};
+    clavesDeLaApp().forEach(function (k) {
+      try {
+        var v = localStorage.getItem(k);
+        if (typeof v === 'string') datos[k] = v;
+      } catch (e) {}
+    });
+    return {
+      app: 'gym-calendar',
+      formato: BACKUP_FORMATO,
+      version: APP_VERSION,
+      fecha: new Date().toISOString(),
+      datos: datos
+    };
+  }
+
+  function nombreDeBackup() {
+    var d = new Date();
+    var p = function (n) { return String(n).padStart(2, '0'); };
+    return 'gym-calendar-' + d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + '.json';
+  }
+
+  function exportarDatos() {
+    var backup = construirBackup();
+    if (!Object.keys(backup.datos).length) {
+      showToast('Todavía no hay nada que copiar');
+      return;
+    }
+    var url = null;
+    try {
+      var blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+      url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = nombreDeBackup();
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      showToast('✓ Copia descargada');
+    } catch (e) {
+      showToast('No se pudo crear la copia');
+    }
+    // Se revoca con retraso: revocar en el mismo tick cancela la descarga que
+    // se acaba de lanzar en algunos navegadores móviles.
+    if (url) setTimeout(function () { try { URL.revokeObjectURL(url); } catch (e) {} }, 60000);
+  }
+
+  function importarBackup(texto) {
+    var backup;
+    try { backup = JSON.parse(texto); }
+    catch (e) { showToast('Ese fichero no es una copia válida'); return; }
+
+    if (!backup || backup.app !== 'gym-calendar' || !backup.datos || typeof backup.datos !== 'object') {
+      showToast('Ese fichero no es una copia de Gym Calendar');
+      return;
+    }
+    if (typeof backup.formato === 'number' && backup.formato > BACKUP_FORMATO) {
+      showToast('La copia es de una versión más nueva de la app');
+      return;
+    }
+
+    // Se filtra por prefijo aunque el fichero sea nuestro: una copia editada a
+    // mano no debe poder escribir claves ajenas en el localStorage del sitio.
+    var claves = Object.keys(backup.datos).filter(function (k) {
+      return k.indexOf('gym') === 0
+        && BACKUP_EXCLUIDAS.indexOf(k) === -1
+        && typeof backup.datos[k] === 'string';
+    });
+    if (!claves.length) { showToast('La copia está vacía'); return; }
+
+    var cuando = backup.fecha ? new Date(backup.fecha) : null;
+    var deCuando = (cuando && !isNaN(cuando.getTime())) ? ' del ' + formatDateShort(cuando) : '';
+    var aviso = 'Vas a sustituir TODOS tus datos por los de la copia' + deCuando + '.\n\n'
+      + 'Tus planes, pesos e historial actuales se pierden. Esto no se puede deshacer.\n\n¿Seguir?';
+    if (!window.confirm(aviso)) return;
+
+    try {
+      clavesDeLaApp().forEach(function (k) { localStorage.removeItem(k); });
+      claves.forEach(function (k) { localStorage.setItem(k, backup.datos[k]); });
+    } catch (e) {
+      window.alert('No se pudo restaurar la copia entera. Se recarga la app: revisa tus datos.');
+    }
+    // Recargar y no repintar: el plan activo, las fases y el estado se leen al
+    // arrancar y hay demasiado derivado como para rehacerlo en caliente.
+    location.reload();
+  }
+
+  function pedirFicheroDeBackup() {
+    var input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'application/json,.json';
+    input.addEventListener('change', function () {
+      var f = input.files && input.files[0];
+      if (!f) return;
+      var reader = new FileReader();
+      reader.onload = function () { importarBackup(String(reader.result)); };
+      reader.onerror = function () { showToast('No se pudo leer el fichero'); };
+      reader.readAsText(f);
+    });
+    input.click();
+  }
+
+  // =============================================
+  // SINCRONIZACIÓN AUTOMÁTICA
+  // ---------------------------------------------
+  // La copia manual sólo salva a quien se acuerda de hacerla, que es justo
+  // quien no la necesita. Esto sube los datos solo: al cambiar algo, al
+  // terminar un entreno y al cerrar la app. Y al abrirla se baja lo último si
+  // otro dispositivo iba por delante.
+  //
+  // Sin cuentas ni contraseñas: el cliente se genera un código la primera vez
+  // y lo usa como identidad. Nadie teclea nada nunca, salvo que quieras
+  // recuperar los datos en un móvil nuevo — ahí sí hace falta el código, y por
+  // eso se enseña en Ajustes.
+  //
+  // Quién gana cuando hay dos versiones: la más reciente, comparando el sello
+  // de tiempo del CLIENTE. No hay mezcla campo a campo. Para los datos de
+  // entrenamiento de una sola persona es suficiente, y es lo que mantiene esto
+  // en unas pocas líneas en vez de en un motor de fusión.
+  var SYNC_CODIGO_KEY = 'gym_sync_codigo';
+  var SYNC_TS_KEY = 'gym_sync_ts';        // último cambio local (ms)
+  var SYNC_SUBIDO_KEY = 'gym_sync_subido'; // último ts que el servidor confirmó
+  var SYNC_ESPERA_MS = 4000;
+
+  // Sin l/o/0/1: el código acaba copiado a mano alguna vez, y esos cuatro se
+  // confunden entre sí en cualquier tipografía.
+  var SYNC_ALFABETO = 'abcdefghijkmnpqrstuvwxyz23456789';
+
+  var syncTimer = null;
+  var syncSubiendo = false;
+  var syncCambioEstaSesion = false;
+  // Hasta que no se ha hablado con el servidor, nada de lo que pase aquí
+  // cuenta como cambio. Ver marcarCambioLocal().
+  var syncArranqueListo = false;
+
+  function syncDisponible() {
+    return !!AI_ENDPOINT && typeof fetch === 'function';
+  }
+
+  function generarCodigo() {
+    // 24 caracteres de un alfabeto de 32 son 120 bits: no se adivina.
+    var bytes = new Uint8Array(24);
+    crypto.getRandomValues(bytes);
+    var out = '';
+    // 256 es múltiplo exacto de 32, así que el módulo no sesga nada.
+    for (var i = 0; i < 24; i++) out += SYNC_ALFABETO[bytes[i] % SYNC_ALFABETO.length];
+    return out;
+  }
+
+  function syncCodigo() {
+    try {
+      var c = localStorage.getItem(SYNC_CODIGO_KEY);
+      if (c && /^[a-z0-9]{24}$/.test(c)) return c;
+      c = generarCodigo();
+      localStorage.setItem(SYNC_CODIGO_KEY, c);
+      return c;
+    } catch (e) { return null; }   // almacenamiento inaccesible: sin sync, y ya
+  }
+
+  function syncTs() {
+    var n = parseInt(localStorage.getItem(SYNC_TS_KEY), 10);
+    return isNaN(n) ? 0 : n;
+  }
+
+  function syncTsSubido() {
+    var n = parseInt(localStorage.getItem(SYNC_SUBIDO_KEY), 10);
+    return isNaN(n) ? 0 : n;
+  }
+
+  // Todo lo que escriba en localStorage pasa por aquí. Marca la hora del
+  // cambio y programa la subida.
+  //
+  // El `if` de arriba no es una optimización, es lo que impide perder datos.
+  // Al arrancar, la app se escribe a sí misma: migraciones, y el registro de
+  // planes de fábrica que se reconstruye si no está. Si eso contara como
+  // cambio del usuario, un móvil recién borrado se pondría el sello de AHORA,
+  // se creería más reciente que el servidor, se saltaría la restauración y
+  // subiría su vacío encima de la copia buena. Probado: 890 bytes vacíos
+  // machacando 41 KB de historial.
+  function marcarCambioLocal() {
+    if (!syncArranqueListo) return;
+    syncCambioEstaSesion = true;
+    try { localStorage.setItem(SYNC_TS_KEY, String(Date.now())); } catch (e) {}
+    programarSubida();
+  }
+
+  // ¿Hay aquí algo que perder? Que existan claves no dice nada: un móvil
+  // recién borrado se reconstruye los planes de fábrica él solo al arrancar.
+  // Lo que cuenta es que haya entrenamientos marcados, pesos apuntados o algún
+  // plan que no venga de serie.
+  function hayDatosDeVerdad() {
+    try {
+      var claves = Object.keys(localStorage);
+      for (var i = 0; i < claves.length; i++) {
+        if (claves[i].indexOf('gym_calendar_data_') !== 0) continue;
+        var st;
+        try { st = JSON.parse(localStorage.getItem(claves[i])); } catch (e) { continue; }
+        if (!st) continue;
+        if (st.completions && Object.keys(st.completions).length) return true;
+        if (st.progress && Object.keys(st.progress).length) return true;
+      }
+      var reg = JSON.parse(localStorage.getItem(PLANS_KEY) || 'null');
+      if (reg && reg.plans) {
+        var ids = Object.keys(reg.plans);
+        for (var j = 0; j < ids.length; j++) {
+          if (!reg.plans[ids[j]].builtin) return true;
+        }
+      }
+    } catch (e) {}
+    return false;
+  }
+
+  // Se agrupan los cambios: marcar cinco ejercicios seguidos es una subida, no
+  // cinco. El servidor guarda el estado entero, así que subir cada pulsación
+  // no aportaría nada.
+  function programarSubida() {
+    if (!syncDisponible()) return;
+    if (syncTimer) clearTimeout(syncTimer);
+    syncTimer = setTimeout(function () { syncTimer = null; subirCopia(); }, SYNC_ESPERA_MS);
+  }
+
+  function subirCopiaYa(alSalir) {
+    if (syncTimer) { clearTimeout(syncTimer); syncTimer = null; }
+    return subirCopia(alSalir);
+  }
+
+  function subirCopia(alSalir) {
+    if (!syncDisponible() || syncSubiendo) return Promise.resolve(false);
+    var codigo = syncCodigo();
+    if (!codigo) return Promise.resolve(false);
+
+    var ts = syncTs();
+    if (!ts || ts <= syncTsSubido()) return Promise.resolve(false);   // nada nuevo
+
+    syncSubiendo = true;
+    var backup = construirBackup();
+    var opciones = {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ codigo: codigo, ts: ts, datos: JSON.stringify(backup) })
+    };
+    // Al salir de la app, una petición normal muere con la pestaña. `keepalive`
+    // deja que termine sola, a cambio de un tope de 64 KB de cuerpo. Si la
+    // copia no cabe, se manda normal y que suene la flauta: de todas formas se
+    // reintenta al volver a abrir.
+    if (alSalir && opciones.body.length <= 60000) opciones.keepalive = true;
+
+    return fetch(AI_ENDPOINT + '/copia/subir', opciones)
+      .then(function (r) { return r.json(); }).then(function (r) {
+      if (r && r.ok) {
+        try { localStorage.setItem(SYNC_SUBIDO_KEY, String(ts)); } catch (e) {}
+        return true;
+      }
+      return false;
+    }).catch(function () {
+      // Sin red o servidor caído. No se marca como subido, así que el próximo
+      // cambio (o la próxima apertura) lo reintenta solo. No se avisa al
+      // usuario: no ha hecho nada mal y no puede hacer nada al respecto.
+      return false;
+    }).then(function (ok) { syncSubiendo = false; return ok; });
+  }
+
+  // Al arrancar: si el servidor va por delante, se restaura. Sólo si aquí no
+  // se ha tocado nada en esta sesión — restaurar encima de algo que el usuario
+  // acaba de marcar sería borrárselo delante de las narices.
+  function bajarCopiaSiProcede() {
+    if (!syncDisponible()) return Promise.resolve(false);
+    var codigo = syncCodigo();
+    if (!codigo) return Promise.resolve(false);
+
+    return fetch(AI_ENDPOINT + '/copia/bajar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ codigo: codigo })
+    }).then(function (r) { return r.json(); }).then(function (r) {
+      if (!r || r.vacio || !r.datos) {
+        // El servidor no tiene nada nuestro: si aquí hay datos, es la primera
+        // copia de este dispositivo.
+        if (syncTs()) programarSubida();
+        return false;
+      }
+      // El segundo cuelgue del cinturón: un dispositivo que no tiene nada que
+      // perder no gana nunca un desempate, diga lo que diga su reloj.
+      if (r.ts <= syncTs() && hayDatosDeVerdad()) {
+        if (syncTs() > syncTsSubido()) programarSubida();   // vamos por delante
+        return false;
+      }
+      if (syncCambioEstaSesion) return false;
+
+      return aplicarCopia(r.datos, r.ts);
+    }).catch(function () { return false; });
+  }
+
+  // Escribe la copia del servidor encima de lo local y recarga. Igual que el
+  // import manual: hay demasiado derivado del arranque (plan activo, fases,
+  // estado) como para rehacerlo en caliente.
+  function aplicarCopia(texto, ts) {
+    var backup;
+    try { backup = JSON.parse(texto); } catch (e) { return false; }
+    if (!backup || backup.app !== 'gym-calendar' || !backup.datos) return false;
+
+    var claves = Object.keys(backup.datos).filter(function (k) {
+      return k.indexOf('gym') === 0
+        && BACKUP_EXCLUIDAS.indexOf(k) === -1
+        && typeof backup.datos[k] === 'string';
+    });
+    if (!claves.length) return false;
+
+    try {
+      clavesDeLaApp().forEach(function (k) { localStorage.removeItem(k); });
+      claves.forEach(function (k) { localStorage.setItem(k, backup.datos[k]); });
+      // El ts es el del origen, no `Date.now()`: si pusiéramos la hora de
+      // ahora, este dispositivo parecería el más reciente sin haber cambiado
+      // nada y ganaría todos los desempates.
+      localStorage.setItem(SYNC_TS_KEY, String(ts));
+      localStorage.setItem(SYNC_SUBIDO_KEY, String(ts));
+    } catch (e) { return false; }
+
+    location.reload();
+    return true;
+  }
+
+  // Recuperar en un móvil nuevo: se adopta el código del viejo y se baja todo.
+  // Es lo único de la sincronización que el usuario llega a tocar.
+  function recuperarConCodigo(codigo) {
+    codigo = String(codigo || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (!/^[a-z0-9]{24}$/.test(codigo)) {
+      showToast('Ese código no tiene la pinta correcta');
+      return;
+    }
+    if (!syncDisponible()) { showToast('No hay conexión con el servidor'); return; }
+
+    showToast('Buscando tu copia…');
+    fetch(AI_ENDPOINT + '/copia/bajar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ codigo: codigo })
+    }).then(function (r) { return r.json(); }).then(function (r) {
+      if (!r || r.vacio || !r.datos) { showToast('No hay ninguna copia con ese código'); return; }
+      if (!window.confirm('Se ha encontrado una copia. Vas a sustituir TODOS los datos de este móvil por los de esa copia.\n\n¿Seguir?')) return;
+      // Se adopta el código ANTES de aplicar, para que a partir de ahora este
+      // móvil sincronice contra esa misma copia.
+      try { localStorage.setItem(SYNC_CODIGO_KEY, codigo); } catch (e) {}
+      if (!aplicarCopia(r.datos, r.ts)) showToast('La copia está dañada');
+    }).catch(function () { showToast('No se ha podido conectar'); });
+  }
+
+  // Pedirle al navegador que no considere desechable nuestro almacenamiento.
+  // No es una garantía —decide él— pero es la única forma de pedirlo, y sin
+  // esto puede borrarlo cuando le apriete el espacio.
+  function pedirAlmacenamientoPersistente() {
+    try {
+      if (!navigator.storage || !navigator.storage.persist) return;
+      navigator.storage.persisted().then(function (ya) {
+        if (!ya) navigator.storage.persist().catch(function () {});
+      }).catch(function () {});
+    } catch (e) {}
   }
 
   function metDelPlan(plan) {
@@ -8015,6 +8699,36 @@
       html += '  </div>';
     }
 
+    // Copia de seguridad. La copia se hace sola; aquí sólo está lo que el
+    // usuario necesita para recuperarla en otro móvil, que es lo único que la
+    // app no puede hacer por él.
+    html += '  <div class="backup-setting">';
+    html += '    <div class="backup-setting-label">☁️ Tus datos están a salvo</div>';
+
+    if (syncDisponible() && syncCodigo()) {
+      html += '    <div class="schedule-settings-hint">Se guarda una copia sola cada vez que '
+           + 'entrenas. Para recuperarla en otro móvil hace falta este código: '
+           + '<strong>apúntalo en algún sitio</strong>, es la única llave.</div>';
+      html += '    <div class="sync-codigo" id="syncCodigo" role="button" tabindex="0" '
+           + 'title="Pulsa para copiarlo">' + formatearCodigo(syncCodigo()) + '</div>';
+      html += '    <div class="backup-setting-row">';
+      html += '      <button class="backup-btn secundario" id="syncRecuperarBtn">📥 Traer datos de otro móvil</button>';
+      html += '    </div>';
+    } else {
+      html += '    <div class="schedule-settings-hint">Ahora mismo no hay conexión con el '
+           + 'servidor, así que la copia automática está parada. Puedes descargarte una a mano.</div>';
+    }
+
+    html += '    <div class="backup-setting-sub">';
+    html += '      <div class="schedule-settings-hint">¿Prefieres un fichero tuyo? '
+         + 'Esto no necesita servidor ni código.</div>';
+    html += '      <div class="backup-setting-row">';
+    html += '        <button class="backup-btn" id="backupExportBtn">⬇️ Exportar</button>';
+    html += '        <button class="backup-btn secundario" id="backupImportBtn">⬆️ Importar</button>';
+    html += '      </div>';
+    html += '    </div>';
+    html += '  </div>';
+
     html += '</div>';
     return html;
   }
@@ -8036,7 +8750,13 @@
         }
         var previo = getBodyWeight();
         setBodyWeight(v);
-        if (previo !== v) showToast('✓ Peso guardado: ' + v + ' kg');
+        if (previo !== v) {
+          showToast('✓ Peso guardado: ' + v + ' kg');
+          // Sólo se repinta la gráfica, no todo Perfil: este handler salta en
+          // el `blur`, y repintar la sección entera se llevaría por delante el
+          // botón que el usuario acaba de pulsar antes de que llegue el click.
+          setupBodyWeightChart();
+        }
       };
       pesoInput.addEventListener('blur', guardarPeso);
       pesoInput.addEventListener('keydown', function (e) {
@@ -8088,6 +8808,43 @@
       showToast('✓ Te avisaré a las ' + h + ':00');
       renderStats();
     });
+
+    var expBtn = document.getElementById('backupExportBtn');
+    if (expBtn) expBtn.addEventListener('click', exportarDatos);
+
+    var impBtn = document.getElementById('backupImportBtn');
+    if (impBtn) impBtn.addEventListener('click', pedirFicheroDeBackup);
+
+    var codEl = document.getElementById('syncCodigo');
+    if (codEl) {
+      var copiar = function () {
+        var c = syncCodigo();
+        if (!c) return;
+        // El portapapeles falla sin permiso o fuera de HTTPS. Que no se pueda
+        // copiar no es grave: el código está en pantalla y se puede leer.
+        try {
+          navigator.clipboard.writeText(c)
+            .then(function () { showToast('✓ Código copiado'); })
+            .catch(function () { showToast('Cópialo a mano de la pantalla'); });
+        } catch (e) { showToast('Cópialo a mano de la pantalla'); }
+      };
+      codEl.addEventListener('click', copiar);
+      codEl.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); copiar(); }
+      });
+    }
+
+    var recBtn = document.getElementById('syncRecuperarBtn');
+    if (recBtn) recBtn.addEventListener('click', function () {
+      var c = window.prompt('Escribe el código del móvil donde tienes tus datos:');
+      if (c) recuperarConCodigo(c);
+    });
+  }
+
+  // En grupos de cuatro. Un chorro de 24 caracteres seguidos no hay quien lo
+  // copie a mano sin perder el sitio.
+  function formatearCodigo(c) {
+    return String(c || '').replace(/(.{4})/g, '$1 ').trim();
   }
 
   // =============================================
@@ -8182,6 +8939,15 @@
              + 'Tu fuerza se ha reagrupado en ' + plan.compacted.diasFuerza
              + ' sesiones más largas (unos ' + plan.compacted.minutosEstimados + ' min) para que entre todo '
              + 'y te quede un día de descanso. El total de series semanales se mantiene.</p>';
+      } else if (plan.answers && plan.answers.running === 'si' && plan.answers.runningPlan === 'si'
+                 && plan.trainingDays && plan.trainingDays.length > (parseInt(plan.answers.days, 10) || 0)) {
+        // Sin compactación pero con carrera: se pidieron 3 días o menos, así
+        // que la fuerza cabe entera, pero la carrera añade 3 días encima. Sin
+        // decirlo, el usuario pide 3 y ve 6 sin ninguna explicación.
+        html += '  <p class="why-text why-text-small why-text-warn">Pediste '
+             + escapeHtml(String(plan.answers.days)) + ' días de fuerza y los tienes, pero el plan '
+             + 'de carrera añade 3 días suyos encima: por eso la semana sale de '
+             + plan.trainingDays.length + ' días.</p>';
       }
       html += '</div>';
     }
@@ -8339,6 +9105,18 @@
     // es si aceptas el plan. El detalle bueno (animación, pasos, alternativas)
     // ya está en la pestaña Rutina.
     html += '<h3 class="wizard-title">Tu rutina está lista 🎉</h3>';
+
+    // Convertir una plantilla no es lo mismo que rehacer tu propia rutina: se
+    // sustituye un programa escrito a mano por uno generado, y no van a ser
+    // iguales. Hay que decirlo ANTES de que le dé a guardar.
+    if (wizardConvirtiendo) {
+      html += '<p class="wizard-aviso">⚠️ «' + escapeHtml(nombrePlanActivo()) + '» es una plantilla '
+        + 'escrita a mano. Al guardar pasa a ser una rutina a medida que <strong>sí podrás ajustar</strong> '
+        + 'desde el coach, pero no será ejercicio por ejercicio la de antes. '
+        + '<strong>Tus pesos, tus sesiones y tu racha se conservan</strong>, y puedes volver a la '
+        + 'plantilla original desde Perfil → Editar.</p>';
+    }
+
     html += planExplainerHtml(plan, null);
 
     html += '<div class="wizard-nav wizard-nav-final">';
@@ -8363,6 +9141,7 @@
       // En modo 'edit' conserva el id, así el plan mantiene su historial.
       // En 'create' nace con UUID propio y no pisa nada.
       var isEdit = wizardMode === 'edit' && wizardTargetId && getPlanEntry(wizardTargetId);
+      var convertida = wizardConvirtiendo;
       var planId = upsertGeneratedPlan(plan, isEdit ? { id: wizardTargetId } : { name: nextPlanName() });
       if (!planId) { showToast('⚠ No se ha podido guardar el plan'); return; }
 
@@ -8371,7 +9150,8 @@
       renderPlanOptions();
       switchProfile(planId);
       switchTab('rutina');
-      showToast(isEdit ? 'Rutina actualizada 🎉' : 'Rutina creada 🎉');
+      showToast(convertida ? 'Ya es tuya: ahora sí puedo ajustártela 🎉'
+                           : (isEdit ? 'Rutina actualizada 🎉' : 'Rutina creada 🎉'));
     });
   }
 
@@ -8443,6 +9223,23 @@
           confirmDeletePlan(entry.id);
         });
         btn.appendChild(del);
+
+        // Vuelta atrás de una conversión: el plan ocupa el id de una plantilla
+        // que sigue existiendo en el código, así que se puede recuperar tal
+        // cual era. El historial no se toca, vive en su propia clave.
+        if (!entry.builtin && BUILTIN_PROFILES[entry.id]) {
+          var undo = document.createElement('span');
+          undo.className = 'profile-option-restore';
+          undo.textContent = '↺';
+          undo.title = 'Volver a la plantilla original';
+          undo.setAttribute('aria-label', 'Restaurar la plantilla ' + entry.name);
+          undo.addEventListener('click', function (e) {
+            e.stopPropagation();
+            confirmRestaurarPlantilla(entry.id);
+          });
+          btn.appendChild(undo);
+        }
+
         btn.addEventListener('click', function () { promptRenamePlan(entry.id); });
       } else {
         btn.addEventListener('click', function () { switchProfile(entry.id); });
@@ -8460,6 +9257,37 @@
       openRoutineWizard(false, { mode: 'create' });
     });
     wrap.appendChild(add);
+  }
+
+  // Deshace una conversión: el plan generado se descarta y vuelve la plantilla
+  // escrita a mano. NO toca el historial, que vive en `gym_calendar_data_<id>`
+  // y es del id, no del contenido del plan.
+  function confirmRestaurarPlantilla(id) {
+    var entry = getPlanEntry(id);
+    var plantilla = BUILTIN_PROFILES[id];
+    if (!entry || !plantilla) return;
+
+    if (!window.confirm('¿Volver a la plantilla original «' + plantilla.name + '»?\n\n'
+        + 'Se descarta la rutina generada. Tus pesos, sesiones y racha se conservan.')) return;
+
+    planRegistry.plans[id] = {
+      id: id,
+      name: plantilla.name,
+      initial: plantilla.initial,
+      builtin: true,
+      createdAt: entry.createdAt,
+      updatedAt: new Date().toISOString()
+    };
+    savePlanRegistry();
+    rebuildProfiles();
+
+    // Los días guardados son los de la rutina generada; hay que devolverlos a
+    // los de la plantilla o el calendario indexaría sesiones que ya no están.
+    sincronizarDiasDeEntreno(id, { trainingDays: plantilla.defaultDays });
+
+    renderPlanOptions();
+    if (id === activeProfile) switchProfile(id);
+    showToast('Plantilla «' + plantilla.name + '» restaurada');
   }
 
   // Borrar es la vía por la que cada uno se queda sólo con sus planes, así que
@@ -8805,6 +9633,7 @@
     // Antes de pintar nada: el peso pasó de vivir por plan a ser único, y hay
     // que rescatar el que ya estuviera guardado.
     migrarPesoCorporal();
+    migrarHistorialPeso();
     reregisterSwappedExercises();
     renderRoutineStatus();
     renderCurrentDay();
@@ -8859,6 +9688,29 @@
     // Si ya estaba concedido de una sesión anterior, se refresca la agenda por
     // si cambiaron los días o el plan estando la app cerrada.
     setTimeout(resyncPush, 6000);
+
+    // Sincronización. Se pide lo persistente enseguida (es sólo una petición
+    // al navegador) y la bajada va con retraso: si el servidor va por delante
+    // esto acaba recargando la página, y hacerlo en el primer segundo daría la
+    // sensación de que la app arranca dos veces.
+    pedirAlmacenamientoPersistente();
+    setTimeout(function () {
+      // Sólo cuando se sabe quién va por delante se empieza a contar lo de
+      // aquí como cambios. Si el servidor no contesta, el temporizador de
+      // abajo lo desbloquea igualmente: quedarse sin sincronizar es malo, pero
+      // quedarse además sin guardar en local sería peor.
+      var listo = function () { syncArranqueListo = true; };
+      bajarCopiaSiProcede().then(listo, listo);
+    }, 1500);
+    setTimeout(function () { syncArranqueListo = true; }, 12000);
+
+    // Última oportunidad de subir antes de que la app se vaya a segundo plano.
+    // En móvil el `beforeunload` no es fiable —el sistema mata la pestaña sin
+    // avisar—, así que el gancho bueno es éste.
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState === 'hidden') subirCopiaYa(true);
+    });
+    window.addEventListener('pagehide', function () { subirCopiaYa(true); });
 
     var pendingOnboarding = needsOnboarding();
     // Bloquea la app desde el primer frame para que no se vea el fondo
@@ -9237,7 +10089,10 @@
   // No incluye nada identificativo — ni nombre de plan libre, ni user agent.
   function buildAiContext() {
     var lines = [];
-    var plan = loadCustomPlan();
+    // El plan ACTIVO, no «uno cualquiera de los que haya». Con `loadCustomPlan()`
+    // aquí, quien tuviera una plantilla activa y además una rutina generada le
+    // estaba describiendo al modelo el plan equivocado.
+    var plan = planAjustable();
     var hoy = getTodayKey();
 
     if (plan) {
@@ -9252,7 +10107,18 @@
       if (avoid.length) lines.push('Zonas que le molestan: ' + avoid.join(', '));
       if (a.running === 'si') lines.push('Corre, con trabajo preventivo en las sesiones de pierna.');
     } else {
-      lines.push('Programa: plantilla fija (no generada por el asistente).');
+      var entry = getPlanEntry(activeProfile);
+      var etiqueta = (PROFILES[activeProfile] && PROFILES[activeProfile].daysLabel) || '';
+      lines.push('Programa: «' + nombrePlanActivo() + '», plantilla fija'
+        + (etiqueta ? ' (' + etiqueta + ')' : '') + '.');
+      // Sin esto el modelo contesta «hecho, ya lo tienes en 3 días», porque
+      // dice que sí a todo. Y como no hay nada que aplicar, el usuario se
+      // queda esperando un cambio que no va a llegar nunca.
+      lines.push('IMPORTANTE: esta rutina NO se puede modificar ni regenerar. No prometas '
+        + 'cambiarla, ni digas que la has cambiado. Si te piden cambios (días, objetivo, '
+        + 'material, tiempo), explica que hay que generar una rutina a medida desde el '
+        + 'asistente y que entonces sí podrás ajustarla.');
+      if (entry) lines.push('Sí puedes responder dudas sobre los ejercicios y el progreso.');
     }
 
     var semana = getWeekNumber(hoy);
@@ -9488,12 +10354,35 @@
     });
   }
 
+  // Por qué pedir otro número de días no ha movido el calendario. Se explica
+  // el caso concreto en vez de un «no ha cambiado nada» a secas: lo primero se
+  // puede accionar (quitar el plan de carrera), lo segundo sólo frustra.
+  //
+  // No se compara el plan entero para detectar esto: el generador baraja los
+  // empates, así que dos generaciones con las mismas respuestas ya salen
+  // distintas y la comparación no diría nada. Lo que se compara es justo lo
+  // que el usuario pidió: los días de la semana.
+  function explicarDiasSinEfecto(answers, nuevo) {
+    var conCarrera = answers.running === 'si' && answers.runningPlan === 'si';
+    var total = (nuevo.trainingDays || []).length;
+
+    if (conCarrera) {
+      return 'Los días de la semana no se mueven: el plan de vuelta a correr necesita 3 días '
+        + 'suyos, y tu fuerza se reparte en los demás, así que la semana se queda en ' + total
+        + ' días pidas los que pidas. Lo que sí cambia es cuánto haces en cada sesión de fuerza. '
+        + 'Si de verdad quieres entrenar menos días, hay que quitar antes el plan de carrera.';
+    }
+    return 'Los días de la semana se quedan como estaban; lo que cambia es el contenido '
+      + 'de cada sesión.';
+  }
+
   // Texto libre → respuestas del asistente → rutina validada. Devuelve
   // { plan, answers, motivo } o lanza si no hay nada aplicable.
   function aiAdjustPlan(texto) {
-    var plan = loadCustomPlan();
-    if (!plan || !plan.answers) {
-      return Promise.reject(aiError('Este plan no lo generó el asistente, así que no se puede ajustar así.'));
+    var plan = planAjustable();
+    if (!plan) {
+      return Promise.reject(aiError('«' + nombrePlanActivo() + '» es una plantilla fija, no una rutina '
+        + 'generada, así que no puedo reescribirla.'));
     }
 
     // Al ajustar se manda además la configuración exacta en JSON. El resumen en
@@ -9540,7 +10429,20 @@
 
       if (!diff.length) throw aiError('Eso ya es lo que tienes configurado.');
 
-      return { plan: nuevo, answers: answers, diff: diff, motivo: data.motivo || '' };
+      // Que cambie la RESPUESTA no significa que cambie la SEMANA. Con el plan
+      // de carrera, pedir 3 días o pedir 5 deja el mismo calendario. Antes la
+      // app enseñaba el chip «Días: 5 → 3», decía «Rutina actualizada 🎉» y
+      // dejaba los mismos días: para el usuario, la app estaba rota.
+      var pidioDias = diff.some(function (d) { return d.clave === 'days'; });
+      var mismosDias = (nuevo.trainingDays || []).join(',') === (plan.trainingDays || []).join(',');
+      var aviso = (pidioDias && mismosDias) ? explicarDiasSinEfecto(answers, nuevo) : '';
+
+      // Si lo ÚNICO que pidió fue cambiar de días y los días no se mueven, no
+      // hay nada que proponer: se explica y no se le hace aceptar un cambio
+      // que no es tal.
+      if (aviso && diff.length === 1) throw aiError(aviso);
+
+      return { plan: nuevo, answers: answers, diff: diff, aviso: aviso, motivo: data.motivo || '' };
     });
   }
 
@@ -9594,10 +10496,41 @@
     // modo: aquel cambiaba sólo el placeholder del campo y no había forma de
     // saber en qué modo estabas.
     function ofrecerAjuste(texto) {
-      if (!loadCustomPlan()) return;   // las plantillas fijas no se ajustan así
-
       var wrap = document.createElement('div');
       wrap.className = 'coach-oferta';
+
+      // Las plantillas fijas (Sergio, Eva, Gely) no se pueden reescribir: son
+      // programas escritos a mano, sin las respuestas con las que el generador
+      // los reconstruiría.
+      //
+      // Antes aquí había un `return` a secas. El resultado era el peor
+      // posible: el coach acababa de contestar en prosa que te cambiaba la
+      // rutina —los modelos dicen que sí a todo— y luego no aparecía ni botón
+      // ni aviso. Te ibas convencido de que se había aplicado.
+      if (!planAjustable()) {
+        var aviso = document.createElement('p');
+        aviso.className = 'coach-oferta-aviso';
+        aviso.textContent = '⚠️ Ojo: «' + nombrePlanActivo() + '» es una plantilla escrita a mano y no '
+          + 'puedo reescribirla, diga lo que diga ahí arriba. Puedo convertirla en una rutina a tu '
+          + 'medida —conservando tus pesos, tus sesiones y tu racha— y a partir de ahí sí ajustártela.';
+        wrap.appendChild(aviso);
+
+        var gen = document.createElement('button');
+        gen.className = 'coach-oferta-btn';
+        gen.textContent = '🪄 Convertirla en rutina a medida';
+        gen.addEventListener('click', function () {
+          if (busy) return;
+          close();
+          // 'edit' sobre el plan activo: conserva el id, y con él el historial.
+          // Con 'create' nacía un plan nuevo y los pesos se quedaban atrás.
+          openRoutineWizard(false, { mode: 'edit', planId: activeProfile });
+        });
+        wrap.appendChild(gen);
+
+        log.appendChild(wrap);
+        log.scrollTop = log.scrollHeight;
+        return;
+      }
 
       var btn = document.createElement('button');
       btn.className = 'coach-oferta-btn';
@@ -9726,6 +10659,9 @@
 
       var html = '';
       if (r.motivo) html += '<p class="coach-proposal-why">' + escapeHtml(r.motivo) + '</p>';
+      // El aviso va ANTES de los chips: si no, el chip «Días: 5 → 3» se lee
+      // como que la semana cambia, y la aclaración llega tarde.
+      if (r.aviso) html += '<p class="coach-proposal-aviso">⚠️ ' + escapeHtml(r.aviso) + '</p>';
       html += '<div class="coach-proposal-diff">' + r.diff.map(function (d) {
         return '<span class="coach-proposal-chip">' + escapeHtml(AI_ANSWER_LABEL[d.clave] || d.clave) + ': '
           + '<s>' + escapeHtml(d.antes) + '</s> → <strong>' + escapeHtml(d.despues) + '</strong></span>';

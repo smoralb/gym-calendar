@@ -28,9 +28,19 @@ class_name = "Suscripciones"
 tag = "v1"
 new_sqlite_classes = ["Contador"]
 
+# Copias de seguridad de los datos de la app. Clase aparte por lo mismo: es
+# otra cosa distinta y mezclarla con las suscripciones no ayudaria a nadie.
+[[durable_objects.bindings]]
+name = "COPIAS"
+class_name = "Copias"
+
 [[migrations]]
 tag = "v2"
 new_sqlite_classes = ["Suscripciones"]
+
+[[migrations]]
+tag = "v3"
+new_sqlite_classes = ["Copias"]
 
 # Recordatorios de entrenamiento. Se dispara cada hora en punto (UTC) y dentro
 # se mira a quien le toca segun SU hora local: los usuarios estan en zonas

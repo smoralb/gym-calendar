@@ -217,3 +217,61 @@ está roto por definición.
 
 El widget acepta los hostnames `smoralb.github.io` y `localhost`; si se publica
 en otro dominio hay que añadirlo en el panel de Turnstile.
+
+---
+
+## Copias de seguridad (`/copia/*`)
+
+Guarda el estado de la app fuera del móvil, para que borrar los datos del
+navegador o cambiar de teléfono no se lo lleve todo. El Worker hace falta por
+lo mismo de siempre: la app es un sitio estático y no tiene dónde guardar nada.
+
+Tres rutas, todas POST y todas con el código en el cuerpo:
+
+| Ruta | Cuerpo | Respuesta |
+| --- | --- | --- |
+| `/copia/subir` | `{codigo, ts, datos}` | `{ok:true, ts}` · `{ok:false, motivo:'vieja', ts}` |
+| `/copia/bajar` | `{codigo}` | `{datos, ts}` · `{vacio:true}` |
+| `/copia/borrar` | `{codigo}` | `{ok:true}` |
+
+**No pasan por Turnstile ni por el presupuesto.** No gastan cuota de IA, y
+sobre todo: la copia tiene que poder subir sin que nada la bloquee, es lo
+último que debe fallar.
+
+### El código es la llave
+
+No hay cuentas. El cliente se genera 24 caracteres de un alfabeto de 32 (120
+bits, no se adivina) y los usa como identidad. El alfabeto excluye `l`, `o`,
+`0` y `1`: el código se copia a mano alguna vez y esos cuatro se confunden.
+
+Aquí **no se puede listar ni enumerar nada**: sin el código exacto no hay
+lectura posible. Por eso `codigoValido()` es estricto — lo genera una máquina,
+nunca lo teclea nadie salvo al recuperar.
+
+### Quién gana
+
+`Copias` guarda el JSON tal cual, sin entenderlo, junto al `ts` del **reloj del
+cliente**. Al subir, un `ts` menor que el guardado se rechaza (`motivo:
+'vieja'`): es una copia vieja llegando tarde, y pisar con ella lo nuevo sería
+perder datos. Last-write-wins, sin mezcla campo a campo.
+
+Que el servidor no interprete el contenido es deliberado: es una caja fuerte,
+no un modelo de datos. Cualquier clave nueva que se añada a la app viaja sin
+tocar nada de aquí.
+
+### Topes
+
+- `MAX_BYTES_COPIA` (512 KB) — un año de entrenamiento ronda los 50 KB. Deja
+  margen de sobra e impide que esto se use como disco duro. Se mide en bytes
+  UTF-8 de verdad, no en `length`: los acentos cuentan doble.
+- `MAX_COPIAS` (500) — el endpoint es público y sin esto cualquiera puede ir
+  inventando códigos hasta llenar el Durable Object. Al llegar al tope se
+  siguen aceptando actualizaciones de las existentes; sólo se rechazan altas.
+- `DIAS_RETENCION_COPIA` (550) — una copia que nadie toca en año y medio es de
+  un móvil que ya no existe. La limpieza va colgada del cron horario de los
+  recordatorios, que para esto sobra.
+
+### Al desplegar
+
+La clase `Copias` es un Durable Object nuevo, así que lleva su migración
+(`tag = "v3"`) en `wrangler.toml`. Con `npx wrangler deploy` se aplica sola.

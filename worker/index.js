@@ -57,6 +57,31 @@ const HORAS_SEGUNDO_AVISO = 3;
 // que trocear esto en varias pasadas.
 const MAX_ENVIOS_POR_TICK = 40;
 
+// =============================================
+// COPIA DE SEGURIDAD EN LA NUBE
+// ---------------------------------------------
+// El navegador puede borrar el almacenamiento cuando quiera, y cambiar de
+// movil se lo lleva todo por delante. Una copia local no salva de ninguna de
+// las dos cosas, asi que la copia tiene que salir del dispositivo.
+//
+// No hay cuentas ni contrasenas: el cliente se inventa un codigo largo la
+// primera vez que arranca y lo usa como identidad. El codigo ES la llave, asi
+// que aqui no se puede listar ni adivinar nada: sin codigo exacto no hay
+// lectura posible.
+//
+// Cap por copia. Medido: un ano de entrenamiento ronda los 50 KB. Medio mega
+// deja margen de sobra y a la vez impide que esto se use como disco duro.
+const MAX_BYTES_COPIA = 512 * 1024;
+
+// Tope de copias distintas. El endpoint es publico, y sin esto cualquiera
+// puede ir inventando codigos y llenar el Durable Object. Al llegar al tope se
+// siguen aceptando actualizaciones de las que ya existen, sólo se rechazan
+// altas nuevas.
+const MAX_COPIAS = 500;
+
+// Una copia que nadie toca en año y medio es de un movil que ya no existe.
+const DIAS_RETENCION_COPIA = 550;
+
 // El secreto se recorta siempre. Al instalarlo por tuberia (PowerShell, `cat`,
 // un copiar-pegar con espacio de mas) es facil que se cuele un salto de linea
 // al final, y entonces la clave EC deja de ser valida con un error opaco
@@ -290,6 +315,74 @@ export class Contador {
   }
 }
 
+// Copias de seguridad. Una fila por código: el JSON tal cual lo manda el
+// cliente (el mismo que produce el botón de exportar) y el instante en que se
+// hizo el último cambio EN EL CLIENTE, que es el que decide quién gana.
+//
+// El servidor no entiende ni valida el contenido: es una caja fuerte, no un
+// modelo de datos. Así, cualquier clave nueva que se añada a la app sigue
+// viajando sin tocar nada de aquí.
+export class Copias {
+  constructor(state) {
+    this.sql = state.storage.sql;
+    this.sql.exec(
+      'CREATE TABLE IF NOT EXISTS copias (' +
+      ' codigo TEXT PRIMARY KEY,' +
+      ' datos TEXT NOT NULL,' +
+      ' ts INTEGER NOT NULL,' +          // últ. cambio, en ms del reloj del cliente
+      ' actualizado INTEGER NOT NULL' +  // últ. escritura, en ms del reloj del server
+      ')'
+    );
+  }
+
+  async fetch(request) {
+    const { accion, datos } = await request.json();
+
+    if (accion === 'subir') {
+      const fila = this.sql.exec('SELECT ts FROM copias WHERE codigo = ?', datos.codigo).toArray()[0];
+
+      // Last-write-wins por el reloj del cliente. Un `ts` menor que el
+      // guardado es una copia vieja subiendo tarde (un móvil que estuvo sin
+      // red), y pisar con ella lo nuevo sería perder datos.
+      if (fila && datos.ts < fila.ts) {
+        return Response.json({ ok: false, motivo: 'vieja', ts: fila.ts });
+      }
+
+      if (!fila) {
+        const total = this.sql.exec('SELECT COUNT(*) AS n FROM copias').toArray()[0].n;
+        if (total >= MAX_COPIAS) return Response.json({ ok: false, motivo: 'lleno' });
+      }
+
+      this.sql.exec(
+        'INSERT INTO copias (codigo, datos, ts, actualizado) VALUES (?, ?, ?, ?) ' +
+        'ON CONFLICT(codigo) DO UPDATE SET datos = ?, ts = ?, actualizado = ?',
+        datos.codigo, datos.datos, datos.ts, Date.now(),
+        datos.datos, datos.ts, Date.now()
+      );
+      return Response.json({ ok: true, ts: datos.ts });
+    }
+
+    if (accion === 'bajar') {
+      const fila = this.sql.exec('SELECT datos, ts FROM copias WHERE codigo = ?', datos.codigo).toArray()[0];
+      if (!fila) return Response.json({ vacio: true });
+      return Response.json({ datos: fila.datos, ts: fila.ts });
+    }
+
+    if (accion === 'borrar') {
+      this.sql.exec('DELETE FROM copias WHERE codigo = ?', datos.codigo);
+      return Response.json({ ok: true });
+    }
+
+    if (accion === 'caducar') {
+      const limite = Date.now() - DIAS_RETENCION_COPIA * 24 * 60 * 60 * 1000;
+      this.sql.exec('DELETE FROM copias WHERE actualizado < ?', limite);
+      return Response.json({ ok: true });
+    }
+
+    return Response.json({ error: 'accion desconocida' }, { status: 400 });
+  }
+}
+
 // Suscripciones a push. Se guarda lo mínimo para poder mandar el aviso:
 // el endpoint y las claves que da el navegador, qué días entrena, a qué hora
 // local quiere el recordatorio y cómo se llama la sesión de cada día. Nada
@@ -412,6 +505,23 @@ export class Suscripciones {
 
 function suscripcionesDO(env) {
   return env.SUSCRIPCIONES.get(env.SUSCRIPCIONES.idFromName('global'));
+}
+
+function llamarCopias(env, accion, datos) {
+  // Una sola instancia para todas las copias, igual que el contador: serializa
+  // las peticiones, pero a este volumen da igual y evita tener que repartir
+  // los códigos entre instancias.
+  return env.COPIAS.get(env.COPIAS.idFromName('global')).fetch('https://copias/', {
+    method: 'POST',
+    body: JSON.stringify({ accion: accion, datos: datos || {} })
+  }).then(r => r.json());
+}
+
+// El código lo genera el cliente y nunca lo teclea nadie, así que puede ser
+// estricto: minúsculas y dígitos, longitud fija. Validarlo aquí evita que una
+// petición a mano meta cualquier cosa como clave primaria.
+function codigoValido(c) {
+  return typeof c === 'string' && /^[a-z0-9]{24}$/.test(c);
 }
 
 function llamarSubs(env, accion, datos) {
@@ -671,6 +781,14 @@ export default {
     ctx.waitUntil(enviarRecordatorios(env).catch(e => {
       console.error('fallo enviando recordatorios:', e && e.message);
     }));
+
+    // Limpieza de copias abandonadas. Va aquí y no en su propio cron porque no
+    // corre prisa: que se ejecute cada hora sobra de largo.
+    if (env.COPIAS) {
+      ctx.waitUntil(llamarCopias(env, 'caducar').catch(e => {
+        console.error('fallo caducando copias:', e && e.message);
+      }));
+    }
   },
 
   async fetch(request, env) {
@@ -726,6 +844,42 @@ export default {
         const r = Number.isInteger(payload.racha) && payload.racha >= 0 && payload.racha < 10000 ? payload.racha : 0;
         await llamarSubs(env, 'hecho', { endpoint: ep, dia: dia, racha: r });
         return json({ ok: true }, 200, origin);
+      }
+
+      return json({ error: 'ruta desconocida' }, 404, origin);
+    }
+
+    // Copias de seguridad. Como las de push: ni Turnstile ni presupuesto, no
+    // gastan cuota de IA. Y sobre todo, la copia tiene que poder subir sin que
+    // nada la bloquee: es lo último que debe fallar.
+    if (url.pathname.indexOf('/copia/') === 0) {
+      if (!env.COPIAS) return json({ error: 'copias no disponibles' }, 503, origin);
+
+      const codigo = payload && payload.codigo;
+      if (!codigoValido(codigo)) return json({ error: 'código no válido' }, 400, origin);
+
+      if (url.pathname === '/copia/subir') {
+        const datos = payload.datos;
+        if (typeof datos !== 'string' || !datos) return json({ error: 'faltan datos' }, 400, origin);
+        // `length` es en caracteres UTF-16, no en bytes. Se mide de verdad:
+        // los acentos de los nombres de ejercicio cuentan doble.
+        if (new TextEncoder().encode(datos).length > MAX_BYTES_COPIA) {
+          return json({ error: 'la copia es demasiado grande' }, 413, origin);
+        }
+        const ts = payload.ts;
+        if (!Number.isInteger(ts) || ts <= 0) return json({ error: 'ts no válido' }, 400, origin);
+
+        const r = await llamarCopias(env, 'subir', { codigo: codigo, datos: datos, ts: ts });
+        if (r.motivo === 'lleno') return json({ error: 'no se admiten copias nuevas' }, 507, origin);
+        return json(r, 200, origin);
+      }
+
+      if (url.pathname === '/copia/bajar') {
+        return json(await llamarCopias(env, 'bajar', { codigo: codigo }), 200, origin);
+      }
+
+      if (url.pathname === '/copia/borrar') {
+        return json(await llamarCopias(env, 'borrar', { codigo: codigo }), 200, origin);
       }
 
       return json({ error: 'ruta desconocida' }, 404, origin);

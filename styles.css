@@ -1878,6 +1878,25 @@ body {
 /* Modo edición: la × de borrar se monta sobre la esquina del círculo. */
 .profile-option { position: relative; }
 
+/* Deshacer la conversión de una plantilla. Va en la esquina contraria a la de
+   borrar y en azul, no en rojo: recupera algo, no destruye nada. */
+.profile-option-restore {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--accent-blue);
+  color: #fff;
+  font-size: 0.95rem;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  -webkit-tap-highlight-color: transparent;
+}
+
 .profile-option-delete {
   position: absolute;
   top: 6px;
@@ -2820,6 +2839,21 @@ body.onboarding-lock::before {
   font-size: 1.15rem;
   color: var(--text-primary);
 }
+
+/* Aviso de que se está sustituyendo una plantilla escrita a mano. Se ve antes
+   del resumen del plan, que es donde se decide si guardar. */
+.wizard-aviso {
+  margin: 8px 0 14px;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(224, 166, 60, 0.35);
+  background: rgba(224, 166, 60, 0.08);
+  color: var(--accent-yellow);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.wizard-aviso strong { color: var(--text-primary); }
 
 .wizard-hint {
   margin: 0 0 16px;
@@ -4177,6 +4211,19 @@ body.onboarding-lock .coach-fab { display: none; }
   margin-bottom: 10px;
 }
 
+/* Aviso de que algo de lo pedido no se puede aplicar tal cual. Va en ámbar y
+   no en rojo: el cambio sigue siendo válido, sólo hace menos de lo que parece. */
+.coach-proposal-aviso {
+  font-size: 0.8rem;
+  color: var(--accent-yellow);
+  line-height: 1.5;
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(224, 166, 60, 0.35);
+  background: rgba(224, 166, 60, 0.08);
+}
+
 .coach-proposal-diff {
   display: flex;
   flex-wrap: wrap;
@@ -4256,6 +4303,21 @@ body.onboarding-lock .coach-fab { display: none; }
 .coach-oferta-btn:active {
   background: var(--accent-primary);
   color: #fff;
+}
+
+/* Aviso de que el plan activo es una plantilla y no se puede reescribir. Va
+   en ámbar y pegado al botón que sí lleva a alguna parte: el usuario acaba de
+   leer al coach decir que se lo cambiaba, y hay que desmentirlo sin dejarle
+   sin salida. */
+.coach-oferta-aviso {
+  font-size: 0.8rem;
+  color: var(--accent-yellow);
+  line-height: 1.5;
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(224, 166, 60, 0.35);
+  background: rgba(224, 166, 60, 0.08);
 }
 
 .coach-input-row {
@@ -4697,6 +4759,148 @@ body.onboarding-lock .coach-fab { display: none; }
   margin-top: 0;
   padding-top: 0;
   border-top: none;
+}
+
+/* Copia de seguridad. Mismo patrón apilado que el peso y los recordatorios:
+   línea separadora arriba y el hint explicando por qué existe. */
+.backup-setting {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-color);
+}
+
+.backup-setting-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.backup-setting-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.backup-btn {
+  flex: 1;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--accent-blue);
+  background: transparent;
+  color: var(--accent-blue);
+  font-family: var(--font);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.backup-btn:active { transform: scale(0.97); }
+
+/* Importar borra lo que hay, así que no compite visualmente con exportar. */
+.backup-btn.secundario {
+  border-color: var(--border-color);
+  color: var(--text-secondary);
+}
+
+/* El fichero manual es la alternativa, no lo principal: va hundido dentro del
+   mismo bloque para que se lea como "y además", no como "o esto o lo otro". */
+.backup-setting-sub {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px dashed var(--border-color);
+}
+
+/* El código de recuperación. Monoespaciado y grande a propósito: es para
+   copiarlo a mano, y ahí un cero y una o se confunden. */
+.sync-codigo {
+  margin-top: 10px;
+  padding: 12px;
+  border-radius: var(--radius-sm);
+  border: 1px dashed var(--accent-blue);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.9rem;
+  letter-spacing: 0.06em;
+  text-align: center;
+  word-break: break-all;
+  cursor: pointer;
+  user-select: all;
+}
+
+.sync-codigo:active { border-style: solid; }
+
+/* =============================================
+   MAPA DE CALOR DE ENTRENAMIENTOS
+   ---------------------------------------------
+   26 columnas (semanas) × 7 filas (lunes a domingo). El relleno va por
+   columnas, así que el HTML emite los días semana a semana y `grid-auto-flow:
+   column` los coloca solos. Las celdas son cuadradas vía aspect-ratio para
+   que la rejilla se adapte al ancho del móvil sin números mágicos.
+   ============================================= */
+.heatmap-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 14px;
+  margin-bottom: 16px;
+}
+
+.heatmap-meses,
+.heatmap-grid {
+  display: grid;
+  grid-template-columns: repeat(26, 1fr);
+  gap: 3px;
+}
+
+.heatmap-grid {
+  grid-template-rows: repeat(7, 1fr);
+  grid-auto-flow: column;
+}
+
+.heatmap-meses {
+  margin-bottom: 4px;
+}
+
+/* Las etiquetas de mes se salen de su columna a propósito: en 26 columnas no
+   cabe «Ene» en una sola, y recortarlas las dejaría ilegibles. */
+.heatmap-mes {
+  font-size: 0.55rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: visible;
+  line-height: 1;
+}
+
+.heatmap-dia {
+  aspect-ratio: 1;
+  border-radius: 2px;
+  background: var(--bg-input);
+}
+
+.heatmap-dia.n1 { background: rgba(233, 69, 96, 0.3); }
+.heatmap-dia.n2 { background: rgba(233, 69, 96, 0.5); }
+.heatmap-dia.n3 { background: rgba(233, 69, 96, 0.75); }
+.heatmap-dia.n4 { background: var(--accent-primary); }
+
+/* Los días que aún no han llegado no son «días fallados». */
+.heatmap-dia.futuro { opacity: 0.35; }
+
+.heatmap-leyenda {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  margin-top: 10px;
+  font-size: 0.6rem;
+  color: var(--text-muted);
+}
+
+.heatmap-leyenda .heatmap-dia {
+  width: 9px;
+  aspect-ratio: 1;
 }
 
 /* =============================================

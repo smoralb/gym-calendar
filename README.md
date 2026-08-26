@@ -14,6 +14,14 @@ de 12 semanas, adaptados al material, los días y el objetivo de cada persona.
 - 🏋️ Registro de pesos utilizados en cada ejercicio
 - 📊 Historial de progreso por ejercicio
 - 🎯 Sugerencias automáticas para subir de peso
+- 🗓️ **Mapa de calor** de los últimos 6 meses: una casilla por día, más intensa
+  cuantos más ejercicios hiciste
+- ⚖️ **Peso corporal con gráfica**: cada vez que lo actualizas queda un apunte
+  y se ve la curva
+- ☁️ **Copia automática**: los datos se guardan solos fuera del móvil cada vez
+  que entrenas. Sin cuentas ni botones
+- 💾 Y una copia manual a `.json`, para quien prefiera su propio fichero
+- 🔆 La pantalla no se apaga mientras entrenas
 - 🔍 Catálogo de 1.324 ejercicios con animaciones e instrucciones en español
 - 🏷️ Ejercicios categorizados por tags (material, patrón, objetivo y nivel) con filtros combinables
 - 🏃 Plan de vuelta a correr de 12 semanas, combinable con los días de fuerza
@@ -63,6 +71,66 @@ Y para comprobar que el generador sigue sano tras tocarlo, desde la consola:
 ```js
 gymSelfTest()   // recorre ~388.000 combinaciones de respuestas y las valida
 ```
+
+### ☁️ Copia automática
+
+Todo vive en el `localStorage` de un solo navegador, así que borrar los datos
+del sitio o cambiar de móvil se lo lleva todo. Guardar más veces no arregla
+nada: el problema no es *cuándo* se guarda, es *dónde*. Así que la copia sale
+del dispositivo sola.
+
+Sin cuentas ni contraseñas: el cliente se genera un código de 24 caracteres la
+primera vez que arranca y lo usa como identidad. **Nadie teclea nada nunca**,
+salvo para recuperar los datos en un móvil nuevo — ahí sí hace falta el código,
+y por eso se enseña en Perfil → Ajustes.
+
+Cuándo sube: 4 segundos después de cualquier cambio (se agrupan: marcar cinco
+ejercicios seguidos es una subida, no cinco), inmediatamente al terminar un
+entreno, y al mandar la app a segundo plano. Cuándo baja: al abrir, si el
+servidor va por delante.
+
+Quién gana cuando hay dos versiones: **la más reciente, comparando el sello de
+tiempo del cliente**. No hay mezcla campo a campo. Para los datos de una sola
+persona es suficiente, y es lo que mantiene esto en unas pocas líneas en vez de
+en un motor de fusión.
+
+Dos salvaguardas, y ninguna sobra:
+
+- **Nada cuenta como cambio hasta haber hablado con el servidor.** Al arrancar,
+  la app se escribe a sí misma (migraciones, planes de fábrica). Si eso contara
+  como cambio del usuario, un móvil recién borrado se pondría el sello de
+  ahora, se creería el más reciente y subiría su vacío encima de la copia
+  buena. Pasó en las pruebas: 890 bytes vacíos machacando 41 KB de historial.
+- **Un dispositivo sin nada que perder no gana un desempate**, diga lo que diga
+  su reloj (`hayDatosDeVerdad()`).
+
+El servidor no entiende el contenido: guarda el JSON tal cual y el sello de
+tiempo. Es una caja fuerte, no un modelo de datos, así que cualquier clave
+nueva de la app viaja sin tocar nada del Worker. Detalles de las rutas y de los
+topes en [`worker/README.md`](worker/README.md).
+
+Ojo con lo que esto implica: **los datos dejan de estar sólo en el móvil de
+cada uno y pasan a la cuenta de Cloudflare de quien despliega el Worker.**
+
+### 💾 Copia manual
+
+Sigue estando, y no depende de nada: ni servidor, ni código, ni red. Desde
+**Perfil → Ajustes** se exporta un `.json` y se vuelve a importar. Es la vía de
+escape cuando el Worker no responde, que es justo cuando más falta hace.
+
+El fichero es `{ app, formato, version, fecha, datos }`, donde `datos` son las
+claves `gym*` **tal cual están en `localStorage`**, sin parsear ni volver a
+serializar: cualquier clave nueva entra en la copia sola y nada se deforma por
+el camino. Quedan fuera las que son de ese navegador y de ese momento
+(`gym_feedback_queue`, `gym_update_recargando`, `gym_push_preguntado`):
+restaurarlas reenviaría reportes ya enviados o dejaría la app creyéndose a
+medio actualizar.
+
+Al importar se borran las claves actuales y se recarga la página, porque el
+plan activo, las fases y el estado se leen al arrancar y hay demasiado
+derivado como para rehacerlo en caliente. El import filtra por prefijo aunque
+el fichero sea nuestro: una copia editada a mano no debe poder escribir claves
+ajenas.
 
 ### 📚 Dataset de ejercicios
 
