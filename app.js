@@ -1,12 +1,12 @@
 /* =============================================
    Gym Calendar - App de Rutina de Ejercicios
-   Versión: 4.33.0 — Copia automática, y las plantillas ya se pueden ajustar
+   Versión: 4.33.1 — La primera copia ya no espera a que toques algo
    ============================================= */
 
 (function () {
   'use strict';
 
-  var APP_VERSION = '4.33.0';
+  var APP_VERSION = '4.33.1';
 
   // Histórico de novedades, de la más reciente a la más antigua.
   //
@@ -17,6 +17,12 @@
   //
   // Sólo entran cambios que el usuario nota. Los arreglos internos no van aquí.
   var CHANGELOG = [
+    {
+      version: '4.33.1',
+      items: [
+        { icon: '☁️', text: 'Arreglado: la primera copia de tus datos esperaba a que cambiaras algo. Si abrías la app y no tocabas nada, no se guardaba nada. Ahora se hace sola nada más abrir.' }
+      ]
+    },
     {
       version: '4.33.0',
       items: [
@@ -8247,8 +8253,21 @@
       body: JSON.stringify({ codigo: codigo })
     }).then(function (r) { return r.json(); }).then(function (r) {
       if (!r || r.vacio || !r.datos) {
-        // El servidor no tiene nada nuestro: si aquí hay datos, es la primera
-        // copia de este dispositivo.
+        // El servidor no tiene nada nuestro: ésta es la primera copia de este
+        // dispositivo, y hay que hacerla YA.
+        //
+        // Sin el sello no se sube nada, y el sello sólo lo pone un cambio del
+        // usuario. O sea que quien instalara la app y no tocara nada se
+        // quedaba sin copia indefinidamente, con su historial entero sólo en
+        // el móvil. Pasó en el primer despliegue: 1 día entrenado y ts=null.
+        //
+        // Poner el sello aquí es seguro justo porque el servidor está vacío:
+        // no hay nada que pisar. Y se exige `hayDatosDeVerdad()` para que un
+        // móvil recién borrado no se ponga el sello de ahora y luego gane un
+        // desempate que no le toca.
+        if (!syncTs() && hayDatosDeVerdad()) {
+          try { localStorage.setItem(SYNC_TS_KEY, String(Date.now())); } catch (e) {}
+        }
         if (syncTs()) programarSubida();
         return false;
       }
