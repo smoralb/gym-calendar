@@ -1,12 +1,12 @@
 /* =============================================
    Gym Calendar - App de Rutina de Ejercicios
-   Versión: 4.33.1 — La primera copia ya no espera a que toques algo
+   Versión: 4.34.0 — El coach ya aplica los cambios sobre cualquier plan
    ============================================= */
 
 (function () {
   'use strict';
 
-  var APP_VERSION = '4.33.1';
+  var APP_VERSION = '4.34.0';
 
   // Histórico de novedades, de la más reciente a la más antigua.
   //
@@ -17,6 +17,13 @@
   //
   // Sólo entran cambios que el usuario nota. Los arreglos internos no van aquí.
   var CHANGELOG = [
+    {
+      version: '4.34.0',
+      items: [
+        { icon: '🎯', text: 'El coach ya te aplica los cambios sobre cualquier plan, también los de plantilla (Sergio, Eva, Gely). Antes te dejaba pedirlos y luego no había forma de aplicarlos: ahora al aceptar, tu plantilla se convierte en rutina a tu medida conservando pesos, sesiones y racha. Se puede deshacer desde Perfil → Editar.' },
+        { icon: '🏃', text: 'Y si pides menos días de los que te van a quedar, te lo dice antes de aceptar en vez de dejarte descubrirlo en el calendario: con el plan de vuelta a correr, la carrera se lleva 3 días suyos y ese número no lo mandas tú.' }
+      ]
+    },
     {
       version: '4.33.1',
       items: [
@@ -10126,18 +10133,18 @@
       if (avoid.length) lines.push('Zonas que le molestan: ' + avoid.join(', '));
       if (a.running === 'si') lines.push('Corre, con trabajo preventivo en las sesiones de pierna.');
     } else {
-      var entry = getPlanEntry(activeProfile);
       var etiqueta = (PROFILES[activeProfile] && PROFILES[activeProfile].daysLabel) || '';
-      lines.push('Programa: «' + nombrePlanActivo() + '», plantilla fija'
+      lines.push('Programa: «' + nombrePlanActivo() + '», plantilla de la app'
         + (etiqueta ? ' (' + etiqueta + ')' : '') + '.');
-      // Sin esto el modelo contesta «hecho, ya lo tienes en 3 días», porque
-      // dice que sí a todo. Y como no hay nada que aplicar, el usuario se
-      // queda esperando un cambio que no va a llegar nunca.
-      lines.push('IMPORTANTE: esta rutina NO se puede modificar ni regenerar. No prometas '
-        + 'cambiarla, ni digas que la has cambiado. Si te piden cambios (días, objetivo, '
-        + 'material, tiempo), explica que hay que generar una rutina a medida desde el '
-        + 'asistente y que entonces sí podrás ajustarla.');
-      if (entry) lines.push('Sí puedes responder dudas sobre los ejercicios y el progreso.');
+      // Los cambios SÍ son aplicables: al aceptarlos, la plantilla se convierte
+      // en rutina a medida conservando el historial. Lo único que no debe hacer
+      // el modelo es dar el cambio por hecho: lo confirma el usuario después.
+      lines.push('Si te piden cambios, se pueden aplicar: al aceptarlos la plantilla se '
+        + 'convierte en una rutina a medida y se conservan pesos, sesiones y racha. '
+        + 'No des el cambio por hecho ni digas que ya lo has aplicado: lo confirma el '
+        + 'usuario después, viendo el plan resultante.');
+      // Sin esto el modelo se inventa el detalle de la plantilla, que no ve.
+      lines.push('No te inventes qué ejercicios tiene esta plantilla: no los conoces.');
     }
 
     var semana = getWeekNumber(hoy);
@@ -10381,27 +10388,54 @@
   // empates, así que dos generaciones con las mismas respuestas ya salen
   // distintas y la comparación no diría nada. Lo que se compara es justo lo
   // que el usuario pidió: los días de la semana.
-  function explicarDiasSinEfecto(answers, nuevo) {
+  // Devuelve un aviso si los días que pediste no son los que te van a quedar,
+  // o si el calendario no se mueve. Vale para los dos casos porque el usuario
+  // se lleva la misma sorpresa: pide 3 días y ve otra cosa.
+  //
+  // Compara sólo los días, no el plan entero: el generador baraja los empates,
+  // así que dos generaciones con las mismas respuestas ya salen distintas y
+  // comparar todo no diría nada.
+  function avisoDeDias(answers, nuevo, diasAntes) {
     var conCarrera = answers.running === 'si' && answers.runningPlan === 'si';
     var total = (nuevo.trainingDays || []).length;
+    var pedidos = parseInt(answers.days, 10) || 0;
+    var iguales = (nuevo.trainingDays || []).join(',') === (diasAntes || []).join(',');
 
-    if (conCarrera) {
-      return 'Los días de la semana no se mueven: el plan de vuelta a correr necesita 3 días '
-        + 'suyos, y tu fuerza se reparte en los demás, así que la semana se queda en ' + total
-        + ' días pidas los que pidas. Lo que sí cambia es cuánto haces en cada sesión de fuerza. '
-        + 'Si de verdad quieres entrenar menos días, hay que quitar antes el plan de carrera.';
+    if (conCarrera && pedidos && total !== pedidos) {
+      return 'Ojo con los días: has pedido ' + pedidos + ' y te van a quedar ' + total + '. '
+        + 'El plan de vuelta a correr necesita 3 días suyos y tu fuerza se reparte en los demás, '
+        + 'así que ese número lo manda la carrera, no tú. Para entrenar menos días hay que quitar '
+        + 'antes el plan de carrera.';
     }
-    return 'Los días de la semana se quedan como estaban; lo que cambia es el contenido '
-      + 'de cada sesión.';
+    if (iguales) {
+      return 'Los días de la semana se quedan como estaban; lo que cambia es el contenido '
+        + 'de cada sesión.';
+    }
+    return '';
   }
 
   // Texto libre → respuestas del asistente → rutina validada. Devuelve
   // { plan, answers, motivo } o lanza si no hay nada aplicable.
   function aiAdjustPlan(texto) {
     var plan = planAjustable();
-    if (!plan) {
-      return Promise.reject(aiError('«' + nombrePlanActivo() + '» es una plantilla fija, no una rutina '
-        + 'generada, así que no puedo reescribirla.'));
+
+    // Si el plan activo es una plantilla, NO se rechaza: se convierte como
+    // parte de aplicar el cambio. Pedirle algo al coach y que después te diga
+    // que no puede es un callejón sin salida — la conversión es un detalle de
+    // implementación, no algo que el usuario tenga que saber ni tramitar
+    // aparte. Se parte de la semilla equivalente a la plantilla.
+    var convirtiendo = false;
+    var base, diasAntes;
+    if (plan) {
+      base = plan.answers;
+      diasAntes = plan.trainingDays || [];
+    } else {
+      base = BUILTIN_SEEDS[activeProfile];
+      if (!base) {
+        return Promise.reject(aiError('«' + nombrePlanActivo() + '» no se puede ajustar.'));
+      }
+      diasAntes = (PROFILES[activeProfile] && PROFILES[activeProfile].defaultDays) || [];
+      convirtiendo = true;
     }
 
     // Al ajustar se manda además la configuración exacta en JSON. El resumen en
@@ -10409,7 +10443,7 @@
     // poder devolverlas completas en vez de pisarlas.
     var contexto = buildAiContext()
       + '\n\nConfiguración actual, en las mismas claves que debes devolver:\n'
-      + JSON.stringify(plan.answers);
+      + JSON.stringify(base);
 
     return aiFetch('/adjust', {
       messages: [{ role: 'user', content: texto }],
@@ -10430,7 +10464,7 @@
 
       // Mezcla sobre una copia: si el plan resultante no vale, el actual no se
       // ha tocado.
-      var answers = normalizeAnswers(JSON.parse(JSON.stringify(plan.answers)));
+      var answers = normalizeAnswers(JSON.parse(JSON.stringify(base)));
       Object.keys(cambios).forEach(function (k) { answers[k] = cambios[k]; });
 
       var nuevo = generateValidRoutine(answers);
@@ -10443,25 +10477,27 @@
       // avoid:["hombro"] sobre un avoid:["rodilla"] borra la rodilla y el
       // usuario no se entera: el chip enseñaría sólo el valor nuevo.
       var diff = Object.keys(cambios).map(function (k) {
-        return { clave: k, antes: aiValorLegible(plan.answers[k]), despues: aiValorLegible(answers[k]) };
+        return { clave: k, antes: aiValorLegible(base[k]), despues: aiValorLegible(answers[k]) };
       }).filter(function (d) { return d.antes !== d.despues; });
 
-      if (!diff.length) throw aiError('Eso ya es lo que tienes configurado.');
+      // Al convertir sí hay algo que aplicar aunque el diff salga vacío: la
+      // rutina pasa de plantilla a generada, que es el cambio de verdad.
+      if (!diff.length && !convirtiendo) throw aiError('Eso ya es lo que tienes configurado.');
 
       // Que cambie la RESPUESTA no significa que cambie la SEMANA. Con el plan
       // de carrera, pedir 3 días o pedir 5 deja el mismo calendario. Antes la
       // app enseñaba el chip «Días: 5 → 3», decía «Rutina actualizada 🎉» y
       // dejaba los mismos días: para el usuario, la app estaba rota.
       var pidioDias = diff.some(function (d) { return d.clave === 'days'; });
-      var mismosDias = (nuevo.trainingDays || []).join(',') === (plan.trainingDays || []).join(',');
-      var aviso = (pidioDias && mismosDias) ? explicarDiasSinEfecto(answers, nuevo) : '';
+      var aviso = pidioDias ? avisoDeDias(answers, nuevo, diasAntes) : '';
 
-      // Si lo ÚNICO que pidió fue cambiar de días y los días no se mueven, no
-      // hay nada que proponer: se explica y no se le hace aceptar un cambio
-      // que no es tal.
-      if (aviso && diff.length === 1) throw aiError(aviso);
+      // Sólo se bloquea si NO hay nada que aplicar: mismo calendario, un único
+      // cambio pedido y ninguna conversión de por medio.
+      var mismosDias = (nuevo.trainingDays || []).join(',') === (diasAntes || []).join(',');
+      if (aviso && mismosDias && diff.length === 1 && !convirtiendo) throw aiError(aviso);
 
-      return { plan: nuevo, answers: answers, diff: diff, aviso: aviso, motivo: data.motivo || '' };
+      return { plan: nuevo, answers: answers, diff: diff, aviso: aviso,
+               convirtiendo: convirtiendo, motivo: data.motivo || '' };
     });
   }
 
@@ -10518,42 +10554,24 @@
       var wrap = document.createElement('div');
       wrap.className = 'coach-oferta';
 
-      // Las plantillas fijas (Sergio, Eva, Gely) no se pueden reescribir: son
-      // programas escritos a mano, sin las respuestas con las que el generador
-      // los reconstruiría.
-      //
-      // Antes aquí había un `return` a secas. El resultado era el peor
-      // posible: el coach acababa de contestar en prosa que te cambiaba la
-      // rutina —los modelos dicen que sí a todo— y luego no aparecía ni botón
-      // ni aviso. Te ibas convencido de que se había aplicado.
-      if (!planAjustable()) {
-        var aviso = document.createElement('p');
-        aviso.className = 'coach-oferta-aviso';
-        aviso.textContent = '⚠️ Ojo: «' + nombrePlanActivo() + '» es una plantilla escrita a mano y no '
-          + 'puedo reescribirla, diga lo que diga ahí arriba. Puedo convertirla en una rutina a tu '
-          + 'medida —conservando tus pesos, tus sesiones y tu racha— y a partir de ahí sí ajustártela.';
-        wrap.appendChild(aviso);
-
-        var gen = document.createElement('button');
-        gen.className = 'coach-oferta-btn';
-        gen.textContent = '🪄 Convertirla en rutina a medida';
-        gen.addEventListener('click', function () {
-          if (busy) return;
-          close();
-          // 'edit' sobre el plan activo: conserva el id, y con él el historial.
-          // Con 'create' nacía un plan nuevo y los pesos se quedaban atrás.
-          openRoutineWizard(false, { mode: 'edit', planId: activeProfile });
-        });
-        wrap.appendChild(gen);
-
-        log.appendChild(wrap);
-        log.scrollTop = log.scrollHeight;
-        return;
+      // Con una plantilla activa el cambio TAMBIÉN se puede aplicar: al
+      // aceptarlo, la plantilla se convierte en rutina a medida conservando su
+      // id (y con él los pesos, las sesiones y la racha). Se avisa de que va a
+      // pasar, pero no se le manda a hacer un trámite aparte: pedir un cambio
+      // que luego no se puede aplicar es un callejón sin salida.
+      var esPlantilla = !planAjustable();
+      if (esPlantilla) {
+        var nota = document.createElement('p');
+        nota.className = 'coach-oferta-aviso';
+        nota.textContent = 'ℹ️ «' + nombrePlanActivo() + '» es una plantilla. Para aplicarte esto la '
+          + 'convierto en una rutina a tu medida, conservando tus pesos, tus sesiones y tu racha. '
+          + 'Verás el plan resultante antes de decidir, y se puede deshacer desde Perfil → Editar.';
+        wrap.appendChild(nota);
       }
 
       var btn = document.createElement('button');
       btn.className = 'coach-oferta-btn';
-      btn.textContent = '🎯 Aplicar a mi rutina';
+      btn.textContent = esPlantilla ? '🪄 Convertir y aplicar' : '🎯 Aplicar a mi rutina';
       btn.addEventListener('click', function () {
         if (busy) return;
         wrap.remove();
@@ -10678,6 +10696,11 @@
 
       var html = '';
       if (r.motivo) html += '<p class="coach-proposal-why">' + escapeHtml(r.motivo) + '</p>';
+      if (r.convirtiendo) {
+        html += '<p class="coach-proposal-aviso">🪄 Al aceptar, «' + escapeHtml(nombrePlanActivo())
+          + '» deja de ser una plantilla y pasa a ser esta rutina. Tus pesos, tus sesiones y tu '
+          + 'racha se conservan, y puedes volver atrás desde Perfil → Editar.</p>';
+      }
       // El aviso va ANTES de los chips: si no, el chip «Días: 5 → 3» se lee
       // como que la semana cambia, y la aclaración llega tarde.
       if (r.aviso) html += '<p class="coach-proposal-aviso">⚠️ ' + escapeHtml(r.aviso) + '</p>';
@@ -10708,7 +10731,7 @@
         switchProfile(planId);
         switchTab('rutina');
         close();
-        showToast('Rutina actualizada 🎉');
+        showToast(r.convirtiendo ? 'Ya es tuya y ajustada 🎉' : 'Rutina actualizada 🎉');
       });
     }
 
