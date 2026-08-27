@@ -1,12 +1,12 @@
 /* =============================================
    Gym Calendar - App de Rutina de Ejercicios
-   Versión: 4.36.0 — Ya puedes correr 1, 2 o 3 días a la semana
+   Versión: 4.36.1 — El coach deja de decir «no sé qué cambiar» cuando sí lo sabe
    ============================================= */
 
 (function () {
   'use strict';
 
-  var APP_VERSION = '4.36.0';
+  var APP_VERSION = '4.36.1';
 
   // Histórico de novedades, de la más reciente a la más antigua.
   //
@@ -17,6 +17,12 @@
   //
   // Sólo entran cambios que el usuario nota. Los arreglos internos no van aquí.
   var CHANGELOG = [
+    {
+      version: '4.36.1',
+      items: [
+        { icon: '🐛', text: 'Arreglado: le pedías un cambio al coach, lo entendía, y al pulsar Aplicar te soltaba «no he sabido qué cambiar con eso». Pasaba cuando pedías más de lo que existe (un cuarto día de carrera, por ejemplo) o cuando lo decías con una frase larga.' }
+      ]
+    },
     {
       version: '4.36.0',
       items: [
@@ -10561,8 +10567,19 @@
         // veces afirma igualmente haberlos hecho, y ese texto como mensaje de
         // error se contradice con que no haya pasado nada.
         if (data && data.motivo) console.warn('Coach IA: ajuste vacío con motivo:', data.motivo);
-        throw aiError('No he sabido qué cambiar con eso. Dímelo de otra forma: «entreno 5 días», '
-          + '«me molesta el hombro», «solo tengo 30 minutos».');
+
+        // Si algo se ha descartado por el camino, el coach SÍ había entendido:
+        // decir «no he sabido qué cambiar» sería mentir y no ayuda a corregirlo.
+        var tirados = (data && Array.isArray(data.descartados)) ? data.descartados : [];
+        if (tirados.length) {
+          var nombres = tirados.map(function (k) { return AI_ANSWER_LABEL[k] || k; }).join(', ');
+          throw aiError('Te he entendido, pero lo que pides no me cabe en «' + nombres + '». '
+            + 'Dime un valor concreto de los que admite y te lo aplico.');
+        }
+
+        throw aiError('No he conseguido convertir eso en un cambio concreto. Pruébalo más corto '
+          + 'y directo: «2 días de running», «entreno 5 días», «me molesta el hombro», '
+          + '«solo tengo 30 minutos».');
       }
 
       // Mezcla sobre una copia: si el plan resultante no vale, el actual no se

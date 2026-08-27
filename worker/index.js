@@ -148,6 +148,36 @@ const ANSWER_VALUES = {
   runningDays: ['1', '2', '3']
 };
 
+// Claves cuyos valores son numeros ordenados. Importa porque el modelo se sale
+// del rango con toda naturalidad: a quien ya corre 3 dias y pide "uno mas" le
+// devuelve runningDays 4, que no esta permitido.
+const NUMERIC_KEYS = { days: true, minutes: true, runningDays: true };
+
+// Normaliza un valor del modelo al dominio permitido. Devuelve null si no hay
+// forma de encajarlo.
+//
+// Existe porque descartar en silencio era lo peor de los dos mundos: el
+// usuario pedia algo perfectamente razonable ("añade un dia de running"), el
+// modelo lo entendia, y la app contestaba "no he sabido que cambiar con eso".
+// Dos motivos reales de descarte:
+//   - tipo: el modelo manda 2 en vez de "2"
+//   - rango: pide 4 cuando el maximo es 3
+function normalizarValor(key, value, allowed) {
+  if (value === null || value === undefined || Array.isArray(value)) return null;
+  const s = String(value);
+  if (allowed.indexOf(s) !== -1) return s;
+  if (!NUMERIC_KEYS[key]) return null;
+
+  const n = parseInt(s, 10);
+  if (isNaN(n)) return null;
+  const nums = allowed.map(v => parseInt(v, 10)).filter(v => !isNaN(v)).sort((a, b) => a - b);
+  if (!nums.length) return null;
+  // Al extremo mas cercano: pedir mas dias de los que existen es pedir el
+  // maximo, y el usuario ve el plan resultante antes de aceptarlo.
+  const clamped = Math.min(Math.max(n, nums[0]), nums[nums.length - 1]);
+  return String(clamped);
+}
+
 const CHAT_SYSTEM = [
   'Eres el entrenador de Gym Calendar, una app de rutinas de gimnasio. Hablas en',
   'español de España, en segunda persona, directo y sin florituras.',
@@ -206,7 +236,15 @@ const ADJUST_SYSTEM = [
   '  rodilla sin que se entere. Quita algo de la lista únicamente si dice que ya',
   '  no le molesta.',
   '- Molestias y dolores van a `avoid`, nunca a `goal`.',
-  '- Si no entiendes qué cambiar, devuelve {"answers":{},"motivo":"..."}',
+  '- NUNCA devuelvas `answers` vacío si el mensaje pide un cambio concreto,',
+  '  aunque venga con rodeos: «quiero modificar mi entrenamiento y añadir un',
+  '  día de running» es exactamente lo mismo que «añade un día de running».',
+  '  Un `motivo` que dice que has hecho el cambio junto a un `answers` vacío es',
+  '  el peor resultado posible: el usuario se queda esperando algo que no pasa.',
+  '- Si te piden más de lo que admite una clave, devuelve el MÁXIMO permitido y',
+  '  dilo en el `motivo`. Si ya está en el máximo, dilo también.',
+  '- Los valores van entre comillas SIEMPRE, también los numéricos: "3", no 3.',
+  '- Si de verdad no entiendes qué cambiar, devuelve {"answers":{},"motivo":"..."}',
   '  explicando qué te falta saber.',
   '- El `motivo` va en español, una sola frase, en segunda persona.'
 ].join('\n');
@@ -777,6 +815,7 @@ async function handleAdjust(env, clean, origin) {
   // Filtro final: aunque el cliente vuelve a validar, no reenviamos claves ni
   // valores inventados.
   const answers = {};
+  const descartados = [];
   const from = parsed.answers && typeof parsed.answers === 'object' ? parsed.answers : {};
   Object.keys(ANSWER_VALUES).forEach(key => {
     if (!(key in from)) return;
@@ -785,13 +824,19 @@ async function handleAdjust(env, clean, origin) {
     if (Array.isArray(value)) {
       const kept = value.filter(v => allowed.indexOf(v) !== -1);
       if (kept.length) answers[key] = kept;
-    } else if (allowed.indexOf(value) !== -1) {
-      answers[key] = value;
+      else descartados.push(key);
+      return;
     }
+    const limpio = normalizarValor(key, value, allowed);
+    if (limpio !== null) answers[key] = limpio;
+    else descartados.push(key);
   });
 
   return json({
     answers: answers,
+    // Qué se ha tenido que tirar. El cliente lo necesita para poder decir algo
+    // útil en vez de un "no he sabido qué cambiar" cuando SÍ ha entendido.
+    descartados: descartados,
     motivo: typeof parsed.motivo === 'string' ? parsed.motivo.slice(0, 300) : ''
   }, 200, origin);
 }
