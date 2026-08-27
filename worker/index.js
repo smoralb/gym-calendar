@@ -82,6 +82,25 @@ const MAX_COPIAS = 500;
 // Una copia que nadie toca en año y medio es de un movil que ya no existe.
 const DIAS_RETENCION_COPIA = 550;
 
+// =============================================
+// METRICAS DEL COACH
+// ---------------------------------------------
+// Tres meses de contadores diarios: suficiente para ver una tendencia y para
+// notar el dia que algo se rompio, y poco suficiente para no acumular nada.
+const DIAS_RETENCION_METRICAS = 90;
+
+// Eventos que el CLIENTE puede apuntar. Lista cerrada a proposito: el endpoint
+// es publico, y sin ella cualquiera podria inventarse nombres y llenar la
+// tabla de filas basura.
+const EVENTOS_CLIENTE = [
+  'boton_ofrecido',      // el coach ofrece aplicar el cambio
+  'ajuste_pedido',       // el usuario pulsa "aplicar"
+  'propuesta_mostrada',  // se le enseña el plan resultante
+  'propuesta_aceptada',
+  'propuesta_rechazada',
+  'plantilla_convertida'
+];
+
 // El secreto se recorta siempre. Al instalarlo por tuberia (PowerShell, `cat`,
 // un copiar-pegar con espacio de mas) es facil que se cuele un salto de linea
 // al final, y entonces la clave EC deja de ser valida con un error opaco
@@ -442,6 +461,70 @@ export class Copias {
   }
 }
 
+// Métricas del coach. Contadores por día y nada más.
+//
+// Existe porque toda la semana se han ido descubriendo fallos del coach por lo
+// que contaba un usuario, no por lo que veíamos: peticiones que devolvían
+// vacío, claves que el filtro tiraba en silencio, un botón que no aparecía.
+// Cualquiera de esas cosas se ve de un vistazo en un contador y ninguna
+// necesita saber QUIÉN hizo qué.
+//
+// Lo que aquí NO entra, a propósito: mensajes, planes, respuestas del modelo,
+// IPs, identificadores de nadie. Sólo «cuántas veces pasó esto el día X».
+export class Metricas {
+  constructor(state) {
+    this.sql = state.storage.sql;
+    this.sql.exec(
+      'CREATE TABLE IF NOT EXISTS eventos (' +
+      ' dia TEXT NOT NULL,' +
+      ' evento TEXT NOT NULL,' +
+      ' n INTEGER NOT NULL DEFAULT 0,' +
+      ' PRIMARY KEY (dia, evento)' +
+      ')'
+    );
+  }
+
+  async fetch(request) {
+    const { accion, datos } = await request.json();
+
+    if (accion === 'apuntar') {
+      const dia = new Date().toISOString().slice(0, 10);
+      const lista = Array.isArray(datos.eventos) ? datos.eventos : [];
+      lista.forEach(ev => {
+        this.sql.exec(
+          'INSERT INTO eventos (dia, evento, n) VALUES (?, ?, 1) ' +
+          'ON CONFLICT(dia, evento) DO UPDATE SET n = n + 1',
+          dia, String(ev).slice(0, 60)
+        );
+      });
+      // El contador de gasto borra el historial cada día porque su pregunta es
+      // «cuánto llevo hoy». Aquí la pregunta es «esto va a mejor o a peor», así
+      // que se guardan tres meses.
+      const limite = new Date(Date.now() - DIAS_RETENCION_METRICAS * 86400000).toISOString().slice(0, 10);
+      this.sql.exec('DELETE FROM eventos WHERE dia < ?', limite);
+      return Response.json({ ok: true });
+    }
+
+    if (accion === 'ver') {
+      const desde = new Date(Date.now() - (datos.dias || 30) * 86400000).toISOString().slice(0, 10);
+      const filas = this.sql.exec(
+        'SELECT dia, evento, n FROM eventos WHERE dia >= ? ORDER BY dia DESC, evento', desde
+      ).toArray();
+
+      const porDia = {};
+      const total = {};
+      filas.forEach(f => {
+        if (!porDia[f.dia]) porDia[f.dia] = {};
+        porDia[f.dia][f.evento] = f.n;
+        total[f.evento] = (total[f.evento] || 0) + f.n;
+      });
+      return Response.json({ desde: desde, total: total, porDia: porDia });
+    }
+
+    return Response.json({ error: 'accion desconocida' }, { status: 400 });
+  }
+}
+
 // Suscripciones a push. Se guarda lo mínimo para poder mandar el aviso:
 // el endpoint y las claves que da el navegador, qué días entrena, a qué hora
 // local quiere el recordatorio y cómo se llama la sesión de cada día. Nada
@@ -581,6 +664,23 @@ function llamarCopias(env, accion, datos) {
 // petición a mano meta cualquier cosa como clave primaria.
 function codigoValido(c) {
   return typeof c === 'string' && /^[a-z0-9]{24}$/.test(c);
+}
+
+function llamarMetricas(env, accion, datos) {
+  return env.METRICAS.get(env.METRICAS.idFromName('global')).fetch('https://metricas/', {
+    method: 'POST',
+    body: JSON.stringify({ accion: accion, datos: datos || {} })
+  }).then(r => r.json());
+}
+
+// Apunta eventos sin que nada dependa de ello: va en waitUntil y se traga sus
+// propios errores. Una metrica que rompa una peticion del coach seria peor que
+// no tener metricas.
+function apunta(env, ctx, ...eventos) {
+  if (!env.METRICAS || !eventos.length) return;
+  try {
+    ctx.waitUntil(llamarMetricas(env, 'apuntar', { eventos: eventos }).catch(() => {}));
+  } catch (e) { /* sin ctx (o sin DO): se pierde el apunte, no pasa nada */ }
 }
 
 function llamarSubs(env, accion, datos) {
@@ -784,19 +884,30 @@ function extractText(res) {
   return '';
 }
 
-async function handleAdjust(env, clean, origin) {
-  // Sólo interesa lo último que ha escrito: esto no es una conversación.
-  const last = clean.messages[clean.messages.length - 1];
+// Cuantas claves puede tocar un solo mensaje. Con una peticion vaga («ponme
+// algo mejor») el modelo se lanza a reescribir la configuracion entera: en las
+// pruebas devolvio place, level, days, minutes, goal Y avoid con dos lesiones
+// que el usuario no habia mencionado nunca. Se ve en el diff antes de aceptar,
+// pero es un muro de cambios inventados. Cinco es holgado para una peticion de
+// verdad («me duele el hombro y ahora puedo 4 dias» son dos).
+const MAX_CLAVES_POR_PETICION = 5;
 
-  const res = await env.AI.run(MODEL, {
-    messages: [
-      { role: 'system', content: ADJUST_SYSTEM },
-      { role: 'system', content: 'Configuración actual del usuario:\n\n' + (clean.context || '(sin plan)') },
-      { role: 'user', content: last.content }
-    ],
-    max_tokens: 300
-  });
+// `avoid` son lesiones y molestias: lo mas delicado que hay aqui, porque
+// condiciona que ejercicios se pueden hacer. No se acepta si el usuario no ha
+// nombrado ninguna zona ni ninguna molestia en su mensaje.
+const PALABRAS_MOLESTIA = /(molest|duele|dolor|lesi|rodilla|hombro|espalda|lumbar|muñec|muneca|codo|cuello|cervical|tendin|me he hecho)/i;
 
+// Una pasada por el modelo. Devuelve { answers, descartados, motivo } o null
+// si lo que ha contestado no hay por dónde cogerlo.
+async function pasadaAdjust(env, contexto, peticion, correccion, ctx) {
+  const messages = [
+    { role: 'system', content: ADJUST_SYSTEM },
+    { role: 'system', content: 'Configuración actual del usuario:\n\n' + (contexto || '(sin plan)') }
+  ];
+  if (correccion) messages.push({ role: 'system', content: correccion });
+  messages.push({ role: 'user', content: peticion });
+
+  const res = await env.AI.run(MODEL, { messages: messages, max_tokens: 300 });
   const text = extractText(res);
 
   // El modelo se empeña a veces en envolver el JSON en prosa o en un bloque de
@@ -807,10 +918,7 @@ async function handleAdjust(env, clean, origin) {
   if (start !== -1 && end > start) {
     try { parsed = JSON.parse(text.slice(start, end + 1)); } catch (e) { /* abajo */ }
   }
-
-  if (!parsed || typeof parsed !== 'object') {
-    return json({ error: 'respuesta ilegible', raw: text.slice(0, 200) }, 502, origin);
-  }
+  if (!parsed || typeof parsed !== 'object') return null;
 
   // Filtro final: aunque el cliente vuelve a validar, no reenviamos claves ni
   // valores inventados.
@@ -832,12 +940,79 @@ async function handleAdjust(env, clean, origin) {
     else descartados.push(key);
   });
 
-  return json({
+  // Guardas contra el modelo desbocado. Van aquí y no en el prompt porque un
+  // prompt es una sugerencia y esto tiene que cumplirse siempre.
+  if ('avoid' in answers && !PALABRAS_MOLESTIA.test(peticion)) {
+    delete answers.avoid;
+    apunta(env, ctx, 'avoid_inventado');
+  }
+
+  const claves = Object.keys(answers);
+  if (claves.length > MAX_CLAVES_POR_PETICION) {
+    apunta(env, ctx, 'peticion_vaga');
+    return { answers: {}, descartados: [], vago: true, motivo: '' };
+  }
+
+  return {
     answers: answers,
-    // Qué se ha tenido que tirar. El cliente lo necesita para poder decir algo
-    // útil en vez de un "no he sabido qué cambiar" cuando SÍ ha entendido.
     descartados: descartados,
     motivo: typeof parsed.motivo === 'string' ? parsed.motivo.slice(0, 300) : ''
+  };
+}
+
+// Instrucción del reintento. Se le dice qué ha hecho mal, no sólo que lo
+// repita: repetir la misma petición al mismo modelo suele dar el mismo fallo.
+const CORRECCION = [
+  'Tu respuesta anterior no ha servido: o no era JSON válido, o `answers` venía',
+  'vacío cuando el usuario SÍ pedía un cambio concreto.',
+  'Vuelve a intentarlo. Devuelve SOLO el objeto JSON, sin prosa alrededor y sin',
+  'bloques de código. `answers` tiene que llevar al menos una de las claves',
+  'admitidas, con su valor entre comillas.'
+].join('\n');
+
+async function handleAdjust(env, ctx, clean, origin) {
+  // Sólo interesa lo último que ha escrito: esto no es una conversación.
+  const last = clean.messages[clean.messages.length - 1];
+
+  let r = await pasadaAdjust(env, clean.context, last.content, null, ctx);
+
+  // Un reintento cuando la primera pasada no vale. Es lo que hace openGym
+  // («one repair attempt») y ataca la causa de casi todos los fallos vistos:
+  // el modelo es pequeño y falla el formato o se queda en blanco, pero a la
+  // segunda suele acertar. Cuesta otra llamada, y sólo en el caso malo.
+  //
+  // Una petición vaga NO se reintenta: ahí el modelo no ha fallado el formato,
+  // ha entendido de más. Repetirla sólo gastaría otra llamada para volver a
+  // inventarse media configuración.
+  const falloPrimera = !r || (!r.vago && !Object.keys(r.answers).length && !r.descartados.length);
+  if (falloPrimera) {
+    apunta(env, ctx, 'adjust_reintento');
+    const segunda = await pasadaAdjust(env, clean.context, last.content, CORRECCION, ctx);
+    if (segunda && (Object.keys(segunda.answers).length || segunda.descartados.length)) {
+      apunta(env, ctx, 'adjust_reintento_ok');
+      r = segunda;
+    } else if (!r) {
+      r = segunda;
+    }
+  }
+
+  if (!r) {
+    apunta(env, ctx, 'adjust_ilegible');
+    return json({ error: 'respuesta ilegible' }, 502, origin);
+  }
+
+  apunta(env, ctx, 'adjust_ok');
+  if (!r.vago && !Object.keys(r.answers).length) apunta(env, ctx, 'adjust_vacio');
+  r.descartados.forEach(k => apunta(env, ctx, 'descartado_' + k));
+
+  return json({
+    answers: r.answers,
+    // Qué se ha tenido que tirar. El cliente lo necesita para poder decir algo
+    // útil en vez de un "no he sabido qué cambiar" cuando SÍ ha entendido.
+    descartados: r.descartados,
+    // La petición era tan vaga que el modelo se puso a reescribirlo todo.
+    vago: !!r.vago,
+    motivo: r.motivo || ''
   }, 200, origin);
 }
 
@@ -857,7 +1032,7 @@ export default {
     }
   },
 
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const origin = request.headers.get('Origin') || '';
     const url = new URL(request.url);
 
@@ -877,6 +1052,32 @@ export default {
     let payload;
     try { payload = await request.json(); }
     catch (e) { return json({ error: 'JSON no válido' }, 400, origin); }
+
+    // Métricas. Dos rutas: apuntar (desde el cliente, lista cerrada de nombres)
+    // y ver (protegida por un secreto). Ninguna gasta cuota de IA.
+    if (url.pathname.indexOf('/metricas') === 0) {
+      if (!env.METRICAS) return json({ error: 'métricas no disponibles' }, 503, origin);
+
+      if (url.pathname === '/metricas/evento') {
+        const evs = Array.isArray(payload && payload.eventos) ? payload.eventos : [];
+        const validos = evs.filter(e => EVENTOS_CLIENTE.indexOf(e) !== -1).slice(0, 5);
+        if (validos.length) apunta(env, ctx, ...validos);
+        return json({ ok: true }, 200, origin);
+      }
+
+      // Sin secreto configurado no se enseña nada: es preferible que el panel
+      // no funcione a que los contadores queden a la vista de cualquiera.
+      if (url.pathname === '/metricas/ver') {
+        if (!env.METRICAS_TOKEN) return json({ error: 'métricas no configuradas' }, 503, origin);
+        if (String(payload && payload.token || '') !== String(env.METRICAS_TOKEN)) {
+          return json({ error: 'token no válido' }, 403, origin);
+        }
+        const dias = Math.min(Math.max(parseInt(payload.dias, 10) || 30, 1), DIAS_RETENCION_METRICAS);
+        return json(await llamarMetricas(env, 'ver', { dias: dias }), 200, origin);
+      }
+
+      return json({ error: 'ruta desconocida' }, 404, origin);
+    }
 
     // Las rutas de push van antes de sanitize(), que exige `messages` y es
     // cosa del coach. No pasan por Turnstile ni por el presupuesto: no gastan
@@ -961,21 +1162,27 @@ export default {
     // verificación no debe llegar a descontar cuota de nadie.
     const ok = await turnstileValido(env, payload.turnstile, request.headers.get('CF-Connecting-IP'));
     if (!ok) {
+      apunta(env, ctx, 'turnstile_rechazado');
       return json({ error: 'No he podido verificar que esto sea un navegador. Recarga la página e inténtalo otra vez.' }, 403, origin);
     }
 
     // El presupuesto se comprueba después de validar la entrada, para no
     // apuntar gasto de peticiones que ni siquiera van a llegar al modelo.
     const rechazo = await presupuestoAgotado(env, request, ruta, origin);
-    if (rechazo) return rechazo;
+    if (rechazo) {
+      apunta(env, ctx, 'presupuesto_agotado');
+      return rechazo;
+    }
 
+    apunta(env, ctx, ruta === 'chat' ? 'chat' : 'adjust');
     try {
       if (ruta === 'chat') return await handleChat(env, clean, origin);
-      return await handleAdjust(env, clean, origin);
+      return await handleAdjust(env, ctx, clean, origin);
     } catch (e) {
       // Lo más probable aquí es que se haya agotado la cuota diaria gratuita de
       // Workers AI. El cliente lo trata como "coach no disponible".
       // El detalle sólo va al log (`npx wrangler tail`), no a la respuesta.
+      apunta(env, ctx, 'modelo_caido');
       console.error('fallo llamando al modelo:', e && e.message, e && e.stack);
       return json({ error: 'el modelo no está disponible ahora mismo' }, 503, origin);
     }

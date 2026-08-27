@@ -275,3 +275,68 @@ tocar nada de aquí.
 
 La clase `Copias` es un Durable Object nuevo, así que lleva su migración
 (`tag = "v3"`) en `wrangler.toml`. Con `npx wrangler deploy` se aplica sola.
+
+---
+
+## Métricas del coach (`/metricas/*`)
+
+Contadores agregados por día, tres meses de histórico (`Metricas`, otro Durable
+Object con SQLite). Existen porque toda una semana de fallos del coach se
+descubrió por lo que contaba un usuario y no por lo que veíamos: peticiones que
+devolvían vacío, claves que el filtro tiraba en silencio, un botón que no
+aparecía. Cualquiera de esas cosas se ve de un vistazo en un contador.
+
+**Qué NO se guarda, a propósito:** mensajes, planes, respuestas del modelo, IPs
+ni identificadores de nadie. Sólo «cuántas veces pasó esto el día X».
+
+| Ruta | Cuerpo | Quién la llama |
+| --- | --- | --- |
+| `/metricas/evento` | `{eventos:[...]}` | El cliente, con una lista cerrada de nombres (`EVENTOS_CLIENTE`) |
+| `/metricas/ver` | `{token, dias}` | Tú, con el secreto |
+
+El secreto se instala aparte y nunca vive en el repo:
+
+```powershell
+npx wrangler secret put METRICAS_TOKEN
+```
+
+Sin `METRICAS_TOKEN` configurado, `/metricas/ver` responde 503: es preferible
+que no funcione a que los contadores queden a la vista de cualquiera.
+
+### Qué se cuenta
+
+Del servidor: `chat`, `adjust`, `adjust_ok`, `adjust_vacio`, `adjust_ilegible`,
+`adjust_reintento`, `adjust_reintento_ok`, `descartado_<clave>`,
+`peticion_vaga`, `avoid_inventado`, `turnstile_rechazado`,
+`presupuesto_agotado`, `modelo_caido`.
+
+Del cliente (la otra mitad de la historia, porque el servidor no sabe si el
+cambio llegó a aplicarse): `boton_ofrecido`, `ajuste_pedido`,
+`propuesta_mostrada`, `propuesta_aceptada`, `propuesta_rechazada`,
+`plantilla_convertida`.
+
+La pareja que más dice es `boton_ofrecido` contra `ajuste_pedido`: si la
+primera sube y la segunda no, el botón no se ve o no se entiende.
+
+### El reintento
+
+`/adjust` da **una segunda pasada** cuando la primera no vale (JSON ilegible, o
+`answers` vacío pidiendo un cambio concreto), con una corrección que le dice al
+modelo qué hizo mal. Es lo mismo que hace openGym y ataca la causa de casi
+todos los fallos vistos: el modelo es pequeño y falla el formato, pero a la
+segunda suele acertar. Cuesta otra llamada y sólo en el caso malo.
+
+Una petición **vaga** no se reintenta: ahí el modelo no ha fallado el formato,
+ha entendido de más.
+
+### Guardas contra el modelo desbocado
+
+Van en el código y no en el prompt, porque un prompt es una sugerencia:
+
+- **`MAX_CLAVES_POR_PETICION` (5).** Con «ponme algo mejor» el modelo llegó a
+  devolver `place`, `level`, `days`, `minutes`, `goal` y `avoid` de una vez,
+  reescribiendo la configuración entera. Si se pasa del tope se devuelve
+  `vago: true` y el cliente pide algo más concreto.
+- **`avoid` sólo si se ha nombrado una molestia.** Es lo más delicado que hay
+  aquí porque condiciona qué ejercicios se pueden hacer, y el modelo se
+  inventó «rodilla» y «hombro» en una petición donde nadie habló de dolor.

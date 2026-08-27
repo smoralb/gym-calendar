@@ -1,12 +1,12 @@
 /* =============================================
    Gym Calendar - App de Rutina de Ejercicios
-   Versión: 4.36.1 — El coach deja de decir «no sé qué cambiar» cuando sí lo sabe
+   Versión: 4.37.0 — El coach reintenta cuando falla, y deja de inventarse lesiones
    ============================================= */
 
 (function () {
   'use strict';
 
-  var APP_VERSION = '4.36.1';
+  var APP_VERSION = '4.37.0';
 
   // Histórico de novedades, de la más reciente a la más antigua.
   //
@@ -17,6 +17,13 @@
   //
   // Sólo entran cambios que el usuario nota. Los arreglos internos no van aquí.
   var CHANGELOG = [
+    {
+      version: '4.37.0',
+      items: [
+        { icon: '🔁', text: 'El coach ahora lo reintenta cuando se le atraganta una petición, en vez de rendirse a la primera. Casi todos los «no he sabido qué cambiar» eran eso.' },
+        { icon: '🛡️', text: 'Y deja de inventarse cosas: si le pides algo muy abierto («ponme algo mejor») ya no te reescribe media configuración, y no puede apuntarte una lesión que no le hayas dicho. Te pedirá que concretes.' }
+      ]
+    },
     {
       version: '4.36.1',
       items: [
@@ -10199,6 +10206,25 @@
 
   function aiEnabled() { return !!AI_ENDPOINT; }
 
+  // Apunta un evento del coach. Es un disparo al aire: no espera respuesta, no
+  // reintenta y se traga cualquier error. Lo único que se manda es el nombre
+  // del evento — ni mensajes, ni plan, ni nada que identifique a nadie.
+  //
+  // Hace falta porque la mitad de la historia pasa aquí: el servidor sabe si
+  // devolvió un cambio, pero no si el usuario llegó a aplicarlo.
+  function metrica() {
+    if (!AI_ENDPOINT) return;
+    var eventos = Array.prototype.slice.call(arguments);
+    try {
+      fetch(AI_ENDPOINT + '/metricas/evento', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ eventos: eventos }),
+        keepalive: true
+      }).catch(function () {});
+    } catch (e) {}
+  }
+
   // Error con mensaje pensado para el usuario. Todo lo demás que se escape
   // («Failed to fetch», un TypeError del stream) se enseña como un genérico:
   // el texto en inglés del navegador no le dice nada a nadie.
@@ -10568,6 +10594,15 @@
         // error se contradice con que no haya pasado nada.
         if (data && data.motivo) console.warn('Coach IA: ajuste vacío con motivo:', data.motivo);
 
+        // Petición tan vaga que el modelo se lanzó a reescribirlo todo, y el
+        // servidor lo paró. Aquí el problema no es que no entienda: es que
+        // había demasiado que adivinar.
+        if (data && data.vago) {
+          throw aiError('Eso es demasiado abierto y me pondría a cambiarte cosas que no me has '
+            + 'pedido. Dime qué quieres tocar: los días, el tiempo por sesión, el objetivo, '
+            + 'el material o alguna molestia.');
+        }
+
         // Si algo se ha descartado por el camino, el coach SÍ había entendido:
         // decir «no he sabido qué cambiar» sería mentir y no ayuda a corregirlo.
         var tirados = (data && Array.isArray(data.descartados)) ? data.descartados : [];
@@ -10708,6 +10743,7 @@
       btn.textContent = esPlantilla ? '🪄 Convertir y aplicar' : '🎯 Aplicar a mi rutina';
       btn.addEventListener('click', function () {
         if (busy) return;
+        metrica('ajuste_pedido');
         wrap.remove();
         enviarAjuste(texto);
       });
@@ -10715,6 +10751,9 @@
       wrap.appendChild(btn);
       log.appendChild(wrap);
       log.scrollTop = log.scrollHeight;
+      // Cuántas veces se llega a ofrecer el botón. Si esto sube y
+      // `ajuste_pedido` no, es que el botón no se entiende o no se ve.
+      metrica('boton_ofrecido');
     }
 
     // Ejemplos de arranque. Se pulsan, así que valen a la vez de muestra de lo
@@ -10851,7 +10890,10 @@
       log.appendChild(wrap);
       log.scrollTop = log.scrollHeight;
 
+      metrica('propuesta_mostrada');
+
       wrap.querySelector('.coach-proposal-cancel').addEventListener('click', function () {
+        metrica('propuesta_rechazada');
         wrap.remove();
         bubble('assistant', 'Vale, no toco nada.');
       });
@@ -10861,6 +10903,9 @@
         // progreso siguen siendo suyos.
         var planId = upsertGeneratedPlan(r.plan, { id: activeProfile });
         if (!planId) { showToast('⚠ No se ha podido guardar el plan'); return; }
+        metrica.apply(null, r.convirtiendo
+          ? ['propuesta_aceptada', 'plantilla_convertida']
+          : ['propuesta_aceptada']);
         renderPlanOptions();
         switchProfile(planId);
         switchTab('rutina');

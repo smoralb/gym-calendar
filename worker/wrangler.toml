@@ -42,6 +42,15 @@ new_sqlite_classes = ["Suscripciones"]
 tag = "v3"
 new_sqlite_classes = ["Copias"]
 
+# Metricas del coach. Contadores agregados por dia, sin contenido de nadie.
+[[durable_objects.bindings]]
+name = "METRICAS"
+class_name = "Metricas"
+
+[[migrations]]
+tag = "v4"
+new_sqlite_classes = ["Metricas"]
+
 # Recordatorios de entrenamiento. Se dispara cada hora en punto (UTC) y dentro
 # se mira a quien le toca segun SU hora local: los usuarios estan en zonas
 # distintas, asi que un cron por hora concreta no serviria.
