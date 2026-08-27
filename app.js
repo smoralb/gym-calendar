@@ -1,12 +1,12 @@
 /* =============================================
    Gym Calendar - App de Rutina de Ejercicios
-   Versión: 4.34.0 — El coach ya aplica los cambios sobre cualquier plan
+   Versión: 4.35.0 — El botón de aplicar ya no se esconde, y la carrera se puede quitar
    ============================================= */
 
 (function () {
   'use strict';
 
-  var APP_VERSION = '4.34.0';
+  var APP_VERSION = '4.35.0';
 
   // Histórico de novedades, de la más reciente a la más antigua.
   //
@@ -17,6 +17,13 @@
   //
   // Sólo entran cambios que el usuario nota. Los arreglos internos no van aquí.
   var CHANGELOG = [
+    {
+      version: '4.35.0',
+      items: [
+        { icon: '🐛', text: 'Arreglado: el coach te decía «pulsa Aplicar a mi rutina» y ese botón no aparecía. Salía o no según las palabras que usaras: «sólo quiero 1 sesión de running a la semana» no lo sacaba. Ahora entiende muchas más formas de pedirlo y, si el coach te dice que lo apliques, el botón está sí o sí.' },
+        { icon: '🏃', text: 'Ya puedes pedirle al coach que te quite el plan de vuelta a correr. Antes era imposible: la petición se descartaba por el camino y no pasaba nada. Ojo, el plan son 3 sesiones por semana fijas y no se puede dejar en 1 — o lo sigues, o lo quitas y corres por tu cuenta.' }
+      ]
+    },
     {
       version: '4.34.0',
       items: [
@@ -10542,9 +10549,23 @@
       var s = texto.toLowerCase();
       // Una molestia es motivo de cambio por sí sola, sin más contexto.
       if (/(molest|duele|dolor|lesi[oó]n|me he hecho)/.test(s)) return true;
-      var tema = /(d[ií]as?|minutos?|tiempo|objetivo|nivel|material|gimnasio|en casa|sin material|correr|mancuern|barra)/.test(s);
-      var cambio = /(cambi|ajust|ahora|ya no|quiero|prefier|me gustar[ií]a|s[oó]lo tengo|solo tengo|pasar a|subir|bajar|quitar|a[ñn]adir)/.test(s);
+      // El vocabulario se quedaba corto y de ahí salían peticiones sin botón:
+      // «sólo quiero 1 sesión de running a la semana» no casaba con nada
+      // («running» y «sesión» no estaban), y «quita el plan de carrera»
+      // tampoco. El usuario pedía el cambio, el coach le contestaba que
+      // pulsara «Aplicar a mi rutina», y ese botón no aparecía nunca.
+      var tema = /(d[ií]as?|semana|sesi[oó]n|minutos?|tiempo|objetivo|nivel|material|gimnasio|en casa|sin material|correr|carrera|running|rodaje|trote|mancuern|barra|m[aá]quina|banda|goma|entrenar|rutina|plan)/.test(s);
+      var cambio = /(cambi|ajust|ahora|ya no|quiero|prefier|me gustar[ií]a|s[oó]lo tengo|solo tengo|s[oó]lo quiero|solo quiero|pasar a|subir|bajar|reducir|aumentar|quitar|quita|elimina|a[ñn]adir|mete|menos|m[aá]s)/.test(s);
       return tema && cambio;
+    }
+
+    // Red de seguridad: si el propio coach dice que lo aplique, el botón tiene
+    // que estar. El filtro de palabras siempre se quedará corto ante alguna
+    // forma de pedirlo, y la peor consecuencia posible es justo ésta — que el
+    // modelo te mande a pulsar algo que no existe.
+    function respuestaOfreceAplicar(texto) {
+      var s = String(texto || '').toLowerCase();
+      return /(aplicar a mi rutina|aplicarlo a tu rutina|aplicar el cambio|bot[oó]n de aplicar|puedo ajustarte|ajustar tu rutina|aplicar los cambios)/.test(s);
     }
 
     // El coach propone aplicar el cambio en vez de esconderlo tras un botón de
@@ -10665,7 +10686,7 @@
       }).then(function (full) {
         if (!full) { out.remove(); throw aiError('No he sabido qué responder.'); }
         messages.push({ role: 'assistant', content: full });
-        if (pareceCambio(texto)) ofrecerAjuste(texto);
+        if (pareceCambio(texto) || respuestaOfreceAplicar(full)) ofrecerAjuste(texto);
       }).catch(function (err) {
         if (primero) out.remove();
         fail(err);
@@ -10789,6 +10810,7 @@
   function aiValorLegible(v) {
     if (Array.isArray(v)) return v.length ? v.join(', ') : 'ninguna';
     if (v === '' || v === undefined || v === null) return 'no';
+    if (v === 'si') return 'sí';
     return String(v);
   }
 
@@ -10796,7 +10818,7 @@
   var AI_ANSWER_LABEL = {
     goal: 'Objetivo', place: 'Dónde entrenas', days: 'Días por semana',
     minutes: 'Minutos por sesión', level: 'Nivel', avoid: 'Zonas a evitar',
-    running: 'Corres'
+    running: 'Corres', runningPlan: 'Plan de vuelta a correr'
   };
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);

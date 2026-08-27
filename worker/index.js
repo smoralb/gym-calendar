@@ -137,7 +137,11 @@ const ANSWER_VALUES = {
   minutes: ['30', '45', '60', '90'],
   level: ['principiante', 'intermedio', 'avanzado'],
   avoid: ['rodilla', 'hombro', 'espalda_baja', 'muneca', 'codo', 'cuello'],
-  running: ['', 'si']
+  running: ['', 'si'],
+  // Faltaba, y sin ella el plan de vuelta a correr no se podia quitar por el
+  // coach: el filtro de abajo descartaba la clave aunque el modelo la mandara.
+  // Quien pedia "quita el plan de carrera" no obtenia ningun cambio.
+  runningPlan: ['', 'si']
 };
 
 const CHAT_SYSTEM = [
@@ -173,7 +177,17 @@ const ADJUST_SYSTEM = [
   '  minutes uno de: ' + ANSWER_VALUES.minutes.join(', '),
   '  level   uno de: ' + ANSWER_VALUES.level.join(', '),
   '  avoid   lista de: ' + ANSWER_VALUES.avoid.join(', '),
-  '  running "si" o ""',
+  '  running "si" o ""   (si sale a correr por su cuenta)',
+  '  runningPlan "si" o ""   (si sigue el plan guiado de vuelta a correr)',
+  '',
+  'Sobre la carrera, importante:',
+  '- El plan de vuelta a correr son SIEMPRE 3 sesiones por semana durante 12',
+  '  semanas. No es configurable: no existe forma de dejarlo en 1 o en 2.',
+  '- Si pide correr menos veces, la única opción real es quitarle el plan',
+  '  guiado: runningPlan "". Puede seguir corriendo por su cuenta (running',
+  '  "si") y mantiene el trabajo preventivo, pero ya no se le programan las',
+  '  sesiones. Dilo claramente en el `motivo`.',
+  '- Si dice que no quiere correr nada, entonces running "" y runningPlan "".',
   '',
   'Criterio:',
   '- No toques claves que el usuario no haya mencionado. Pero si pide VARIAS',
