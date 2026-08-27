@@ -141,7 +141,11 @@ const ANSWER_VALUES = {
   // Faltaba, y sin ella el plan de vuelta a correr no se podia quitar por el
   // coach: el filtro de abajo descartaba la clave aunque el modelo la mandara.
   // Quien pedia "quita el plan de carrera" no obtenia ningun cambio.
-  runningPlan: ['', 'si']
+  runningPlan: ['', 'si'],
+  // Cuantas carreras a la semana. Antes eran 3 fijas y la unica alternativa
+  // era quitar el plan entero: quien pedia "1 dia de running" acababa con
+  // CERO, porque el modelo solo podia elegir entre las dos opciones que habia.
+  runningDays: ['1', '2', '3']
 };
 
 const CHAT_SYSTEM = [
@@ -179,15 +183,18 @@ const ADJUST_SYSTEM = [
   '  avoid   lista de: ' + ANSWER_VALUES.avoid.join(', '),
   '  running "si" o ""   (si sale a correr por su cuenta)',
   '  runningPlan "si" o ""   (si sigue el plan guiado de vuelta a correr)',
+  '  runningDays uno de: ' + ANSWER_VALUES.runningDays.join(', ') + '   (carreras por semana)',
   '',
-  'Sobre la carrera, importante:',
-  '- El plan de vuelta a correr son SIEMPRE 3 sesiones por semana durante 12',
-  '  semanas. No es configurable: no existe forma de dejarlo en 1 o en 2.',
-  '- Si pide correr menos veces, la única opción real es quitarle el plan',
-  '  guiado: runningPlan "". Puede seguir corriendo por su cuenta (running',
-  '  "si") y mantiene el trabajo preventivo, pero ya no se le programan las',
-  '  sesiones. Dilo claramente en el `motivo`.',
+  'Sobre la carrera:',
+  '- Si pide correr MENOS veces (o más), eso es `runningDays`, no quitar el',
+  '  plan. «Sólo quiero 1 día de running» es runningDays "1", y el plan sigue.',
+  '- `runningDays` sólo tiene sentido con runningPlan "si". Si quiere correr y',
+  '  no tiene el plan, pon runningPlan "si" junto con los días que pida.',
+  '- Quitar el plan (runningPlan "") es sólo para quien no quiere que se le',
+  '  programen carreras. Puede seguir corriendo por su cuenta con running "si".',
   '- Si dice que no quiere correr nada, entonces running "" y runningPlan "".',
+  '- El plan está diseñado para 3 sesiones; con 1 o 2 la readaptación va más',
+  '  despacio. Puedes decirlo en el `motivo`, pero hazle caso igualmente.',
   '',
   'Criterio:',
   '- No toques claves que el usuario no haya mencionado. Pero si pide VARIAS',

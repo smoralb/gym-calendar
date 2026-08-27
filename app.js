@@ -1,12 +1,12 @@
 /* =============================================
    Gym Calendar - App de Rutina de Ejercicios
-   Versión: 4.35.0 — El botón de aplicar ya no se esconde, y la carrera se puede quitar
+   Versión: 4.36.0 — Ya puedes correr 1, 2 o 3 días a la semana
    ============================================= */
 
 (function () {
   'use strict';
 
-  var APP_VERSION = '4.35.0';
+  var APP_VERSION = '4.36.0';
 
   // Histórico de novedades, de la más reciente a la más antigua.
   //
@@ -17,6 +17,13 @@
   //
   // Sólo entran cambios que el usuario nota. Los arreglos internos no van aquí.
   var CHANGELOG = [
+    {
+      version: '4.36.0',
+      items: [
+        { icon: '🏃', text: 'Ya puedes elegir cuántos días corres: 1, 2 o 3 a la semana. Antes eran 3 fijos o ninguno, y por eso pedir «1 día de running» te dejaba sin ninguna carrera. Con 1 día se corre el rodaje largo, con 2 se añade una sesión corta.' },
+        { icon: '💪', text: 'Y como la carrera ocupa menos días, te caben más de fuerza: pidiendo 4 días de fuerza y 1 de carrera ya no se te reagrupa nada, tienes tus 4 días tal cual.' }
+      ]
+    },
     {
       version: '4.35.0',
       items: [
@@ -2153,7 +2160,8 @@
   // se avisa antes y se puede deshacer (restaurarPlantilla()).
   var BUILTIN_SEEDS = {
     sergio: { goal: ['hipertrofia'], place: ['gimnasio'], days: '5', split: 'auto',
-              minutes: '60', level: 'intermedio', avoid: [], running: 'si', runningPlan: 'si', focus: '' },
+              minutes: '60', level: 'intermedio', avoid: [], running: 'si', runningPlan: 'si',
+              runningDays: '3', focus: '' },
     eva:    { goal: ['tono'], place: ['gimnasio'], days: '2', split: 'auto',
               minutes: '45', level: 'principiante', avoid: [], running: '', runningPlan: '', focus: '' },
     gely:   { goal: ['tono'], place: ['gimnasio'], days: '3', split: 'auto',
@@ -2556,7 +2564,12 @@
     var sessions = RUNNING_PLAN[week];
     if (!sessions) return null;
     var idx = day.runIdx;
-    if (idx === undefined || idx < 0 || idx >= sessions.length) return null;
+    if (idx === undefined || idx < 0) return null;
+    // La semana 12 sólo tiene 2 sesiones (la última es el día del objetivo),
+    // así que un runIdx 2 se saldría de rango y el día aparecería vacío. Se
+    // usa la última que haya: quien corre una sola vez por semana lleva
+    // justamente el rodaje largo, y ahí eso es el día del objetivo.
+    if (idx >= sessions.length) idx = sessions.length - 1;
     return { session: sessions[idx], week: week, index: idx, total: sessions.length };
   }
 
@@ -6351,13 +6364,24 @@
           { value: '', label: '🚫 No, gracias', desc: 'Sólo el bloque preventivo en las sesiones de pierna' },
           { value: 'si', label: '🏃 Sí, incluir el plan de carrera',
             desc: compacta
-              ? '3 sesiones de carrera a la semana. Tu fuerza se reagrupa en '
+              ? 'En días propios. Tu fuerza se reagrupa en '
                 + compacta.diasFuerza + ' días con sesiones más largas (unos '
                 + compacta.minutosEstimados + ' min) para que quepa todo y te quede un día de descanso.'
-              : '3 sesiones de carrera a la semana, además de tus días de fuerza.' }
+              : 'En días propios, además de tus días de fuerza.' }
         ];
       },
       options: []
+    },
+
+    {
+      key: 'runningDays', title: '¿Cuántos días corres a la semana?',
+      hint: 'El plan está pensado para 3, que es lo que mejor readapta. Con menos avanzas más despacio, pero te deja más días para la fuerza.',
+      when: function (a) { return a.running === 'si' && a.runningPlan === 'si'; },
+      options: [
+        { value: '1', label: '1 día', desc: 'Sólo el rodaje largo de cada semana' },
+        { value: '2', label: '2 días', desc: 'El rodaje largo y una sesión corta' },
+        { value: '3', label: '3 días', desc: 'El plan completo, como está diseñado' }
+      ]
     },
 
     {
@@ -6526,14 +6550,33 @@
   // sesiones más largas. Como el eje del generador es el volumen SEMANAL, el
   // total de series se mantiene: sólo cambia el reparto. Lo que sí cambia es
   // la duración de cada sesión, y por eso se avisa antes de generar nada.
-  var COMPACT_STRENGTH_DAYS = 3;
+  // Tope de días ocupados en la semana. El séptimo es descanso, y con una
+  // vuelta a correr eso no se negocia.
+  var MAX_DIAS_SEMANA = 6;
+
+  // Cuántas sesiones de carrera por semana. Era una constante escondida: el
+  // plan siempre metía 3 y la única alternativa era quitarlo entero. Quien
+  // pedía «1 día de running» acababa con CERO, porque el modelo sólo podía
+  // elegir entre las dos únicas opciones que existían.
+  function runningDaysOf(answers) {
+    if (answers.running !== 'si' || answers.runningPlan !== 'si') return 0;
+    var n = parseInt(answers.runningDays, 10);
+    if (!n || n < 1 || n > 3) return 3;   // por defecto, el plan completo
+    return n;
+  }
+
+  // Días de fuerza que caben junto a la carrera, dejando el descanso.
+  function strengthCapFor(answers) {
+    return Math.max(2, MAX_DIAS_SEMANA - runningDaysOf(answers));
+  }
 
   function compactionFor(answers) {
     if (answers.running !== 'si') return null;
+    var cap = strengthCapFor(answers);
     var pedidos = parseInt(answers.days, 10) || 3;
-    if (pedidos <= COMPACT_STRENGTH_DAYS) return null;
+    if (pedidos <= cap) return null;
 
-    var factor = pedidos / COMPACT_STRENGTH_DAYS;
+    var factor = pedidos / cap;
     var goals = answerList(answers, 'goal');
     var scheme = GOAL_SCHEME[goals[0]] || GOAL_SCHEME.hipertrofia;
     var restSec = parseRestSeconds(scheme[0].rest) || 60;
@@ -6549,7 +6592,8 @@
 
     return {
       diasPedidos: pedidos,
-      diasFuerza: COMPACT_STRENGTH_DAYS,
+      diasFuerza: cap,
+      diasCarrera: runningDaysOf(answers),
       maxExercises: ampliado,
       minutosEstimados: Math.round(ampliado * perExercise + preventivos + 6)
     };
@@ -6681,20 +6725,28 @@
     var pool = coreAvailable(inventory, level, avoid);
     if (!pool.length) return null;
 
-    // Con el plan de carrera y 4+ días pedidos, la fuerza se reagrupa en 3
-    // días para dejar sitio a las 3 sesiones de carrera (ver compactionFor).
-    var compacta = (answers.running === 'si' && answers.runningPlan === 'si')
-      ? compactionFor(answers) : null;
+    // Con el plan de carrera, la fuerza se reagrupa si no cabe junto a las
+    // sesiones de carrera dejando un día de descanso (ver compactionFor). El
+    // tope depende de cuántas carreras haya: con 3 caben 3 días de fuerza, con
+    // 1 caben 5.
+    var nRun = runningDaysOf(answers);
+    var compacta = nRun ? compactionFor(answers) : null;
 
-    // Al compactar se usa Push · Pull · Legs y no el de más frecuencia. Con
-    // cuerpo completo habría pierna en las tres sesiones, y sumado a los tres
+    // Al compactar se prefiere Push · Pull · Legs y no el de más frecuencia.
+    // Con cuerpo completo habría pierna en todas las sesiones, y sumado a los
     // días de carrera el tren inferior no descansaría nunca — justo lo que hay
     // que evitar en una vuelta a correr. PPL concentra la pierna en un día.
-    var splitDef = compacta
-      ? (getSplitById(answers.split) && getSplitById(answers.split).days === COMPACT_STRENGTH_DAYS
-          ? getSplitById(answers.split)
-          : (getSplitById('ppl') || recommendedSplit({ days: String(COMPACT_STRENGTH_DAYS), goal: answers.goal })))
-      : resolveSplit(answers);
+    var splitDef;
+    if (compacta) {
+      var cap = compacta.diasFuerza;
+      var elegido = getSplitById(answers.split);
+      splitDef = (elegido && elegido.days === cap)
+        ? elegido
+        : (recommendedSplit({ days: String(cap), goal: answers.goal })
+           || getSplitById('ppl'));
+    } else {
+      splitDef = resolveSplit(answers);
+    }
     var split = splitDef.sessions;
     var goals = answerList(answers, 'goal');
     if (!goals.length) goals = ['hipertrofia'];
@@ -6916,32 +6968,57 @@
     // semana (getRunningSession), igual que en el plan de Sergio. Por eso el
     // mismo runIdx 0/1/2 se repite en las tres fases sin cambiar nada.
     function runningDay(idx) {
-      var days = ['Carrera', 'Carrera', 'Carrera larga'];
-      var titles = ['Sesión de carrera', 'Sesión de carrera', 'Rodaje largo de la semana'];
+      var largo = idx === 2;
       return {
-        id: 'gen_run' + idx, day: days[idx], emoji: idx === 2 ? '🏃‍♂️' : '🏃',
-        title: titles[idx], type: 'running', runIdx: idx, exercises: []
+        id: 'gen_run' + idx,
+        day: largo ? 'Carrera larga' : 'Carrera',
+        emoji: largo ? '🏃‍♂️' : '🏃',
+        title: largo ? 'Rodaje largo de la semana' : 'Sesión de carrera',
+        type: 'running', runIdx: idx, exercises: []
       };
     }
 
-    // Combinaciones de fuerza + carrera probadas (mismo patrón que el plan de
-    // Sergio): sólo para 2 y 3 días de fuerza, porque con 4 o 5 no queda
-    // hueco en la semana para las 3 sesiones de carrera sin quitar descanso.
-    // El reparto se decide por los días de fuerza REALES (ya compactados), no
-    // por los que se pidieron: con 4+ días la fuerza se reagrupa en 3, así que
-    // siempre acaba cayendo en uno de estos dos patrones y queda 1 día libre.
-    var RUNNING_COMBOS = {
-      2: { weekdays: [1, 2, 4, 5, 6], pattern: ['S', 'R', 'R', 'S', 'R'] },
-      3: { weekdays: [1, 2, 3, 4, 5, 6], pattern: ['S', 'R', 'S', 'R', 'S', 'R'] }
-    };
-    var runningCombo = (answers.running === 'si' && answers.runningPlan === 'si')
-      ? RUNNING_COMBOS[split.length] : null;
+    // Qué sesiones del plan se quedan cuando no se corren las 3. El rodaje
+    // largo (índice 2) es el que sostiene la base aeróbica, así que es el
+    // último en caerse: con 1 sesión se corre ésa, con 2 se añade la primera.
+    var SESIONES_CARRERA = { 1: [2], 2: [0, 2], 3: [0, 1, 2] };
+
+    // Reparto de la semana. Antes era una tabla fija de dos entradas porque
+    // las carreras siempre eran 3; ahora se calcula, que es lo que permite
+    // pedir 1 o 2. Las carreras se colocan lo más separadas posible entre las
+    // sesiones de fuerza, y siempre queda al menos un día de descanso.
+    //
+    // Con 3 días de fuerza y 3 de carrera sale S·R·S·R·S·R, que es exactamente
+    // el reparto que había antes escrito a mano.
+    function repartoSemanal(nStrength, nRun) {
+      var total = nStrength + nRun;
+      var weekdays = DEFAULT_DAYS_BY_COUNT[total];
+      if (!weekdays || nRun < 1) return null;
+
+      var esCarrera = {};
+      for (var k = 0; k < nRun; k++) {
+        esCarrera[Math.floor((k + 0.5) * total / nRun)] = true;
+      }
+      var pattern = [];
+      for (var i = 0; i < total; i++) pattern.push(esCarrera[i] ? 'R' : 'S');
+
+      // El redondeo puede dejar dos carreras en la misma posición si los
+      // números no cuadran; se completa por el final para no perder ninguna.
+      var faltan = nRun - pattern.filter(function (p) { return p === 'R'; }).length;
+      for (var j = total - 1; j >= 0 && faltan > 0; j--) {
+        if (pattern[j] === 'S') { pattern[j] = 'R'; faltan--; }
+      }
+      return { weekdays: weekdays.slice(), pattern: pattern };
+    }
+
+    var runningCombo = repartoSemanal(split.length, nRun);
+    var idxCarrera = SESIONES_CARRERA[nRun] || SESIONES_CARRERA[3];
 
     function combineWithRunning(strengthDays) {
       if (!runningCombo) return strengthDays;
       var sIdx = 0, rIdx = 0;
       return runningCombo.pattern.map(function (p) {
-        return p === 'S' ? strengthDays[sIdx++] : runningDay(rIdx++);
+        return p === 'S' ? strengthDays[sIdx++] : runningDay(idxCarrera[rIdx++]);
       });
     }
 
@@ -7026,8 +7103,8 @@
     });
 
     // Días de la semana que va a ocupar el plan de verdad. Con carrera los
-    // manda el patrón combinado (la carrera necesita 3 días suyos), y no el
-    // número que se pidió.
+    // manda el patrón combinado (fuerza + las carreras que haya), no el número
+    // de días de fuerza que se pidió.
     var diasReales = runningCombo
       ? runningCombo.weekdays
       : (DEFAULT_DAYS_BY_COUNT[answers.days] || [1, 3, 5]);
@@ -7055,15 +7132,17 @@
       // semanas de intensidad creciente sin descarga acaban en estancamiento.
       deloadWeeks: [4, 8, 12],
       trainingDays: diasReales.slice(),
+      runningDays: nRun,
       // El rótulo dice los días que hay DE VERDAD, no los que se pidieron.
-      // Con el plan de carrera no coinciden: la carrera se lleva 3 días suyos
-      // y la fuerza se reagrupa, así que pedir 5 y pedir 3 acaba dando la
-      // misma semana de 6 días. Poniendo aquí `answers.days` el rótulo decía
-      // «3 días» sobre un calendario de 6, y el usuario no entendía nada.
+      // Con el plan de carrera no coinciden: las carreras ocupan días propios
+      // y la fuerza se reagrupa si hace falta. Poniendo aquí `answers.days` el
+      // rótulo decía «3 días» sobre un calendario de 6, y no había quien lo
+      // entendiera. Y se dice cuántas carreras son, que es justo el dato que
+      // se echaba en falta.
       daysLabel: diasReales.length + ' días · '
         + goals.map(function (g) { return GOAL_LABEL[g] || ''; }).filter(Boolean).join(' + ')
         + ' · ' + minutes + ' min'
-        + (runningCombo ? ' · + carrera 12 sem' : '')
+        + (runningCombo ? ' · + ' + nRun + (nRun === 1 ? ' carrera' : ' carreras') + '/sem' : '')
     };
   }
 
@@ -7277,6 +7356,11 @@
     // días, pero se recorre siempre para comprobar que con otras respuestas
     // (running:'' o 4-5 días) el generador lo ignora sin romper nada.
     var runningPlanOpts = ['', 'si'];
+    // Número de carreras semanales. Entra en la matriz porque cambia el
+    // reparto de la semana entero (cuántos días de fuerza caben y dónde), y
+    // ese cálculo dejó de ser una tabla fija para pasar a calcularse.
+    // El '' es el caso de los planes viejos, que no tienen la clave.
+    var runningDaysOpts = ['', '1', '2', '3'];
 
     var runs = 0, failed = 0;
     var failures = [];
@@ -7291,6 +7375,11 @@
                   runningOpts.forEach(function (running) {
                     focusOpts.forEach(function (focus) {
                       runningPlanOpts.forEach(function (runningPlan) {
+                       // El número de carreras sólo pinta algo con el plan
+                       // activo; fuera de ahí sería multiplicar la matriz por
+                       // cuatro sin comprobar nada nuevo.
+                       var rdOpts = runningPlan === 'si' ? runningDaysOpts : [''];
+                       rdOpts.forEach(function (runningDays) {
                         // Cada programa posible para esos días, más el caso
                         // "sin elegir" (planes antiguos y días con una sola
                         // opción, donde cae en el recomendado).
@@ -7300,7 +7389,7 @@
                             place: place, gear: gear.slice(), days: d, goal: goal.slice(),
                             level: level, minutes: mins, avoid: avoid.slice(),
                             running: running, focus: focus, runningPlan: runningPlan,
-                            split: splitId
+                            runningDays: runningDays, split: splitId
                           };
                           runs++;
                           var plan = null, problems = null;
@@ -7317,6 +7406,7 @@
                             }
                           }
                         });
+                       });
                       });
                     });
                   });
@@ -8966,20 +9056,26 @@
       html += '  <p class="why-text">' + escapeHtml(plan.splitWhy) + '</p>';
       // Si se reagrupó la fuerza para meter la carrera, hay que decirlo: el
       // usuario pidió X días y recibe otra distribución.
+      // El número de carreras ya no es fijo: hay que leerlo del plan en vez de
+      // escribir «3» a mano, que era lo que había y decía «añade 3 días suyos»
+      // sobre una semana con una sola carrera.
+      var nCarreras = plan.runningDays || (plan.compacted && plan.compacted.diasCarrera) || 0;
+      var labelCarreras = nCarreras + (nCarreras === 1 ? ' día propio' : ' días propios');
+
       if (plan.compacted) {
         html += '  <p class="why-text why-text-small why-text-warn">Pediste '
-             + plan.compacted.diasPedidos + ' días, pero el plan de carrera necesita 3 días propios. '
-             + 'Tu fuerza se ha reagrupado en ' + plan.compacted.diasFuerza
+             + plan.compacted.diasPedidos + ' días, pero el plan de carrera necesita '
+             + labelCarreras + '. Tu fuerza se ha reagrupado en ' + plan.compacted.diasFuerza
              + ' sesiones más largas (unos ' + plan.compacted.minutosEstimados + ' min) para que entre todo '
              + 'y te quede un día de descanso. El total de series semanales se mantiene.</p>';
-      } else if (plan.answers && plan.answers.running === 'si' && plan.answers.runningPlan === 'si'
-                 && plan.trainingDays && plan.trainingDays.length > (parseInt(plan.answers.days, 10) || 0)) {
-        // Sin compactación pero con carrera: se pidieron 3 días o menos, así
-        // que la fuerza cabe entera, pero la carrera añade 3 días encima. Sin
-        // decirlo, el usuario pide 3 y ve 6 sin ninguna explicación.
+      } else if (nCarreras && plan.trainingDays
+                 && plan.trainingDays.length > (parseInt(plan.answers && plan.answers.days, 10) || 0)) {
+        // Sin compactación pero con carrera: la fuerza cabe entera y las
+        // carreras se suman encima. Sin decirlo, pides 5 y ves 6 sin saber
+        // de dónde sale el sexto.
         html += '  <p class="why-text why-text-small why-text-warn">Pediste '
-             + escapeHtml(String(plan.answers.days)) + ' días de fuerza y los tienes, pero el plan '
-             + 'de carrera añade 3 días suyos encima: por eso la semana sale de '
+             + escapeHtml(String(plan.answers.days)) + ' días de fuerza y los tienes, pero la carrera '
+             + 'añade ' + labelCarreras + ' encima: por eso la semana sale de '
              + plan.trainingDays.length + ' días.</p>';
       }
       html += '</div>';
@@ -10818,7 +10914,8 @@
   var AI_ANSWER_LABEL = {
     goal: 'Objetivo', place: 'Dónde entrenas', days: 'Días por semana',
     minutes: 'Minutos por sesión', level: 'Nivel', avoid: 'Zonas a evitar',
-    running: 'Corres', runningPlan: 'Plan de vuelta a correr'
+    running: 'Corres', runningPlan: 'Plan de vuelta a correr',
+    runningDays: 'Carreras por semana'
   };
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
