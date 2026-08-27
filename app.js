@@ -1,12 +1,12 @@
 /* =============================================
    Gym Calendar - App de Rutina de Ejercicios
-   Versión: 4.37.0 — El coach reintenta cuando falla, y deja de inventarse lesiones
+   Versión: 4.38.0 — Modelo más capaz para entender lo que le pides al coach
    ============================================= */
 
 (function () {
   'use strict';
 
-  var APP_VERSION = '4.37.0';
+  var APP_VERSION = '4.38.0';
 
   // Histórico de novedades, de la más reciente a la más antigua.
   //
@@ -17,6 +17,12 @@
   //
   // Sólo entran cambios que el usuario nota. Los arreglos internos no van aquí.
   var CHANGELOG = [
+    {
+      version: '4.38.0',
+      items: [
+        { icon: '🧠', text: 'El coach entiende mejor lo que le pides. Ahora usa un modelo más capaz para traducir tus peticiones a cambios en la rutina, y además responde más rápido. En las pruebas pasó de acertar 8 de cada 10 a 10 de 10.' }
+      ]
+    },
     {
       version: '4.37.0',
       items: [

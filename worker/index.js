@@ -19,8 +19,6 @@
 // Ojo al elegir modelo: Cloudflare retira los viejos. Llama 3.1 8B se deprecó
 // el 2026-05-30 y devuelve error 5028, no un aviso. Si un día empieza a fallar
 // todo con 503, lo primero que hay que mirar es el catálogo de modelos.
-// Si hiciera falta abaratar, @cf/meta/llama-3.2-3b-instruct también devuelve el
-// JSON de /adjust correctamente, con peor prosa. Coste medido: ver PRESUPUESTO.
 // Se usa esta librería y no otras por el esquema de cifrado: manda `aes128gcm`
 // (RFC 8291), que es el vigente. Varias alternativas siguen emitiendo el
 // `aesgcm` antiguo, y el endpoint de Apple —o sea todos los iPhone, que es
@@ -28,7 +26,21 @@
 // puro, sin `node:crypto`.
 import { sendPushNotification } from '@mmmike/web-push/send';
 
-const MODEL = '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
+// Dos modelos, uno por ruta, porque las dos tareas no se parecen en nada: el
+// chat escribe prosa en streaming y /adjust extrae un JSON pequeño y cerrado.
+//
+// /adjust pasa a gpt-oss-120b. Es más grande y más capaz siguiendo formato
+// —que es EXACTAMENTE donde fallaba: devolver prosa en vez de JSON, `answers`
+// vacío, valores sin comillas, salirse del rango— y además sale MÁS BARATO en
+// neurons que el llama que había, porque su output cuesta la tercera parte:
+//
+//   llama-3.3-70b-fp8-fast   26.668 in / 204.805 out  (neurons por millón)
+//   gpt-oss-120b             31.818 in /  68.182 out
+//
+// El chat se queda en llama de momento: ahí el formato de streaming importa y
+// no se cambia a la vez que lo otro. Si /adjust va bien, se mueve después.
+const MODEL_CHAT = '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
+const MODEL_ADJUST = '@cf/openai/gpt-oss-120b';
 
 // =============================================
 // NOTIFICACIONES PUSH
@@ -121,19 +133,31 @@ function vapidKeys(env) {
 // agotarlos, Workers AI devuelve error: el coach se cae para todo el mundo
 // hasta el día siguiente.
 //
-// Medido en este Worker: un chat con contexto completo gasta ~98 neurons y un
-// /adjust ~12. O sea que la cuota diaria da para unas 100 conversaciones, no
-// para miles. El límite por minuto (12/IP) no protege de esto en absoluto:
-// permite 17.280 peticiones al día desde una sola IP, que funde la cuota
-// entera en menos de diez minutos.
+// Medido en este Worker: un chat con contexto completo gasta ~98 neurons. O
+// sea que la cuota diaria da para unas 100 conversaciones, no para miles. El
+// límite por minuto (12/IP) no protege de esto en absoluto: permite 17.280
+// peticiones al día desde una sola IP, que funde la cuota entera en menos de
+// diez minutos.
 //
 // Por eso se lleva la cuenta del gasto del día, en dos niveles:
 //   - por IP, para que nadie se coma la cuota de los demás
 //   - global, para apagar el coach ANTES de que lo apague Cloudflare (así el
 //     usuario recibe un mensaje claro en vez de un error genérico)
-const COSTE = { chat: 100, adjust: 12 };   // neurons estimados por petición
+//
+// El /adjust estaba estimado en 12 y salían ~43 de verdad (1.000 tokens de
+// entrada y ~80 de salida contra la tarifa de llama). Con gpt-oss-120b la
+// entrada cuesta parecido y la salida un tercio, pero razona antes de
+// contestar y eso también son tokens de salida: ~1.000 in + ~500 out ≈ 66.
+// Se apunta 70.
+//
+// Ojo con inflar esto «por prudencia»: el gasto se apunta por adelantado y
+// contra el tope por IP, así que cada neuron de más recorta directamente lo
+// que puede hacer una persona en un día. Poniéndolo en 80 el cupo se quedaba
+// en 15 ajustes diarios, que es poco. Un reintento ocasional se pasa de los
+// 70, y eso lo absorbe el 15% de margen del presupuesto global.
+const COSTE = { chat: 100, adjust: 70 };   // neurons estimados por petición
 const PRESUPUESTO_GLOBAL = 8500;           // 85% de la cuota: deja margen
-const TOPE_IP = 1200;                      // ~12 chats al día por persona
+const TOPE_IP = 1500;                      // ~15 chats o ~21 ajustes al día
 
 const ALLOWED_ORIGINS = [
   'https://smoralb.github.io',
@@ -836,7 +860,7 @@ async function handleChat(env, clean, origin) {
     { role: 'system', content: 'Datos del plan del usuario:\n\n' + (clean.context || '(sin plan activo)') }
   ].concat(clean.messages);
 
-  const stream = await env.AI.run(MODEL, {
+  const stream = await env.AI.run(MODEL_CHAT, {
     messages: messages,
     stream: true,
     max_tokens: 600
@@ -907,7 +931,17 @@ async function pasadaAdjust(env, contexto, peticion, correccion, ctx) {
   if (correccion) messages.push({ role: 'system', content: correccion });
   messages.push({ role: 'user', content: peticion });
 
-  const res = await env.AI.run(MODEL, { messages: messages, max_tokens: 300 });
+  // 300 tokens bastaban con llama, pero gpt-oss razona antes de contestar y ese
+  // razonamiento consume presupuesto: con 300 se quedaba a medias y la
+  // respuesta llegaba sin el JSON («respuesta ilegible» en 2 de cada 10). El
+  // JSON en sí son ~80 tokens; el resto es el razonamiento, que se descarta en
+  // extractText(). Sale barato porque en este modelo el output cuesta la
+  // tercera parte.
+  const res = await env.AI.run(MODEL_ADJUST, {
+    messages: messages,
+    max_tokens: 1500,
+    reasoning: { effort: 'low' }
+  });
   const text = extractText(res);
 
   // El modelo se empeña a veces en envolver el JSON en prosa o en un bloque de

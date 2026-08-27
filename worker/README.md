@@ -340,3 +340,51 @@ Van en el código y no en el prompt, porque un prompt es una sugerencia:
 - **`avoid` sólo si se ha nombrado una molestia.** Es lo más delicado que hay
   aquí porque condiciona qué ejercicios se pueden hacer, y el modelo se
   inventó «rodilla» y «hombro» en una petición donde nadie habló de dolor.
+
+---
+
+## Elección de modelo
+
+Dos modelos, uno por ruta, porque las tareas no se parecen:
+
+| Ruta | Modelo | Por qué |
+| --- | --- | --- |
+| `/chat` | `@cf/meta/llama-3.3-70b-instruct-fp8-fast` | Prosa en streaming. El formato SSE importa y no se toca a la vez que lo demás. |
+| `/adjust` | `@cf/openai/gpt-oss-120b` | Extraer un JSON pequeño y cerrado, que es justo donde fallaba. |
+
+### Por qué gpt-oss-120b en `/adjust`
+
+Es más grande y bastante mejor siguiendo formato — devolver prosa en vez de
+JSON, `answers` vacío, valores sin comillas, salirse del rango — y encima
+**cuesta menos neurons**, porque su salida vale la tercera parte:
+
+```
+llama-3.3-70b-fp8-fast   26.668 in / 204.805 out   (neurons por millón)
+gpt-oss-120b             31.818 in /  68.182 out
+```
+
+Medido con la misma batería de 10 peticiones reales:
+
+| | llama-3.3-70b | gpt-oss-120b |
+| --- | --- | --- |
+| Aciertos | 8/10 | **10/10** |
+| Peticiones vagas | Se inventaba media configuración, lesiones incluidas | Pregunta qué quieres cambiar |
+| Latencia típica | — | 3–4 s |
+
+**Razona antes de contestar, y eso son tokens de salida.** Con los 300
+`max_tokens` que bastaban para llama se quedaba a medias y no llegaba a
+emitir el JSON: 2 de cada 10 daban «respuesta ilegible». Con 1.500 y
+`reasoning: { effort: 'low' }`, 10 de 10. El razonamiento lo descarta
+`extractText()`, que ya sabía leer el formato `output[]` de gpt-oss.
+
+### Si algún día hace falta un modelo de pago
+
+A este volumen el coste no es el problema. Con la tarifa de Claude Haiku 4.5
+($1/$5 por millón de tokens), un `/adjust` sale a ~$0.0014 y un chat a ~$0.003:
+cien de cada uno al mes son **menos de medio euro**. Incluso con Claude Opus 5
+($5/$25) serían ~2 €/mes.
+
+Lo que costaría de verdad es lo otro: una clave de API como secreto, y dejar de
+estar en el «todo gratis y sin cuentas» en el que vive el resto del proyecto.
+Antes de dar ese paso, mira las métricas: si `adjust_reintento` y `adjust_vacio`
+están bajos, no hace falta.
